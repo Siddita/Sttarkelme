@@ -1,0 +1,1683 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+      "title": "Mentorship Service",
+      "description": "A service for Mentorship.",
+      "version": "1.0.0"
+    },
+    "servers": [
+      {
+        "url": "/mentorship"
+      }
+    ],
+    "paths": {
+      "/me": {
+        "get": {
+          "tags": [
+            "profiles"
+          ],
+          "summary": "Me",
+          "operationId": "mentorship_me_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProfileOut"
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ]
+        },
+        "patch": {
+          "tags": [
+            "profiles"
+          ],
+          "summary": "Update Me",
+          "operationId": "update_me_me_patch",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileUpdate"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProfileOut"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ]
+        }
+      },
+      "/skills": {
+        "get": {
+          "tags": [
+            "skills"
+          ],
+          "summary": "List Skills",
+          "operationId": "list_skills_skills_get",
+          "parameters": [
+            {
+              "name": "q",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Q"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SkillOut"
+                    },
+                    "title": "Response List Skills Skills Get"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "post": {
+          "tags": [
+            "skills"
+          ],
+          "summary": "Create Skill",
+          "operationId": "create_skill_skills_post",
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillBase"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SkillOut"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/me/mentor/skills": {
+        "get": {
+          "tags": [
+            "skills"
+          ],
+          "summary": "My Mentor Skills",
+          "operationId": "my_mentor_skills_me_mentor_skills_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "items": {
+                      "$ref": "#/components/schemas/MentorSkillOut"
+                    },
+                    "type": "array",
+                    "title": "Response My Mentor Skills Me Mentor Skills Get"
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ]
+        },
+        "post": {
+          "tags": [
+            "skills"
+          ],
+          "summary": "Add Mentor Skill",
+          "operationId": "add_mentor_skill_me_mentor_skills_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorSkillIn"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/MentorSkillOut"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ]
+        }
+      },
+      "/me/mentor/skills/{skill_id}": {
+        "delete": {
+          "tags": [
+            "skills"
+          ],
+          "summary": "Delete Mentor Skill",
+          "operationId": "delete_mentor_skill_me_mentor_skills__skill_id__delete",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "skill_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Skill Id"
+              }
+            }
+          ],
+          "responses": {
+            "204": {
+              "description": "Successful Response"
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/me/mentee/goals": {
+        "get": {
+          "tags": [
+            "skills"
+          ],
+          "summary": "My Goals",
+          "operationId": "my_goals_me_mentee_goals_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "items": {
+                      "$ref": "#/components/schemas/GoalOut"
+                    },
+                    "type": "array",
+                    "title": "Response My Goals Me Mentee Goals Get"
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ]
+        },
+        "post": {
+          "tags": [
+            "skills"
+          ],
+          "summary": "Add Goal",
+          "operationId": "add_goal_me_mentee_goals_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalIn"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/GoalOut"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ]
+        }
+      },
+      "/me/mentee/goals/{goal_id}": {
+        "delete": {
+          "tags": [
+            "skills"
+          ],
+          "summary": "Delete Goal",
+          "operationId": "delete_goal_me_mentee_goals__goal_id__delete",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "goal_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Goal Id"
+              }
+            }
+          ],
+          "responses": {
+            "204": {
+              "description": "Successful Response"
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/mentors/search": {
+        "get": {
+          "tags": [
+            "discovery"
+          ],
+          "summary": "Mentor Search",
+          "operationId": "mentor_search_mentors_search_get",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "skill",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Skill"
+              }
+            },
+            {
+              "name": "min_exp",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Min Exp"
+              }
+            },
+            {
+              "name": "tz",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Tz"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ProfileOut"
+                    },
+                    "title": "Response List Mentors Search Get"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/mentors/{mentor_id}/availability": {
+        "get": {
+          "tags": [
+            "availability"
+          ],
+          "summary": "List Availability",
+          "operationId": "list_availability_mentors__mentor_id__availability_get",
+          "parameters": [
+            {
+              "name": "mentor_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Mentor Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/AvailabilityOut"
+                    },
+                    "title": "Response List Availability Mentors  Mentor Id  Availability Get"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/me/mentor/availability": {
+        "post": {
+          "tags": [
+            "availability"
+          ],
+          "summary": "Create Availability",
+          "operationId": "create_availability_me_mentor_availability_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvailabilityIn"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AvailabilityOut"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ]
+        }
+      },
+      "/sessions": {
+        "post": {
+          "tags": [
+            "sessions"
+          ],
+          "summary": "Book Session",
+          "operationId": "book_session_sessions_post",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionIn"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SessionOut"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "get": {
+          "tags": [
+            "sessions"
+          ],
+          "summary": "List Sessions",
+          "operationId": "list_sessions_sessions_get",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "role",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "default": "mentee",
+                "title": "Role"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SessionOut"
+                    },
+                    "title": "Response List Sessions Sessions Get"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/sessions/{session_id}": {
+        "patch": {
+          "tags": [
+            "sessions"
+          ],
+          "summary": "Update Session",
+          "operationId": "update_session_sessions__session_id__patch",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "session_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Session Id"
+              }
+            },
+            {
+              "name": "status",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Status"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/sessions/{session_id}/review": {
+        "post": {
+          "tags": [
+            "sessions"
+          ],
+          "summary": "Create Review",
+          "operationId": "create_review_sessions__session_id__review_post",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "session_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Session Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewIn"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/": {
+        "get": {
+          "summary": "Root",
+          "description": "Root endpoint",
+          "operationId": "mentorship_root__get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RootModel"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/health": {
+        "get": {
+          "summary": "Health Check",
+          "description": "Global health check endpoint",
+          "operationId": "mentorship_health_check_health_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HealthModel"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/healthz": {
+        "get": {
+          "summary": "Healthz",
+          "operationId": "mentorship_healthz_healthz_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HealthZModel"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "schemas": {
+        "AvailabilityIn": {
+          "properties": {
+            "starts_at": {
+              "type": "string",
+              "title": "Starts At"
+            },
+            "ends_at": {
+              "type": "string",
+              "title": "Ends At"
+            },
+            "is_recurring": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Recurring",
+              "default": false
+            },
+            "rrule": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rrule"
+            }
+          },
+          "type": "object",
+          "required": [
+            "starts_at",
+            "ends_at"
+          ],
+          "title": "AvailabilityIn",
+          "example": {
+            "ends_at": "2025-10-02T15:00:00+05:30",
+            "is_recurring": false,
+            "starts_at": "2025-10-02T14:00:00+05:30"
+          }
+        },
+        "AvailabilityOut": {
+          "properties": {
+            "starts_at": {
+              "type": "string",
+              "title": "Starts At"
+            },
+            "ends_at": {
+              "type": "string",
+              "title": "Ends At"
+            },
+            "is_recurring": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Recurring",
+              "default": false
+            },
+            "rrule": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rrule"
+            },
+            "id": {
+              "type": "integer",
+              "title": "Id"
+            },
+            "mentor_id": {
+              "type": "integer",
+              "title": "Mentor Id"
+            }
+          },
+          "type": "object",
+          "required": [
+            "starts_at",
+            "ends_at",
+            "id",
+            "mentor_id"
+          ],
+          "title": "AvailabilityOut",
+          "example": {
+            "ends_at": "2025-10-02T15:00:00+05:30",
+            "id": 11,
+            "is_recurring": false,
+            "mentor_id": 101,
+            "starts_at": "2025-10-02T14:00:00+05:30"
+          }
+        },
+        "GoalIn": {
+          "properties": {
+            "skill_id": {
+              "type": "integer",
+              "title": "Skill Id"
+            },
+            "priority": {
+              "type": "integer",
+              "maximum": 5,
+              "minimum": 1,
+              "title": "Priority"
+            },
+            "target_date": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Date"
+            },
+            "notes": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Notes"
+            }
+          },
+          "type": "object",
+          "required": [
+            "skill_id",
+            "priority"
+          ],
+          "title": "GoalIn",
+          "example": {
+            "notes": "Prep for interviews",
+            "priority": 5,
+            "skill_id": 2,
+            "target_date": "2025-12-31"
+          }
+        },
+        "GoalOut": {
+          "properties": {
+            "skill_id": {
+              "type": "integer",
+              "title": "Skill Id"
+            },
+            "priority": {
+              "type": "integer",
+              "maximum": 5,
+              "minimum": 1,
+              "title": "Priority"
+            },
+            "target_date": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Date"
+            },
+            "notes": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Notes"
+            },
+            "id": {
+              "type": "integer",
+              "title": "Id"
+            },
+            "mentee_id": {
+              "type": "integer",
+              "title": "Mentee Id"
+            }
+          },
+          "type": "object",
+          "required": [
+            "skill_id",
+            "priority",
+            "id",
+            "mentee_id"
+          ],
+          "title": "GoalOut",
+          "example": {
+            "id": 55,
+            "mentee_id": 202,
+            "notes": "Prep for interviews",
+            "priority": 5,
+            "skill_id": 2,
+            "target_date": "2025-12-31"
+          }
+        },
+        "HTTPValidationError": {
+          "properties": {
+            "detail": {
+              "items": {
+                "$ref": "#/components/schemas/ValidationError"
+              },
+              "type": "array",
+              "title": "Detail"
+            }
+          },
+          "type": "object",
+          "title": "HTTPValidationError"
+        },
+        "HealthModel": {
+          "properties": {
+            "status": {
+              "type": "string",
+              "title": "Status"
+            },
+            "service": {
+              "type": "string",
+              "title": "Service"
+            },
+            "version": {
+              "type": "string",
+              "title": "Version"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Timestamp"
+            }
+          },
+          "type": "object",
+          "required": [
+            "status",
+            "service",
+            "version",
+            "timestamp"
+          ],
+          "title": "HealthModel"
+        },
+        "HealthZModel": {
+          "properties": {
+            "status": {
+              "type": "string",
+              "title": "Status"
+            }
+          },
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "title": "HealthZModel"
+        },
+        "MentorSkillIn": {
+          "properties": {
+            "skill_id": {
+              "type": "integer",
+              "title": "Skill Id"
+            },
+            "level": {
+              "type": "integer",
+              "maximum": 5,
+              "minimum": 1,
+              "title": "Level"
+            },
+            "years": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Years"
+            }
+          },
+          "type": "object",
+          "required": [
+            "skill_id",
+            "level",
+            "years"
+          ],
+          "title": "MentorSkillIn",
+          "example": {
+            "level": 4,
+            "skill_id": 1,
+            "years": 3
+          }
+        },
+        "MentorSkillOut": {
+          "properties": {
+            "skill_id": {
+              "type": "integer",
+              "title": "Skill Id"
+            },
+            "level": {
+              "type": "integer",
+              "maximum": 5,
+              "minimum": 1,
+              "title": "Level"
+            },
+            "years": {
+              "type": "integer",
+              "minimum": 0,
+              "title": "Years"
+            },
+            "mentor_id": {
+              "type": "integer",
+              "title": "Mentor Id"
+            }
+          },
+          "type": "object",
+          "required": [
+            "skill_id",
+            "level",
+            "years",
+            "mentor_id"
+          ],
+          "title": "MentorSkillOut",
+          "example": {
+            "level": 4,
+            "mentor_id": 101,
+            "skill_id": 1,
+            "years": 3
+          }
+        },
+        "ProfileOut": {
+          "properties": {
+            "auth_user_id": {
+              "type": "integer",
+              "title": "Auth User Id"
+            },
+            "full_name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Full Name"
+            },
+            "headline": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Headline"
+            },
+            "bio": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bio"
+            },
+            "timezone": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Timezone"
+            },
+            "languages": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Languages"
+            },
+            "avatar_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Avatar Url"
+            },
+            "is_mentor": {
+              "type": "boolean",
+              "title": "Is Mentor",
+              "default": false
+            },
+            "is_mentee": {
+              "type": "boolean",
+              "title": "Is Mentee",
+              "default": true
+            },
+            "years_experience": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Years Experience"
+            }
+          },
+          "type": "object",
+          "required": [
+            "auth_user_id"
+          ],
+          "title": "ProfileOut",
+          "example": {
+            "auth_user_id": 101,
+            "avatar_url": "https://cdn.example.com/u/101.png",
+            "bio": "10+ yrs building data platforms",
+            "full_name": "Priya S",
+            "headline": "Senior Data Engineer",
+            "is_mentee": false,
+            "is_mentor": true,
+            "languages": [
+              "en",
+              "hi"
+            ],
+            "timezone": "Asia/Kolkata",
+            "years_experience": 10
+          }
+        },
+        "ProfileUpdate": {
+          "properties": {
+            "full_name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Full Name"
+            },
+            "headline": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Headline"
+            },
+            "bio": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bio"
+            },
+            "timezone": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Timezone"
+            },
+            "languages": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Languages"
+            },
+            "avatar_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Avatar Url"
+            },
+            "is_mentor": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Mentor"
+            },
+            "is_mentee": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Mentee"
+            },
+            "years_experience": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Years Experience"
+            }
+          },
+          "type": "object",
+          "title": "ProfileUpdate",
+          "example": {
+            "bio": "Mentor for Go/Distributed Systems",
+            "headline": "Staff Backend Engineer",
+            "is_mentor": true,
+            "languages": [
+              "en"
+            ],
+            "timezone": "Asia/Kolkata"
+          }
+        },
+        "ReviewIn": {
+          "properties": {
+            "rating": {
+              "type": "integer",
+              "maximum": 5,
+              "minimum": 1,
+              "title": "Rating"
+            },
+            "text": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Text"
+            }
+          },
+          "type": "object",
+          "required": [
+            "rating"
+          ],
+          "title": "ReviewIn",
+          "example": {
+            "rating": 5,
+            "text": "Very clear guidance and actionable tips."
+          }
+        },
+        "RootModel": {
+          "properties": {
+            "message": {
+              "type": "string",
+              "title": "Message"
+            },
+            "version": {
+              "type": "string",
+              "title": "Version"
+            },
+            "docs": {
+              "type": "string",
+              "title": "Docs"
+            },
+            "health": {
+              "type": "string",
+              "title": "Health"
+            }
+          },
+          "type": "object",
+          "required": [
+            "message",
+            "version",
+            "docs",
+            "health"
+          ],
+          "title": "RootModel"
+        },
+        "SessionIn": {
+          "properties": {
+            "mentor_id": {
+              "type": "integer",
+              "title": "Mentor Id"
+            },
+            "starts_at": {
+              "type": "string",
+              "title": "Starts At"
+            },
+            "ends_at": {
+              "type": "string",
+              "title": "Ends At"
+            },
+            "agenda": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Agenda"
+            }
+          },
+          "type": "object",
+          "required": [
+            "mentor_id",
+            "starts_at",
+            "ends_at"
+          ],
+          "title": "SessionIn",
+          "example": {
+            "agenda": "Review DS&A plan",
+            "ends_at": "2025-10-03T10:30:00+05:30",
+            "mentor_id": 101,
+            "starts_at": "2025-10-03T10:00:00+05:30"
+          }
+        },
+        "SessionOut": {
+          "properties": {
+            "mentor_id": {
+              "type": "integer",
+              "title": "Mentor Id"
+            },
+            "starts_at": {
+              "type": "string",
+              "title": "Starts At"
+            },
+            "ends_at": {
+              "type": "string",
+              "title": "Ends At"
+            },
+            "agenda": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Agenda"
+            },
+            "id": {
+              "type": "integer",
+              "title": "Id"
+            },
+            "mentee_id": {
+              "type": "integer",
+              "title": "Mentee Id"
+            },
+            "status": {
+              "type": "string",
+              "title": "Status"
+            }
+          },
+          "type": "object",
+          "required": [
+            "mentor_id",
+            "starts_at",
+            "ends_at",
+            "id",
+            "mentee_id",
+            "status"
+          ],
+          "title": "SessionOut",
+          "example": {
+            "agenda": "Review DS&A plan",
+            "ends_at": "2025-10-03T10:30:00+05:30",
+            "id": 77,
+            "mentee_id": 202,
+            "mentor_id": 101,
+            "starts_at": "2025-10-03T10:00:00+05:30",
+            "status": "requested"
+          }
+        },
+        "SkillBase": {
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "category": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          "type": "object",
+          "required": [
+            "name"
+          ],
+          "title": "SkillBase",
+          "example": {
+            "category": "Programming",
+            "name": "Python"
+          }
+        },
+        "SkillOut": {
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "category": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            },
+            "id": {
+              "type": "integer",
+              "title": "Id"
+            }
+          },
+          "type": "object",
+          "required": [
+            "name",
+            "id"
+          ],
+          "title": "SkillOut",
+          "example": {
+            "category": "Programming",
+            "id": 1,
+            "name": "Python"
+          }
+        },
+        "ValidationError": {
+          "properties": {
+            "loc": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ]
+              },
+              "type": "array",
+              "title": "Location"
+            },
+            "msg": {
+              "type": "string",
+              "title": "Message"
+            },
+            "type": {
+              "type": "string",
+              "title": "Error Type"
+            }
+          },
+          "type": "object",
+          "required": [
+            "loc",
+            "msg",
+            "type"
+          ],
+          "title": "ValidationError"
+        }
+      },
+      "securitySchemes": {
+        "HTTPBearer": {
+          "type": "http",
+          "scheme": "bearer"
+        }
+      }
+    }
+  }

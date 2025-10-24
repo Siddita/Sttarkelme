@@ -1,0 +1,1064 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+      "title": "Resume Parser API",
+      "description": "A microservice for parsing resumes using OCR and AI",
+      "version": "1.0.0"
+    },
+    "servers": [
+      {
+        "url": "/resume_builder"
+      }
+    ],
+    "paths": {
+      "/health": {
+        "get": {
+          "summary": "Health Check",
+          "description": "Global health check endpoint",
+          "operationId": "resumebuilder_health_check_health_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HealthModel"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/resume/parse": {
+        "post": {
+          "tags": [
+            "resume"
+          ],
+          "summary": "Parse Resume",
+          "description": "Parse a resume (PDF or Image)",
+          "operationId": "parse_resume_resume_parse_post",
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "$ref": "#/components/schemas/Body_parse_resume_resume_parse_post"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ResumeParseResponseSchema"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/resume/generate": {
+        "post": {
+          "tags": [
+            "resume"
+          ],
+          "summary": "Generate Resume",
+          "description": "Generate a formatted resume text from structured data",
+          "operationId": "generate_resume_resume_generate_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumeGenerateRequestSchema"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ResumeGenerateResponseSchema"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/resume/export/pdf/": {
+        "post": {
+          "tags": [
+            "resume"
+          ],
+          "summary": "Export Pdf",
+          "description": "Export resume as PDF",
+          "operationId": "export_pdf_resume_export_pdf__post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportRequestSchema"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/resume/export/docx/": {
+        "post": {
+          "tags": [
+            "resume"
+          ],
+          "summary": "Export Docx",
+          "description": "Export resume as DOCX",
+          "operationId": "export_docx_resume_export_docx__post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportRequestSchema"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/parse-resume": {
+        "post": {
+          "tags": [
+            "legacy"
+          ],
+          "summary": "Parse Resume Legacy",
+          "description": "Legacy endpoint: Parse a resume (PDF or Image)",
+          "operationId": "parse_resume_legacy_parse_resume_post",
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "$ref": "#/components/schemas/Body_parse_resume_legacy_parse_resume_post"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/generate-resume": {
+        "post": {
+          "tags": [
+            "legacy"
+          ],
+          "summary": "Generate Resume Legacy",
+          "description": "Legacy endpoint: Generate a formatted resume text from structured data",
+          "operationId": "generate_resume_legacy_generate_resume_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Payload"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/export/pdf/": {
+        "post": {
+          "tags": [
+            "legacy"
+          ],
+          "summary": "Export Pdf Legacy",
+          "description": "Legacy endpoint: Export resume as PDF",
+          "operationId": "export_pdf_legacy_api_export_pdf__post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Payload"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/export/docx/": {
+        "post": {
+          "tags": [
+            "legacy"
+          ],
+          "summary": "Export Docx Legacy",
+          "description": "Legacy endpoint: Export resume as DOCX",
+          "operationId": "export_docx_legacy_api_export_docx__post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Payload"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+  
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/": {
+        "get": {
+          "summary": "Root",
+          "description": "Root endpoint",
+          "operationId": "root__get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/RootModel"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/healthz": {
+        "get": {
+          "summary": "Healthz",
+          "operationId": "resumebuilder_healthz_healthz_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HealthZModel"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "schemas": {
+        "Body_parse_resume_legacy_parse_resume_post": {
+          "properties": {
+            "file": {
+              "type": "string",
+              "format": "binary",
+              "title": "File"
+            }
+          },
+          "type": "object",
+          "required": [
+            "file"
+          ],
+          "title": "Body_parse_resume_legacy_parse_resume_post"
+        },
+        "Body_parse_resume_resume_parse_post": {
+          "properties": {
+            "file": {
+              "type": "string",
+              "format": "binary",
+              "title": "File"
+            }
+          },
+          "type": "object",
+          "required": [
+            "file"
+          ],
+          "title": "Body_parse_resume_resume_parse_post"
+        },
+        "CertificationSchema": {
+          "properties": {
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name",
+              "default": ""
+            },
+            "issuer": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Issuer",
+              "default": ""
+            },
+            "date": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date",
+              "default": ""
+            },
+            "url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Url",
+              "default": ""
+            }
+          },
+          "type": "object",
+          "title": "CertificationSchema"
+        },
+        "EducationSchema": {
+          "properties": {
+            "institution": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Institution",
+              "default": ""
+            },
+            "degree": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Degree",
+              "default": ""
+            },
+            "field": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Field",
+              "default": ""
+            },
+            "start_date": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start Date",
+              "default": ""
+            },
+            "end_date": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End Date",
+              "default": ""
+            },
+            "gpa": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gpa",
+              "default": ""
+            }
+          },
+          "type": "object",
+          "title": "EducationSchema"
+        },
+        "ExperienceSchema": {
+          "properties": {
+            "company": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Company",
+              "default": ""
+            },
+            "position": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Position",
+              "default": ""
+            },
+            "start_date": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start Date",
+              "default": ""
+            },
+            "end_date": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End Date",
+              "default": ""
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description",
+              "default": ""
+            },
+            "achievements": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "title": "Achievements"
+            }
+          },
+          "type": "object",
+          "title": "ExperienceSchema"
+        },
+        "ExportRequestSchema": {
+          "properties": {
+            "data": {
+              "$ref": "#/components/schemas/ResumeDataSchema"
+            }
+          },
+          "type": "object",
+          "required": [
+            "data"
+          ],
+          "title": "ExportRequestSchema"
+        },
+        "HTTPValidationError": {
+          "properties": {
+            "detail": {
+              "items": {
+                "$ref": "#/components/schemas/ValidationError"
+              },
+              "type": "array",
+              "title": "Detail"
+            }
+          },
+          "type": "object",
+          "title": "HTTPValidationError"
+        },
+        "HealthModel": {
+          "properties": {
+            "status": {
+              "type": "string",
+              "title": "Status"
+            },
+            "service": {
+              "type": "string",
+              "title": "Service"
+            },
+            "version": {
+              "type": "string",
+              "title": "Version"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Timestamp"
+            }
+          },
+          "type": "object",
+          "required": [
+            "status",
+            "service",
+            "version",
+            "timestamp"
+          ],
+          "title": "HealthModel"
+        },
+        "HealthResponseSchema": {
+          "properties": {
+            "status": {
+              "type": "string",
+              "title": "Status"
+            },
+            "gemini_api": {
+              "type": "string",
+              "title": "Gemini Api"
+            },
+            "tesseract": {
+              "type": "string",
+              "title": "Tesseract"
+            }
+          },
+          "type": "object",
+          "required": [
+            "status",
+            "gemini_api",
+            "tesseract"
+          ],
+          "title": "HealthResponseSchema"
+        },
+        "HealthZModel": {
+          "properties": {
+            "status": {
+              "type": "string",
+              "title": "Status"
+            }
+          },
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "title": "HealthZModel"
+        },
+        "PersonalInfoSchema": {
+          "properties": {
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name",
+              "default": ""
+            },
+            "email": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Email",
+              "default": ""
+            },
+            "phone": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Phone",
+              "default": ""
+            },
+            "location": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location",
+              "default": ""
+            },
+            "linkedin": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Linkedin",
+              "default": ""
+            },
+            "github": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Github",
+              "default": ""
+            },
+            "website": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Website",
+              "default": ""
+            }
+          },
+          "type": "object",
+          "title": "PersonalInfoSchema"
+        },
+        "ProjectSchema": {
+          "properties": {
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name",
+              "default": ""
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description",
+              "default": ""
+            },
+            "technologies": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "title": "Technologies"
+            },
+            "url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Url",
+              "default": ""
+            }
+          },
+          "type": "object",
+          "title": "ProjectSchema"
+        },
+        "ResumeDataSchema": {
+          "properties": {
+            "personal_info": {
+              "$ref": "#/components/schemas/PersonalInfoSchema"
+            },
+            "summary": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Summary",
+              "default": ""
+            },
+            "skills": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "title": "Skills"
+            },
+            "experience": {
+              "items": {
+                "$ref": "#/components/schemas/ExperienceSchema"
+              },
+              "type": "array",
+              "title": "Experience"
+            },
+            "education": {
+              "items": {
+                "$ref": "#/components/schemas/EducationSchema"
+              },
+              "type": "array",
+              "title": "Education"
+            },
+            "projects": {
+              "items": {
+                "$ref": "#/components/schemas/ProjectSchema"
+              },
+              "type": "array",
+              "title": "Projects"
+            },
+            "certifications": {
+              "items": {
+                "$ref": "#/components/schemas/CertificationSchema"
+              },
+              "type": "array",
+              "title": "Certifications"
+            },
+            "hobbies": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "title": "Hobbies"
+            }
+          },
+          "type": "object",
+          "title": "ResumeDataSchema"
+        },
+        "ResumeGenerateRequestSchema": {
+          "properties": {
+            "data": {
+              "$ref": "#/components/schemas/ResumeDataSchema"
+            },
+            "job_description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Job Description",
+              "default": ""
+            }
+          },
+          "type": "object",
+          "required": [
+            "data"
+          ],
+          "title": "ResumeGenerateRequestSchema"
+        },
+        "ResumeGenerateResponseSchema": {
+          "properties": {
+            "success": {
+              "type": "boolean",
+              "title": "Success"
+            },
+            "generated_resume": {
+              "type": "string",
+              "title": "Generated Resume"
+            }
+          },
+          "type": "object",
+          "required": [
+            "success",
+            "generated_resume"
+          ],
+          "title": "ResumeGenerateResponseSchema"
+        },
+        "ResumeParseResponseSchema": {
+          "properties": {
+            "success": {
+              "type": "boolean",
+              "title": "Success"
+            },
+            "data": {
+              "$ref": "#/components/schemas/ResumeDataSchema"
+            },
+            "extracted_text": {
+              "type": "string",
+              "title": "Extracted Text"
+            }
+          },
+          "type": "object",
+          "required": [
+            "success",
+            "data",
+            "extracted_text"
+          ],
+          "title": "ResumeParseResponseSchema"
+        },
+        "RootModel": {
+          "properties": {
+            "message": {
+              "type": "string",
+              "title": "Message"
+            },
+            "version": {
+              "type": "string",
+              "title": "Version"
+            },
+            "docs": {
+              "type": "string",
+              "title": "Docs"
+            },
+            "health": {
+              "type": "string",
+              "title": "Health"
+            }
+          },
+          "type": "object",
+          "required": [
+            "message",
+            "version",
+            "docs",
+            "health"
+          ],
+          "title": "RootModel"
+        },
+        "ValidationError": {
+          "properties": {
+            "loc": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ]
+              },
+              "type": "array",
+              "title": "Location"
+            },
+            "msg": {
+              "type": "string",
+              "title": "Message"
+            },
+            "type": {
+              "type": "string",
+              "title": "Error Type"
+            }
+          },
+          "type": "object",
+          "required": [
+            "loc",
+            "msg",
+            "type"
+          ],
+          "title": "ValidationError"
+        }
+      }
+    }
+  }
