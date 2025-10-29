@@ -400,6 +400,8 @@ const AIAssessment = () => {
     setQuizStartTime(null);
     setCodeSolution('');
     setCodingResults(null);
+    // Navigate back to the assessment tab within the same page
+    setActiveTab('assessment');
   };
 
   // Handle jobs data for recommendations
@@ -643,7 +645,7 @@ const AIAssessment = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: "easeOut" }}
           viewport={{ once: true }}
-          className="relative z-40 lg:min-h-screen max-w-screen-2xl mx-auto pt-8 bg-gradient-to-b from-cyan-100 to-white overflow-hidden"
+          className="relative pb-20 lg:min-h-screen max-w-screen-2xl mx-auto pt-8 bg-gradient-to-b from-cyan-100 to-white overflow-hidden"
       >
           <div className="relative max-w-7xl mx-auto pt-8 lg:pt-12">
         
@@ -673,11 +675,11 @@ const AIAssessment = () => {
             </section>
 
             {/* Tab Navigation */}
-            <div className="flex justify-center mb-12">
-              <div className="bg-card/50 backdrop-blur-sm rounded-lg p-1 border border-primary/20">
+            <div className="flex justify-center mb-12 px-4">
+              <div className="bg-card/50 backdrop-blur-sm rounded-lg p-1 border border-primary/20 flex flex-wrap justify-center gap-2 sm:gap-0 sm:flex-nowrap">
                 <button
                   onClick={() => setActiveTab('personalized')}
-                  className={`px-6 py-3 rounded-md font-medium transition-all ${
+                  className={`w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 rounded-md font-medium transition-all text-sm sm:text-base ${
                     activeTab === 'personalized'
                       ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
@@ -688,7 +690,7 @@ const AIAssessment = () => {
                 </button>
                 <button
                   onClick={() => setActiveTab('assessment')}
-                  className={`px-6 py-3 rounded-md font-medium transition-all ${
+                  className={`w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 rounded-md font-medium transition-all text-sm sm:text-base ${
                     activeTab === 'assessment'
                       ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
@@ -699,7 +701,7 @@ const AIAssessment = () => {
                 </button>
                 <button
                   onClick={() => setActiveTab('interview')}
-                  className={`px-6 py-3 rounded-md font-medium transition-all ${
+                  className={`w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 rounded-md font-medium transition-all text-sm sm:text-base ${
                     activeTab === 'interview'
                       ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
@@ -1281,7 +1283,7 @@ const AIAssessment = () => {
                   </p>
                 </div>
 
-                {/* Workflow Progress Indicator */}
+                {/* Workflow Progress Indicator
                 <div className="flex justify-center mb-8">
                   <div className="flex items-center space-x-4">
                     {['upload', 'analysis', 'jobs', 'test', 'interview'].map((step, index) => (
@@ -1303,6 +1305,43 @@ const AIAssessment = () => {
                         {index < 4 && <div className="w-8 h-0.5 bg-gray-200 mx-2" />}
                       </div>
                     ))}
+                  </div>
+                </div> */}
+
+                {/* Workflow Progress Indicator */}
+                <div className="flex justify-center mb-8 px-4">
+                  <div className="flex flex-wrap sm:flex-nowrap items-center justify-center gap-4 sm:gap-6">
+                    {['upload', 'analysis', 'jobs', 'test', 'interview'].map((step, index) => {
+                      const isActive = resumeWorkflowStep === step;
+                      const isCompleted =
+                        ['upload', 'analysis', 'jobs', 'test', 'interview'].indexOf(resumeWorkflowStep) > index;
+
+                      return (
+                        <div key={step} className="flex items-center">
+                          <div
+                            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-colors duration-300 ${
+                              isActive
+                                ? 'bg-primary text-white shadow-md'
+                                : isCompleted
+                                ? 'bg-green-500 text-white'
+                                : 'bg-gray-200 text-gray-600'
+                            }`}
+                          >
+                            {index + 1}
+                          </div>
+                          <span
+                            className={`ml-2 text-sm sm:text-base font-medium transition-colors duration-300 ${
+                              isActive ? 'text-primary' : 'text-gray-600'
+                            }`}
+                          >
+                            {step.charAt(0).toUpperCase() + step.slice(1)}
+                          </span>
+                          {index < 4 && (
+                            <div className="hidden sm:block w-8 h-0.5 bg-gray-300 mx-2" />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
                 
@@ -1587,7 +1626,7 @@ const AIAssessment = () => {
                       </p>
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-6 mb-8">
+                    <div className="grid md:grid-cols-2 gap-6 p-4 mb-8">
                       {/* MCQ + Technical Assessment Option */}
                       <Card 
                         className={`p-6 cursor-pointer transition-all duration-300 hover:shadow-lg border-2 ${
@@ -1931,7 +1970,7 @@ const AIAssessment = () => {
           )}
 
             {/* How It Works Section */}
-            <section className="relative w-full py-20 bg-gradient-to-b from-white to-cyan-100 overflow-hidden">
+            <section className="relative w-full py-20  overflow-hidden">
               <div className="text-center pt-14 relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <h2 className="text-xl mb-6 sm:text-4xl md:text-6xl lg:text-4xl font-normal leading-tight text-[#2D3253] z-50">
                   How Personalized Assessment <span className="bg-gradient-primary bg-clip-text text-transparent">Works</span>
@@ -1996,17 +2035,18 @@ const AIAssessment = () => {
         </motion.section>
               </div>
 
-      {/* Footer Section */}
-      <div
-        className="-mt-16 relative z-10 min-h-screen max-w-screen-2xl mx-auto px-2 sm:px-6 lg:px-8 border border-blue-300 rounded-tl-[70px] rounded-tr-[70px] overflow-hidden bg-[#FFFFFF] animate-fade-in"
-      >
-        <Footer />
-        <div className="px-4 sm:px-6 lg:px-8 text-center">
-          <div className="h-[16rem] flex items-center justify-center tracking-widest">
-            <TextHoverEffect text=" AInode " />
+      {/* Footer Section 7 */}
+        <div
+          className="-mt-16 relative z-10 min-h-screen max-w-screen-2xl mx-auto px-2 sm:px-6 lg:px-8 border border-blue-300 rounded-tl-[50px] rounded-tr-[50px] lg:rounded-tl-[70px] lg:rounded-tr-[70px] overflow-hidden bg-[#FFFFFF] animate-fade-in"
+        >
+          <Footer />
+
+          <div className="px-4 sm:px-6 lg:px-8 text-center">
+            <div className="h-[16rem] flex items-center justify-center tracking-widest">
+              <TextHoverEffect text=" AInode " />
+            </div>
           </div>
         </div>
-    </div>
   </div>
   );
 };

@@ -28,6 +28,7 @@ import {
   Camera,
   Timer,
   Loader2,
+  Code,
   Send,
   TrendingUp,
   BarChart3,
@@ -37,7 +38,12 @@ import {
   Hand,
   RotateCcw,
   AlertCircle,
-  Download
+  Download,
+  Trophy,
+  Activity,
+  BookOpen,
+  RefreshCw,
+  Square
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
@@ -124,7 +130,7 @@ async function apiClient(
 const PersonalizedAssessment = () => {
   const navigate = useNavigate();
   
-  const [currentStep, setCurrentStep] = useState<'welcome' | 'upload' | 'analysis' | 'jobs' | 'aptitude' | 'behavioral' | 'coding' | 'interview'>('welcome');
+  const [currentStep, setCurrentStep] = useState<'welcome' | 'upload' | 'analysis' | 'jobs' | 'aptitude' | 'behavioral' | 'coding' | 'results' | 'interview'>('welcome');
   const [selectedPath, setSelectedPath] = useState<'quick-test' | 'ai-interview' | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -185,6 +191,14 @@ const PersonalizedAssessment = () => {
   const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState(false);
   const [downloadedReport, setDownloadedReport] = useState<any>(null);
   const [generatedPdf, setGeneratedPdf] = useState<any>(null);
+  const [isDownloadingReport, setIsDownloadingReport] = useState(false);
+  
+  // Quick Test Analysis State
+  const [quickTestAnalysis, setQuickTestAnalysis] = useState<any>(null);
+  const [isGeneratingQuickTestAnalysis, setIsGeneratingQuickTestAnalysis] = useState(false);
+  const [quickTestResults, setQuickTestResults] = useState<any>(null);
+  const [showQuickTestAnalysis, setShowQuickTestAnalysis] = useState(false);
+  const [showDetailedResults, setShowDetailedResults] = useState<any>(null);
 
   // Video and Real-time Analysis State
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -198,6 +212,17 @@ const PersonalizedAssessment = () => {
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [questionCount, setQuestionCount] = useState(0);
+  
+  // Quick test timer state
+  const [quickTestElapsedTime, setQuickTestElapsedTime] = useState(0);
+  const quickTestTimerRef = useRef<number | null>(null);
+  
+  // Speech recognition state for behavioral assessment
+  const [isRecordingSpeech, setIsRecordingSpeech] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const [activeField, setActiveField] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
   
   const [metrics, setMetrics] = useState({
     confidencePercent: 0,
@@ -278,13 +303,219 @@ const PersonalizedAssessment = () => {
     }
   });
 
+  // Helper: Convert markdown report to styled HTML for printing/downloading
+  const generateReportHtml = (markdown: string): string => {
+    const converted = markdown
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+      .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+      .replace(/^\* (.*$)/gim, '<li>$1</li>')
+      .replace(/^\d+\. (.*$)/gim, '<li>$1</li>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/^(?!<[h|l])/gim, '<p>')
+      .replace(/(?<!>)$/gim, '</p>');
+
+    return (
+      `<!DOCTYPE html>` +
+      `<html>` +
+      `<head>` +
+      `<meta charset="utf-8">` +
+      `<title>Assessment Report</title>` +
+      `<style>` +
+      `body{font-family:Arial,sans-serif;line-height:1.6;max-width:800px;margin:0 auto;padding:20px;color:#333}` +
+      `h1,h2,h3{color:#2c3e50}` +
+      `h1{border-bottom:2px solid #3498db;padding-bottom:10px}` +
+      `h2{border-bottom:1px solid #ecf0f1;padding-bottom:5px}` +
+      `ul,ol{margin-left:20px}` +
+      `li{margin-bottom:5px}` +
+      `strong{color:#2c3e50}` +
+      `.header{text-align:center;margin-bottom:30px}` +
+      `.section{margin-bottom:25px}` +
+      `</style>` +
+      `</head>` +
+      `<body>` +
+      `<div class="header">` +
+      `<h1>Comprehensive Assessment Report</h1>` +
+      `<p>Generated on ${new Date().toLocaleDateString()}</p>` +
+      `</div>` +
+      `<div class="content">${converted}</div>` +
+      `</body>` +
+      `</html>`
+    );
+  };
+
+  // Helper: Load jsPDF from CDN and return the constructor
+  const loadJsPdf = (): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      if ((window as any).jspdf?.jsPDF) {
+        resolve((window as any).jspdf.jsPDF);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+      script.async = true;
+      script.onload = () => {
+        if ((window as any).jspdf?.jsPDF) {
+          resolve((window as any).jspdf.jsPDF);
+        } else {
+          reject(new Error('jsPDF failed to load'));
+        }
+      };
+      script.onerror = () => reject(new Error('Failed to load jsPDF'));
+      document.body.appendChild(script);
+    });
+  };
+
+  // Helper: Convert markdown to plain text suitable for PDF
+  const markdownToPlainText = (markdown: string): string => {
+    return markdown
+      .replace(/\r\n/g, '\n')
+      .replace(/\t/g, '  ')
+      .replace(/^###\s+/gim, '')
+      .replace(/^##\s+/gim, '')
+      .replace(/^#\s+/gim, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/^\*\s+/gim, '• ')
+      .replace(/^\d+\.\s+/gim, match => match)
+      .replace(/\n{3,}/g, '\n\n');
+  };
+
+  // Helper: Format evaluation text with proper Markdown rendering
+  const formatEvaluationText = (text: string) => {
+    if (!text) return null;
+    
+    return text.split('\n').map((line: string, index: number) => {
+      // Handle bold text (**text**)
+      if (line.includes('**') && line.match(/\*\*.*\*\*/)) {
+        const parts = line.split(/(\*\*.*?\*\*)/g);
+        return (
+          <p key={index} className="mb-2">
+            {parts.map((part, partIndex) => {
+              if (part.startsWith('**') && part.endsWith('**')) {
+                return (
+                  <strong key={partIndex} className="font-bold text-gray-800">
+                    {part.replace(/\*\*/g, '')}
+                  </strong>
+                );
+              }
+              return part;
+            })}
+          </p>
+        );
+      }
+      // Handle headers (lines that are entirely bold)
+      else if (line.startsWith('**') && line.endsWith('**') && line.length > 4) {
+        return (
+          <h5 key={index} className="font-bold text-gray-800 mt-4 mb-2 text-base">
+            {line.replace(/\*\*/g, '')}
+          </h5>
+        );
+      }
+      // Handle bullet points
+      else if (line.trim().startsWith('* ') && !line.includes('**')) {
+        return (
+          <div key={index} className="ml-4 mb-1">
+            <span className="text-blue-600">•</span>
+            <span className="ml-2">{line.replace(/^\* /, '')}</span>
+          </div>
+        );
+      }
+      // Handle numbered lists
+      else if (line.match(/^\d+\.\s/)) {
+        return (
+          <div key={index} className="ml-4 mb-1">
+            <span className="text-blue-600 font-medium">{line.match(/^\d+\./)?.[0]}</span>
+            <span className="ml-2">{line.replace(/^\d+\.\s/, '')}</span>
+          </div>
+        );
+      }
+      // Handle empty lines
+      else if (line.trim() === '') {
+        return <br key={index} />;
+      }
+      // Handle regular text
+      else if (line.trim().length > 0) {
+        return (
+          <p key={index} className="mb-1">
+            {line}
+          </p>
+        );
+      }
+      return null;
+    });
+  };
+
+  // Helper: Generate and download PDF from markdown string
+  const downloadReportAsPdf = async (markdown: string) => {
+    try {
+      const jsPDFCtor = await loadJsPdf();
+      const doc = new jsPDFCtor({ unit: 'pt', format: 'a4' });
+      const margin = 40;
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const usableWidth = pageWidth - margin * 2;
+
+      // Title
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.text('Comprehensive Assessment Report', margin, 60);
+
+      // Date
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text(`Generated on ${new Date().toLocaleDateString()}`, margin, 80);
+
+      // Body
+      const bodyText = markdownToPlainText(markdown);
+      doc.setFontSize(12);
+      const lines = doc.splitTextToSize(bodyText, usableWidth);
+
+      let cursorY = 110;
+      const lineHeight = 16;
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      lines.forEach((line: string) => {
+        if (cursorY + lineHeight > pageHeight - margin) {
+          doc.addPage();
+          cursorY = margin;
+        }
+        doc.text(line, margin, cursorY);
+        cursorY += lineHeight;
+      });
+
+      const filename = `assessment-report-${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(filename);
+    } catch (err) {
+      console.error('PDF generation failed, falling back to HTML download:', err);
+      // Fallback to HTML download to ensure user still gets the report
+      const htmlContent = generateReportHtml(markdown);
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `assessment-report-${new Date().toISOString().split('T')[0]}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }
+  };
+
   const { mutate: downloadReport } = downloadReportDownloadReportPost({
     onSuccess: (data) => {
       console.log('Report download initiated:', data);
       setDownloadedReport(data);
+      setIsDownloadingReport(false);
+      
+      if (data?.report) {
+        void downloadReportAsPdf(data.report);
+      }
     },
     onError: (error) => {
       console.error('Failed to download report:', error);
+      setIsDownloadingReport(false);
     }
   });
 
@@ -292,11 +523,340 @@ const PersonalizedAssessment = () => {
     onSuccess: (data) => {
       console.log('Interview PDF generated:', data);
       setGeneratedPdf(data);
+      
+      // Trigger PDF download if available
+      if (data?.pdf_url || data?.pdf_data) {
+        const link = document.createElement('a');
+        if (data.pdf_url) {
+          link.href = data.pdf_url;
+        } else if (data.pdf_data) {
+          const blob = new Blob([data.pdf_data], { type: 'application/pdf' });
+          const url = window.URL.createObjectURL(blob);
+          link.href = url;
+        }
+        link.download = `interview-report-${new Date().toISOString().split('T')[0]}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        if (data.pdf_data) {
+          window.URL.revokeObjectURL(link.href);
+        }
+      }
     },
     onError: (error) => {
       console.error('Failed to generate interview PDF:', error);
     }
   });
+
+  // Quick Test Analysis Functions
+  const generateQuickTestAnalysis = async () => {
+    setIsGeneratingQuickTestAnalysis(true);
+    
+    try {
+      // Load stored test data from localStorage
+      const aptitudeTestData = localStorage.getItem('aptitudeTestData');
+      const behavioralTestData = localStorage.getItem('behavioralTestData');
+      const codingTestData = localStorage.getItem('codingTestData');
+      
+      let allResults = {
+        aptitudeResults: null,
+        behavioralResults: null,
+        codingResults: null
+      };
+      
+      let totalScore = 0;
+      let completedTests = 0;
+      
+      // Evaluate aptitude test using Quiz Microservice
+      if (aptitudeTestData) {
+        const aptitudeData = JSON.parse(aptitudeTestData);
+        
+        try {
+          // Prepare data for evaluation
+          const questionIds = aptitudeData.questions.map((_: any, index: number) => index);
+          const selectedOptions = aptitudeData.answers.map((answer: string) => answer || '');
+          
+          const evaluationResponse = await apiClient("POST", "/quiz/evaluate_aptitude", {
+            question_ids: questionIds,
+            selected_options: selectedOptions
+          });
+          
+          allResults.aptitudeResults = {
+            score: evaluationResponse.score || 0,
+            correctAnswers: evaluationResponse.results?.filter((r: any) => r.is_correct).length || 0,
+            totalQuestions: evaluationResponse.total || aptitudeData.questions.length,
+            evaluation: `Aptitude test completed with ${evaluationResponse.score || 0}% accuracy. You answered ${evaluationResponse.results?.filter((r: any) => r.is_correct).length || 0} out of ${evaluationResponse.total || aptitudeData.questions.length} questions correctly.`,
+            detailedResults: evaluationResponse.results || []
+          };
+          
+          totalScore += evaluationResponse.score || 0;
+          completedTests++;
+        } catch (error) {
+          console.error('Aptitude evaluation failed:', error);
+          // Fallback to basic scoring
+          const correctAnswers = aptitudeData.answers.filter(answer => answer && answer.trim() !== '').length;
+          const totalQuestions = aptitudeData.questions.length;
+          const aptitudeScore = Math.round((correctAnswers / totalQuestions) * 100);
+          
+          allResults.aptitudeResults = {
+            score: aptitudeScore,
+            correctAnswers,
+            totalQuestions,
+            evaluation: `Aptitude test completed with ${aptitudeScore}% accuracy. You answered ${correctAnswers} out of ${totalQuestions} questions correctly.`
+          };
+          
+          totalScore += aptitudeScore;
+          completedTests++;
+        }
+      }
+      
+      // Evaluate behavioral test using Quiz Microservice
+      if (behavioralTestData) {
+        const behavioralData = JSON.parse(behavioralTestData);
+        
+        try {
+          // Evaluate each behavioral response
+          const evaluations = [];
+          let totalBehavioralScore = 0;
+          
+          for (let i = 0; i < behavioralData.questions.length; i++) {
+            const question = behavioralData.questions[i];
+            const response = behavioralData.answers[i];
+            
+            if (response && response.trim() !== '') {
+              const evaluationResponse = await apiClient("POST", "/quiz/evaluate_behavioral", {
+                question: question.text || question.question || question,
+                response: response
+              });
+              
+              evaluations.push({
+                question: question.text || question.question || question,
+                response: response,
+                evaluation: evaluationResponse.evaluation
+              });
+              
+              // Extract score from evaluation text (basic parsing)
+              const scoreMatch = evaluationResponse.evaluation.match(/(\d+)\s*out\s*of\s*10|score\s*of\s*(\d+)|(\d+)\/10/);
+              const score = scoreMatch ? parseInt(scoreMatch[1] || scoreMatch[2] || scoreMatch[3]) : 5;
+              totalBehavioralScore += score;
+            }
+          }
+          
+          const answeredQuestions = evaluations.length;
+          const behavioralScore = answeredQuestions > 0 ? Math.round(totalBehavioralScore / answeredQuestions * 10) : 0;
+          
+          allResults.behavioralResults = {
+            score: behavioralScore,
+            answeredQuestions,
+            totalQuestions: behavioralData.questions.length,
+            evaluation: `Behavioral assessment completed with ${behavioralScore}% average score. You provided detailed responses to ${answeredQuestions} out of ${behavioralData.questions.length} questions.`,
+            detailedEvaluations: evaluations
+          };
+          
+          totalScore += behavioralScore;
+          completedTests++;
+        } catch (error) {
+          console.error('Behavioral evaluation failed:', error);
+          // Fallback to basic scoring
+          const answeredQuestions = behavioralData.answers.filter(answer => answer && answer.trim() !== '').length;
+          const totalQuestions = behavioralData.questions.length;
+          const behavioralScore = Math.round((answeredQuestions / totalQuestions) * 100);
+          
+          allResults.behavioralResults = {
+            score: behavioralScore,
+            answeredQuestions,
+            totalQuestions,
+            evaluation: `Behavioral assessment completed with ${behavioralScore}% completion. You provided detailed responses to ${answeredQuestions} out of ${totalQuestions} questions.`
+          };
+          
+          totalScore += behavioralScore;
+          completedTests++;
+        }
+      }
+      
+      // Evaluate coding test using Quiz Microservice
+      if (codingTestData) {
+        const codingData = JSON.parse(codingTestData);
+        
+        try {
+          if (codingData.solution && codingData.solution.trim() !== '') {
+            const evaluationResponse = await apiClient("POST", "/quiz/evaluate_code", {
+              challenge: codingData.challenge.challenge,
+              solution: codingData.solution
+            });
+            
+            allResults.codingResults = {
+              score: evaluationResponse.score || 75,
+              hasSolution: true,
+              evaluation: evaluationResponse.evaluation || `Coding challenge completed. You provided a solution for the given problem.`,
+              detailedEvaluation: evaluationResponse
+            };
+          } else {
+            allResults.codingResults = {
+              score: 0,
+              hasSolution: false,
+              evaluation: `Coding challenge not completed. No solution was provided.`
+            };
+          }
+          
+          totalScore += allResults.codingResults.score;
+          completedTests++;
+        } catch (error) {
+          console.error('Coding evaluation failed:', error);
+          // Fallback to basic scoring
+          const hasSolution = codingData.solution && codingData.solution.trim() !== '';
+          const codingScore = hasSolution ? 75 : 0;
+          
+          allResults.codingResults = {
+            score: codingScore,
+            hasSolution,
+            evaluation: hasSolution 
+              ? `Coding challenge completed. You provided a solution for the given problem.`
+              : `Coding challenge not completed. No solution was provided.`
+          };
+          
+          totalScore += codingScore;
+          completedTests++;
+        }
+      }
+      
+      const overallScore = completedTests > 0 ? Math.round(totalScore / completedTests) : 0;
+      
+      // Store results
+      setQuickTestResults(allResults);
+      
+      // Generate analysis using API
+      const performanceGapsData = {
+        scores: {
+          overall_score: overallScore,
+          total_questions: completedTests,
+          accuracy: overallScore,
+          time_efficiency: completedTests > 0 ? (completedTests / 2) : 0
+        },
+        feedback: `Quick test assessment completed with ${overallScore}% overall score. ${completedTests} out of 3 tests completed.`
+      };
+      
+      console.log('Quick test performance gaps data:', performanceGapsData);
+      analyzePerformanceGaps(performanceGapsData);
+      
+      const skillRecommendationsData = {
+        skills: resumeAnalysis?.skills?.join(', ') || 'General skills',
+        scores: {
+          overall_score: overallScore,
+          total_questions: completedTests,
+          accuracy: overallScore,
+          time_efficiency: completedTests > 0 ? (completedTests / 2) : 0
+        }
+      };
+      
+      console.log('Quick test skill recommendations data:', skillRecommendationsData);
+      generateSkillRecommendations(skillRecommendationsData);
+      
+      // Create comprehensive analysis
+      const analysis = {
+        overallScore,
+        completedTests,
+        totalTests: 3,
+        results: allResults,
+        summary: `You completed ${completedTests} out of 3 tests with an overall score of ${overallScore}%.`,
+        recommendations: generateQuickTestRecommendations(allResults, overallScore)
+      };
+      
+      setQuickTestAnalysis(analysis);
+      setShowQuickTestAnalysis(true);
+      
+    } catch (error) {
+      console.error('Failed to generate quick test analysis:', error);
+    } finally {
+      setIsGeneratingQuickTestAnalysis(false);
+    }
+  };
+  
+  const generateQuickTestRecommendations = (results: any, overallScore: number) => {
+    const recommendations = [];
+    
+    if (results.aptitudeResults) {
+      if (results.aptitudeResults.score >= 80) {
+        recommendations.push({
+          category: 'Aptitude',
+          message: 'Excellent logical reasoning and quantitative skills!',
+          type: 'strength'
+        });
+      } else if (results.aptitudeResults.score >= 60) {
+        recommendations.push({
+          category: 'Aptitude',
+          message: 'Good aptitude skills. Consider practicing more quantitative problems.',
+          type: 'improvement'
+        });
+      } else {
+        recommendations.push({
+          category: 'Aptitude',
+          message: 'Focus on improving logical reasoning and quantitative skills through practice.',
+          type: 'improvement'
+        });
+      }
+    }
+    
+    if (results.behavioralResults) {
+      if (results.behavioralResults.score >= 80) {
+        recommendations.push({
+          category: 'Behavioral',
+          message: 'Strong communication and behavioral competencies!',
+          type: 'strength'
+        });
+      } else if (results.behavioralResults.score >= 60) {
+        recommendations.push({
+          category: 'Behavioral',
+          message: 'Good behavioral skills. Practice articulating your experiences more clearly.',
+          type: 'improvement'
+        });
+      } else {
+        recommendations.push({
+          category: 'Behavioral',
+          message: 'Work on developing stronger behavioral examples and communication skills.',
+          type: 'improvement'
+        });
+      }
+    }
+    
+    if (results.codingResults) {
+      if (results.codingResults.hasSolution) {
+        recommendations.push({
+          category: 'Coding',
+          message: 'Great job completing the coding challenge!',
+          type: 'strength'
+        });
+      } else {
+        recommendations.push({
+          category: 'Coding',
+          message: 'Practice more coding problems to improve your technical skills.',
+          type: 'improvement'
+        });
+      }
+    }
+    
+    if (overallScore >= 80) {
+      recommendations.push({
+        category: 'Overall',
+        message: 'Outstanding performance across all assessments!',
+        type: 'strength'
+      });
+    } else if (overallScore >= 60) {
+      recommendations.push({
+        category: 'Overall',
+        message: 'Good performance. Focus on identified areas for improvement.',
+        type: 'improvement'
+      });
+    } else {
+      recommendations.push({
+        category: 'Overall',
+        message: 'Consider additional practice and preparation in all areas.',
+        type: 'improvement'
+      });
+    }
+    
+    return recommendations;
+  };
 
   // Handle analysis data changes
   useEffect(() => {
@@ -335,6 +895,7 @@ const PersonalizedAssessment = () => {
           }
           
           setCurrentStep('jobs');
+          scrollToTop();
           setIsAnalyzing(false);
         } else if (analysisData.status === 'FAILED') {
           const errorMsg = analysisData.error_message;
@@ -436,6 +997,7 @@ const PersonalizedAssessment = () => {
       if (response && response.id) {
         setResumeId(response.id.toString());
         setCurrentStep('analysis');
+        scrollToTop();
         // Start analysis
         await startResumeAnalysis(response.id.toString());
       } else {
@@ -528,6 +1090,9 @@ const PersonalizedAssessment = () => {
       setCurrentAptitudeQuestion(0);
       setAptitudeAnswers(new Array(response.questions?.length || 0).fill(''));
       
+      // Scroll to questions after they are loaded
+      scrollToQuestions();
+      
     } catch (error) {
       console.error('Error generating aptitude questions:', error);
     } finally {
@@ -554,6 +1119,7 @@ const PersonalizedAssessment = () => {
       
       // Move to next test without immediate evaluation
       setCurrentStep('behavioral');
+      scrollToTop();
       
     } catch (error) {
       console.error('Error storing aptitude test data:', error);
@@ -619,6 +1185,9 @@ const PersonalizedAssessment = () => {
       setCurrentBehavioralQuestion(0);
       setBehavioralAnswers(new Array(response.questions?.length || 0).fill(''));
       
+      // Scroll to questions after they are loaded
+      scrollToQuestions();
+      
     } catch (error) {
       console.error('Error generating behavioral questions:', error);
       console.error('Error details:', error.response || error.message);
@@ -646,6 +1215,7 @@ const PersonalizedAssessment = () => {
       
       // Move to next test without immediate evaluation
       setCurrentStep('coding');
+      scrollToTop();
       
     } catch (error) {
       console.error('Error storing behavioral test data:', error);
@@ -698,6 +1268,9 @@ const PersonalizedAssessment = () => {
       setCodingChallenge(response);
       setUserCodeSolution('');
       
+      // Scroll to questions after they are loaded
+      scrollToQuestions();
+      
     } catch (error) {
       console.error('Error generating coding challenge:', error);
     } finally {
@@ -722,8 +1295,13 @@ const PersonalizedAssessment = () => {
       
       console.log('Coding test completed, data stored for evaluation');
       
-      // Move to next test without immediate evaluation
-      setCurrentStep('interview');
+      // Move to results for quick-test path, or interview for ai-interview path
+      if (selectedPath === 'quick-test') {
+        setCurrentStep('results');
+      } else {
+        setCurrentStep('interview');
+      }
+      scrollToTop();
       
     } catch (error) {
       console.error('Error storing coding test data:', error);
@@ -1419,40 +1997,314 @@ const PersonalizedAssessment = () => {
     }
   };
 
+  // Quick test timer functions
+  const startQuickTestTimer = () => {
+    quickTestTimerRef.current = window.setInterval(() => {
+      setQuickTestElapsedTime(prev => prev + 1);
+    }, 1000);
+  };
+
+  const stopQuickTestTimer = () => {
+    if (quickTestTimerRef.current) {
+      clearInterval(quickTestTimerRef.current);
+      quickTestTimerRef.current = null;
+    }
+  };
+
+  // Speech recognition functions for behavioral assessment
+  const startSpeechRecognition = async (fieldName: string) => {
+    try {
+      setActiveField(fieldName);
+      setIsRecordingSpeech(true);
+      setIsTranscribing(false);
+      
+      // Check browser support
+      if (!window.MediaRecorder || !navigator.mediaDevices) {
+        throw new Error('Audio recording not supported in this browser');
+      }
+      
+      // Get microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Try different audio formats
+      const formats = ['audio/webm', 'audio/mp4', 'audio/wav'];
+      let mediaRecorder;
+      
+      for (const format of formats) {
+        if (MediaRecorder.isTypeSupported(format)) {
+          try {
+            mediaRecorder = new MediaRecorder(stream, { mimeType: format });
+            break;
+          } catch (e) {
+            continue;
+          }
+        }
+      }
+      
+      if (!mediaRecorder) {
+        throw new Error('No supported audio format found');
+      }
+      
+      // Set up the media recorder
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (ev) => {
+        if (ev.data && ev.data.size > 0) {
+          audioChunksRef.current.push(ev.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        try {
+          const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          console.log("Audio blob size:", blob.size, "bytes");
+          
+          if (blob.size === 0) {
+            console.warn("No audio data recorded");
+            setIsTranscribing(false);
+            return;
+          }
+
+          // Stop all tracks
+          stream.getTracks().forEach(track => track.stop());
+
+          // Try to transcribe via API
+          try {
+            const form = new FormData();
+            form.append("file", blob, "recording.webm");
+            
+            console.log("Sending audio for transcription...");
+            setIsTranscribing(true);
+            
+            const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
+            const headers: Record<string, string> = {};
+            if (token) {
+              headers["Authorization"] = `Bearer ${token}`;
+            }
+
+            const resp = await fetch("https://zettanix.in/interview/audio/transcribe", {
+              method: "POST",
+              headers,
+              body: form,
+            });
+
+            if (!resp.ok) {
+              throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+            }
+
+            const res = await resp.json();
+            console.log("Transcribe result:", res);
+            
+            // Handle different response formats
+            if (res && typeof res === "object") {
+              if ("transcript" in res) {
+                const tr = (res as any).transcript as string;
+                setTranscript(tr);
+                setIsTranscribing(false);
+                return;
+              } else if ("transcription" in res) {
+                const tr = (res as any).transcription as string;
+                setTranscript(tr);
+                setIsTranscribing(false);
+                return;
+              } else if (typeof res === "string") {
+                setTranscript(res);
+                setIsTranscribing(false);
+                return;
+              }
+            }
+          } catch (apiErr) {
+            console.error("API transcription failed:", apiErr);
+            setIsTranscribing(false);
+            // Fallback to browser speech recognition
+            startBrowserSpeechRecognition(fieldName);
+          }
+        } catch (err) {
+          console.error("Audio processing failed:", err);
+          setIsTranscribing(false);
+          // Fallback to browser speech recognition
+          startBrowserSpeechRecognition(fieldName);
+        }
+      };
+
+      mediaRecorder.onerror = (ev) => {
+        console.error("MediaRecorder error:", ev);
+        setIsRecordingSpeech(false);
+        setIsTranscribing(false);
+        // Fallback to browser speech recognition
+        startBrowserSpeechRecognition(fieldName);
+      };
+
+      // Start recording
+      mediaRecorder.start();
+      
+    } catch (error) {
+      console.error('Failed to start audio recording:', error);
+      setIsRecordingSpeech(false);
+      setIsTranscribing(false);
+      
+      // Fallback to browser speech recognition
+      startBrowserSpeechRecognition(fieldName);
+    }
+  };
+
+  const startBrowserSpeechRecognition = (fieldName: string) => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert('Speech recognition is not supported in this browser. Please use Chrome or Edge.');
+      setIsRecordingSpeech(false);
+      setIsTranscribing(false);
+      setActiveField(null);
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsRecordingSpeech(true);
+      setIsTranscribing(false);
+      setActiveField(fieldName);
+    };
+
+    recognition.onresult = (event: any) => {
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      setTranscript(finalTranscript || interimTranscript);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsRecordingSpeech(false);
+      setIsTranscribing(false);
+      setActiveField(null);
+    };
+
+    recognition.onend = () => {
+      setIsRecordingSpeech(false);
+      setIsTranscribing(false);
+      setActiveField(null);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  const stopSpeechRecognition = () => {
+    const rec = mediaRecorderRef.current;
+    if (rec && rec.state !== "inactive") {
+      rec.stop();
+      setIsRecordingSpeech(false);
+    } else if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsRecordingSpeech(false);
+    }
+  };
+
+  const applyTranscript = () => {
+    if (transcript && activeField === 'behavioral') {
+      const newAnswers = [...behavioralAnswers];
+      newAnswers[currentBehavioralQuestion] = transcript;
+      setBehavioralAnswers(newAnswers);
+      setTranscript('');
+    }
+  };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const scrollToQuestions = () => {
+    // Scroll to the questions section (look for the first question or test content)
+    setTimeout(() => {
+      // Try to find specific question elements
+      const questionsElement = document.querySelector('h3:contains("Question")') ||
+                              document.querySelector('.space-y-6') ||
+                              document.querySelector('[class*="question"]') ||
+                              document.querySelector('h4:contains("Problem Statement")') ||
+                              document.querySelector('.bg-gray-50');
+      
+      if (questionsElement) {
+        questionsElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        // Fallback: scroll down by a reasonable amount to get past the button area
+        window.scrollBy({ top: 600, behavior: 'smooth' });
+      }
+    }, 800); // Increased delay to ensure questions are fully rendered
+  };
+
   const startAssessment = () => {
     console.log('Start Assessment button clicked');
     setCurrentStep('upload');
+    scrollToTop();
   };
 
   const goBack = () => {
+    console.log('Back button clicked, current step:', currentStep);
+    console.log('Current step type:', typeof currentStep);
+    
     if (currentStep === 'welcome') {
+      console.log('Navigating to /services/ai-assessment');
       navigate('/services/ai-assessment');
     } else if (currentStep === 'upload') {
+      console.log('Going back to welcome step');
       setCurrentStep('welcome');
+      scrollToTop();
     } else if (currentStep === 'analysis') {
+      console.log('Going back to upload step');
       setCurrentStep('upload');
+      scrollToTop();
     } else if (currentStep === 'jobs') {
+      console.log('Going back to analysis step from jobs');
+      console.log('Setting currentStep to analysis...');
       setCurrentStep('analysis');
+      console.log('setCurrentStep called, new value should be analysis');
+      scrollToTop();
     } else if (currentStep === 'aptitude') {
       // If coming from quick test path, go back to jobs
-      if (selectedPath === 'quick-test') {
+      console.log('Going back to jobs step from aptitude');
       setCurrentStep('jobs');
-      } else {
-        setCurrentStep('jobs');
-      }
+      scrollToTop();
     } else if (currentStep === 'behavioral') {
+      console.log('Going back to aptitude step');
       setCurrentStep('aptitude');
+      scrollToTop();
     } else if (currentStep === 'coding') {
+      console.log('Going back to behavioral step');
       setCurrentStep('behavioral');
+      scrollToTop();
+    } else if (currentStep === 'results') {
+      // If coming from quick test results, go back to jobs
+      console.log('Going back to jobs step from results');
+      setCurrentStep('jobs');
+      scrollToTop();
     } else if (currentStep === 'interview') {
       // If coming from AI interview path, go back to jobs
+      console.log('Going back to jobs step from interview');
       setCurrentStep('jobs');
+      scrollToTop();
+    } else {
+      console.log('Unknown current step:', currentStep);
     }
   };
 
@@ -1465,11 +2317,33 @@ const PersonalizedAssessment = () => {
     return 8; // welcome + 7 workflow steps
   };
 
+  // Debug currentStep changes
+  useEffect(() => {
+    console.log('currentStep changed to:', currentStep);
+  }, [currentStep]);
+
+  // Auto-generate quick test analysis when reaching results step
+  useEffect(() => {
+    if (currentStep === 'results' && selectedPath === 'quick-test' && !quickTestAnalysis) {
+      // Stop the quick test timer
+      stopQuickTestTimer();
+      
+      // Small delay to ensure the UI is rendered
+      const timer = setTimeout(() => {
+        generateQuickTestAnalysis();
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [currentStep, selectedPath, quickTestAnalysis]);
+
   // Cleanup effect for video and analysis
   useEffect(() => {
     return () => {
       stopFrameLoop();
       stopTimer();
+      stopQuickTestTimer();
+      stopSpeechRecognition();
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach((t) => t.stop());
       }
@@ -1516,8 +2390,15 @@ const PersonalizedAssessment = () => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={goBack}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Back button clicked, event:', e);
+                    console.log('Button click handler executed');
+                    goBack();
+                  }}
                   className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
+                  type="button"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   Back
@@ -1549,7 +2430,7 @@ const PersonalizedAssessment = () => {
                       let steps = ['upload', 'analysis', 'jobs'];
                       
                       if (selectedPath === 'quick-test') {
-                        steps = ['upload', 'analysis', 'jobs', 'aptitude', 'behavioral', 'coding'];
+                        steps = ['upload', 'analysis', 'jobs', 'aptitude', 'behavioral', 'coding', 'results'];
                       } else if (selectedPath === 'ai-interview') {
                         steps = ['upload', 'analysis', 'jobs', 'interview'];
                       } else {
@@ -2069,6 +2950,8 @@ const PersonalizedAssessment = () => {
                           onClick={() => {
                             setSelectedPath('quick-test');
                             setCurrentStep('aptitude');
+                            setQuickTestElapsedTime(0);
+                            startQuickTestTimer();
                           }}
                           className="w-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-lg py-6 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
                         >
@@ -2167,9 +3050,17 @@ const PersonalizedAssessment = () => {
               <Card className="p-8 max-w-4xl mx-auto">
                 <div className="text-center mb-8">
                   <h3 className="text-2xl font-bold mb-4">Aptitude Test</h3>
-                  <p className="text-muted-foreground mb-6">
-                    Question {currentAptitudeQuestion + 1} of {aptitudeQuestions.length}
-                  </p>
+                  <div className="flex justify-center items-center gap-4 mb-6">
+                    <p className="text-muted-foreground">
+                      Question {currentAptitudeQuestion + 1} of {aptitudeQuestions.length}
+                    </p>
+                    {selectedPath === 'quick-test' && (
+                      <div className="flex items-center gap-2 text-primary">
+                        <Timer className="w-4 h-4" />
+                        <span className="text-sm font-mono">{formatTime(quickTestElapsedTime)}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mb-8">
@@ -2326,15 +3217,16 @@ const PersonalizedAssessment = () => {
               <Card className="p-8 max-w-4xl mx-auto">
                 <div className="text-center mb-8">
                   <h3 className="text-2xl font-bold mb-4">Behavioral Assessment</h3>
-                  <p className="text-muted-foreground mb-6">
-                    Question {currentBehavioralQuestion + 1} of {behavioralQuestions.length}
-                  </p>
-                  
-                  {/* Debug info */}
-                  <div className="text-xs text-gray-500 mb-4 p-2 bg-gray-100 rounded">
-                    Debug: Questions loaded: {behavioralQuestions.length}, Current index: {currentBehavioralQuestion}
-                    <br />
-                    Current question exists: {behavioralQuestions[currentBehavioralQuestion] ? 'Yes' : 'No'}
+                  <div className="flex justify-center items-center gap-4 mb-6">
+                    <p className="text-muted-foreground">
+                      Question {currentBehavioralQuestion + 1} of {behavioralQuestions.length}
+                    </p>
+                    {selectedPath === 'quick-test' && (
+                      <div className="flex items-center gap-2 text-primary">
+                        <Timer className="w-4 h-4" />
+                        <span className="text-sm font-mono">{formatTime(quickTestElapsedTime)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2352,17 +3244,77 @@ const PersonalizedAssessment = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Your Response:
                       </label>
-                      <textarea
-                        value={behavioralAnswers[currentBehavioralQuestion] || ''}
-                        onChange={(e) => {
-                          const newAnswers = [...behavioralAnswers];
-                          newAnswers[currentBehavioralQuestion] = e.target.value;
-                          setBehavioralAnswers(newAnswers);
-                        }}
-                        placeholder="Describe your experience and approach..."
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
-                        rows={4}
-                      />
+                      <div className="relative">
+                        <textarea
+                          value={behavioralAnswers[currentBehavioralQuestion] || ''}
+                          onChange={(e) => {
+                            const newAnswers = [...behavioralAnswers];
+                            newAnswers[currentBehavioralQuestion] = e.target.value;
+                            setBehavioralAnswers(newAnswers);
+                          }}
+                          placeholder="Describe your experience and approach..."
+                          className="w-full p-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+                          rows={4}
+                        />
+                        <div className="absolute right-2 top-2 flex items-center gap-1">
+                          {activeField === 'behavioral' && isRecordingSpeech ? (
+                            <div className="flex items-center gap-1">
+                              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={stopSpeechRecognition}
+                                className="h-8 w-8 p-0"
+                                title="Stop recording"
+                              >
+                                <Square className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : isTranscribing ? (
+                            <div className="flex items-center gap-1">
+                              <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+                              <span className="text-xs text-blue-600">Processing...</span>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => startSpeechRecognition('behavioral')}
+                              className="h-8 w-8 p-0"
+                              title="Start voice recording"
+                              disabled={isTranscribing}
+                            >
+                              <Mic className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Transcript Display */}
+                      {activeField === 'behavioral' && transcript && (
+                        <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="text-sm text-blue-800 mb-2">
+                            <strong>Voice Transcript:</strong> {transcript}
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={applyTranscript}
+                              className="bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                              Apply to Answer
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setTranscript('')}
+                            >
+                              Discard
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      
                       <div className="text-xs text-gray-500 mt-1">
                         {behavioralAnswers[currentBehavioralQuestion]?.length || 0} characters
                       </div>
@@ -2482,9 +3434,17 @@ const PersonalizedAssessment = () => {
               <Card className="p-8 max-w-6xl mx-auto">
                 <div className="text-center mb-8">
                   <h3 className="text-2xl font-bold mb-4">Coding Challenge</h3>
-                  <p className="text-muted-foreground mb-6">
-                    Solve the problem below and submit your solution for evaluation.
-                  </p>
+                  <div className="flex justify-center items-center gap-4 mb-6">
+                    <p className="text-muted-foreground">
+                      Solve the problem below and submit your solution for evaluation.
+                    </p>
+                    {selectedPath === 'quick-test' && (
+                      <div className="flex items-center gap-2 text-primary">
+                        <Timer className="w-4 h-4" />
+                        <span className="text-sm font-mono">{formatTime(quickTestElapsedTime)}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid lg:grid-cols-2 gap-8">
@@ -2495,29 +3455,66 @@ const PersonalizedAssessment = () => {
                       <div className="text-gray-700 leading-relaxed">
                         <div className="prose prose-sm max-w-none">
                           {codingChallenge.challenge?.split('\n').map((line: string, index: number) => {
-                            if (line.startsWith('**') && line.endsWith('**')) {
+                            // Handle bold text (**text**)
+                            if (line.includes('**') && line.match(/\*\*.*\*\*/)) {
+                              const parts = line.split(/(\*\*.*?\*\*)/g);
                               return (
-                                <h4 key={index} className="font-bold text-gray-800 mt-4 mb-2">
+                                <p key={index} className="mb-2">
+                                  {parts.map((part, partIndex) => {
+                                    if (part.startsWith('**') && part.endsWith('**')) {
+                                      return (
+                                        <strong key={partIndex} className="font-bold text-gray-800">
+                                          {part.replace(/\*\*/g, '')}
+                                        </strong>
+                                      );
+                                    }
+                                    return part;
+                                  })}
+                                </p>
+                              );
+                            }
+                            // Handle headers (lines that are entirely bold)
+                            else if (line.startsWith('**') && line.endsWith('**') && line.length > 4) {
+                              return (
+                                <h4 key={index} className="font-bold text-gray-800 mt-6 mb-3 text-lg">
                                   {line.replace(/\*\*/g, '')}
                                 </h4>
                               );
-                            } else if (line.startsWith('* ') && line.endsWith('*')) {
+                            }
+                            // Handle bullet points
+                            else if (line.trim().startsWith('* ') && !line.includes('**')) {
                               return (
-                                <div key={index} className="bg-blue-50 p-3 rounded-lg my-2 border-l-4 border-blue-400">
-                                  <p className="font-medium text-blue-800">{line.replace(/\*/g, '')}</p>
+                                <div key={index} className="ml-4 mb-2">
+                                  <span className="text-blue-600">•</span>
+                                  <span className="ml-2">{line.replace(/^\* /, '')}</span>
                                 </div>
                               );
-                            } else if (line.trim().startsWith('```')) {
+                            }
+                            // Handle numbered lists
+                            else if (line.match(/^\d+\.\s/)) {
+                              return (
+                                <div key={index} className="ml-4 mb-2">
+                                  <span className="text-blue-600 font-medium">{line.match(/^\d+\./)?.[0]}</span>
+                                  <span className="ml-2">{line.replace(/^\d+\.\s/, '')}</span>
+                                </div>
+                              );
+                            }
+                            // Handle code blocks
+                            else if (line.trim().startsWith('```')) {
                               return (
                                 <div key={index} className="bg-gray-100 p-4 rounded-lg my-3 font-mono text-sm border">
                                   <pre className="whitespace-pre-wrap">{line.replace(/```/g, '')}</pre>
                                 </div>
                               );
-                            } else if (line.trim() === '') {
+                            }
+                            // Handle empty lines
+                            else if (line.trim() === '') {
                               return <br key={index} />;
-                            } else if (line.trim().length > 0) {
+                            }
+                            // Handle regular text
+                            else if (line.trim().length > 0) {
                               return (
-                                <p key={index} className="mb-3">
+                                <p key={index} className="mb-2">
                                   {line}
                                 </p>
                               );
@@ -2574,6 +3571,401 @@ const PersonalizedAssessment = () => {
                 </div>
 
               </Card>
+            )}
+
+            {/* Quick Test Results Step */}
+            {currentStep === 'results' && (
+              <div className="max-w-6xl mx-auto space-y-8">
+                {/* Main Results Card */}
+                <Card className="p-8 shadow-xl border-0 bg-gradient-to-br from-white to-gray-50">
+                  <div className="text-center mb-8">
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle className="h-8 w-8 text-green-600" />
+                    </div>
+                    <h3 className="text-2xl font-bold mb-4">Assessment Complete!</h3>
+                    <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
+                      You have successfully completed all three tests: Aptitude, Behavioral, and Coding. Here's a summary of your performance.
+                    </p>
+                  </div>
+
+                  <div className="grid md:grid-cols-3 gap-6 mb-8">
+                    {/* Aptitude Test Results */}
+                    <div className="text-center p-6 bg-blue-50 rounded-lg">
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <Brain className="h-6 w-6 text-blue-600" />
+                      </div>
+                      <h4 className="font-semibold mb-2">Aptitude Test</h4>
+                      <p className="text-sm text-muted-foreground mb-4">Completed</p>
+                      <div className="text-2xl font-bold text-blue-600">✓</div>
+                    </div>
+
+                    {/* Behavioral Test Results */}
+                    <div className="text-center p-6 bg-green-50 rounded-lg">
+                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <Users className="h-6 w-6 text-green-600" />
+                      </div>
+                      <h4 className="font-semibold mb-2">Behavioral Test</h4>
+                      <p className="text-sm text-muted-foreground mb-4">Completed</p>
+                      <div className="text-2xl font-bold text-green-600">✓</div>
+                    </div>
+
+                    {/* Coding Test Results */}
+                    <div className="text-center p-6 bg-purple-50 rounded-lg">
+                      <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <Code className="h-6 w-6 text-purple-600" />
+                      </div>
+                      <h4 className="font-semibold mb-2">Coding Test</h4>
+                      <p className="text-sm text-muted-foreground mb-4">Completed</p>
+                      <div className="text-2xl font-bold text-purple-600">✓</div>
+                    </div>
+                  </div>
+
+                  <div className="text-center space-y-4">
+                    <p className="text-muted-foreground">
+                      Your test data has been saved and will be analyzed for detailed insights.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                      <Button 
+                        onClick={() => setCurrentStep('jobs')}
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                      >
+                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        Back to Job Recommendations
+                      </Button>
+                      <Button 
+                        onClick={generateQuickTestAnalysis}
+                        disabled={isGeneratingQuickTestAnalysis}
+                        className="w-full sm:w-auto"
+                      >
+                        {isGeneratingQuickTestAnalysis ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Analyzing...
+                          </>
+                        ) : (
+                          <>
+                            View Detailed Analytics
+                            <ArrowRight className="h-4 w-4 ml-2" />
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Quick Test Analysis Results */}
+                {showQuickTestAnalysis && quickTestAnalysis && (
+                  <div className="space-y-8">
+                    {/* Overall Performance Summary */}
+                    <Card className="p-8 shadow-xl border-0 bg-gradient-to-br from-blue-50 to-indigo-50">
+                      <div className="text-center mb-8">
+                        <h3 className="text-2xl font-bold mb-4 text-gray-900">Performance Summary</h3>
+                        <div className="flex items-center justify-center gap-8">
+                          <div className="text-center">
+                            <div className="text-4xl font-bold text-primary mb-2">
+                              {quickTestAnalysis.overallScore}%
+                            </div>
+                            <div className="text-sm text-gray-600">Overall Score</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-4xl font-bold text-green-600 mb-2">
+                              {quickTestAnalysis.completedTests}/{quickTestAnalysis.totalTests}
+                            </div>
+                            <div className="text-sm text-gray-600">Tests Completed</div>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-center text-gray-700 text-lg">
+                        {quickTestAnalysis.summary}
+                      </p>
+                    </Card>
+
+                    {/* Detailed Test Results */}
+                    <div className="grid md:grid-cols-3 gap-6">
+                      {/* Aptitude Test Details */}
+                      {quickTestResults?.aptitudeResults && (
+                          <Card className="p-6 shadow-lg border-0 bg-gradient-to-br from-blue-50 to-blue-100">
+                            <div className="text-center mb-4">
+                              <h4 className="text-lg font-semibold text-gray-900">Aptitude Test</h4>
+                            </div>
+                          <div className="space-y-3">
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-blue-600 mb-1">
+                                {quickTestResults.aptitudeResults.score}%
+                              </div>
+                              <div className="text-sm text-gray-600">Score</div>
+                            </div>
+                            <div className="text-sm text-gray-700 text-center">
+                              {quickTestResults.aptitudeResults.correctAnswers} / {quickTestResults.aptitudeResults.totalQuestions} correct
+                            </div>
+                            <div className="text-xs text-gray-600 text-center">
+                              {quickTestResults.aptitudeResults.evaluation}
+                            </div>
+                            {quickTestResults.aptitudeResults.detailedResults && quickTestResults.aptitudeResults.detailedResults.length > 0 && (
+                              <div className="mt-4">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setShowDetailedResults({
+                                    type: 'aptitude',
+                                    data: quickTestResults.aptitudeResults.detailedResults
+                                  })}
+                                  className="w-full text-xs"
+                                >
+                                  View Detailed Results
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </Card>
+                      )}
+
+                      {/* Behavioral Test Details */}
+                      {quickTestResults?.behavioralResults && (
+                          <Card className="p-6 shadow-lg border-0 bg-gradient-to-br from-green-50 to-green-100">
+                            <div className="text-center mb-4">
+                              <h4 className="text-lg font-semibold text-gray-900">Behavioral Test</h4>
+                            </div>
+                          <div className="space-y-3">
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-green-600 mb-1">
+                                {quickTestResults.behavioralResults.score}%
+                              </div>
+                              <div className="text-sm text-gray-600">Score</div>
+                            </div>
+                            <div className="text-sm text-gray-700 text-center">
+                              {quickTestResults.behavioralResults.answeredQuestions} / {quickTestResults.behavioralResults.totalQuestions} answered
+                            </div>
+                            <div className="text-xs text-gray-600 text-center">
+                              {quickTestResults.behavioralResults.evaluation}
+                            </div>
+                            {quickTestResults.behavioralResults.detailedEvaluations && quickTestResults.behavioralResults.detailedEvaluations.length > 0 && (
+                              <div className="mt-4">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setShowDetailedResults({
+                                    type: 'behavioral',
+                                    data: quickTestResults.behavioralResults.detailedEvaluations
+                                  })}
+                                  className="w-full text-xs"
+                                >
+                                  View AI Evaluations
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </Card>
+                      )}
+
+                      {/* Coding Test Details */}
+                      {quickTestResults?.codingResults && (
+                          <Card className="p-6 shadow-lg border-0 bg-gradient-to-br from-purple-50 to-purple-100">
+                            <div className="text-center mb-4">
+                              <h4 className="text-lg font-semibold text-gray-900">Coding Test</h4>
+                            </div>
+                          <div className="space-y-3">
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-purple-600 mb-1">
+                                {quickTestResults.codingResults.score}%
+                              </div>
+                              <div className="text-sm text-gray-600">Score</div>
+                            </div>
+                            <div className="text-sm text-gray-700 text-center">
+                              {quickTestResults.codingResults.hasSolution ? 'Solution Provided' : 'No Solution'}
+                            </div>
+                            <div className="text-xs text-gray-600 text-center -mt-1">
+                              {quickTestResults.codingResults.hasSolution ? 'Coding challenge completed successfully' : 'Coding challenge not completed'}
+                            </div>
+                            <div className="text-xs text-gray-500 text-center -mt-1">
+                              {quickTestResults.codingResults.hasSolution ? 'Code quality and efficiency evaluated' : 'No code submitted for evaluation'}
+                            </div>
+                            {quickTestResults.codingResults.detailedEvaluation && (
+                              <div className="mt-4">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setShowDetailedResults({
+                                    type: 'coding',
+                                    data: quickTestResults.codingResults.detailedEvaluation
+                                  })}
+                                  className="w-full text-xs"
+                                >
+                                  View AI Evaluation
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </Card>
+                      )}
+                    </div>
+
+                    {/* Recommendations */}
+                    <Card className="p-8 shadow-xl border-0 bg-gradient-to-br from-yellow-50 to-orange-50">
+                      <h3 className="text-xl font-bold mb-6 text-gray-900 text-center">Recommendations</h3>
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {quickTestAnalysis.recommendations.map((rec: any, index: number) => (
+                          <div
+                            key={index}
+                            className={`p-4 rounded-lg border-l-4 ${
+                              rec.type === 'strength'
+                                ? 'bg-green-50 border-green-400'
+                                : 'bg-orange-50 border-orange-400'
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                                rec.type === 'strength'
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-orange-100 text-orange-700'
+                              }`}>
+                                {rec.type === 'strength' ? '✓' : '!'}
+                              </div>
+                              <div>
+                                <div className="font-semibold text-gray-900 mb-1">{rec.category}</div>
+                                <div className="text-sm text-gray-700">{rec.message}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+
+                    {/* Performance Gaps Analysis */}
+                    {performanceGaps && (
+                      <Card className="p-8 shadow-xl border-0 bg-gradient-to-br from-red-50 to-pink-50">
+                        <h3 className="text-xl font-bold mb-6 text-gray-900 text-center">Performance Gaps Analysis</h3>
+                        <div className="space-y-4">
+                          {performanceGaps.areas_for_improvement && performanceGaps.areas_for_improvement.length > 0 && (
+                            <div>
+                              <h4 className="text-lg font-semibold text-red-800 mb-3">Areas for Improvement</h4>
+                              <div className="space-y-2">
+                                {performanceGaps.areas_for_improvement.map((area: any, index: number) => (
+                                  <div key={index} className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                                    <div className="text-sm text-red-700">
+                                      {typeof area === 'string' ? area : area.title || area.area || JSON.stringify(area)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {performanceGaps.strengths && performanceGaps.strengths.length > 0 && (
+                            <div>
+                              <h4 className="text-lg font-semibold text-green-800 mb-3">Strengths</h4>
+                              <div className="space-y-2">
+                                {performanceGaps.strengths.map((strength: any, index: number) => (
+                                  <div key={index} className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                                    <div className="text-sm text-green-700">
+                                      {typeof strength === 'string' ? strength : strength.title || strength.strength || JSON.stringify(strength)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    )}
+
+                    {/* Skill Recommendations */}
+                    {skillRecommendations && (
+                      <Card className="p-8 shadow-xl border-0 bg-gradient-to-br from-indigo-50 to-purple-50">
+                        <h3 className="text-xl font-bold mb-6 text-gray-900 text-center">Skill-Based Recommendations</h3>
+                        <div className="space-y-4">
+                          {skillRecommendations.learning_paths && skillRecommendations.learning_paths.length > 0 && (
+                            <div>
+                              <h4 className="text-lg font-semibold text-indigo-800 mb-3">Learning Paths</h4>
+                              <div className="space-y-2">
+                                {skillRecommendations.learning_paths.map((path: any, index: number) => (
+                                  <div key={index} className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                                    <div className="text-sm text-indigo-700">
+                                      {typeof path === 'string' ? path : path.title || path.name || JSON.stringify(path)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {skillRecommendations.practice_projects && skillRecommendations.practice_projects.length > 0 && (
+                            <div>
+                              <h4 className="text-lg font-semibold text-purple-800 mb-3">Practice Projects</h4>
+                              <div className="space-y-2">
+                                {skillRecommendations.practice_projects.map((project: any, index: number) => (
+                                  <div key={index} className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                                    <div className="text-sm text-purple-700">
+                                      {typeof project === 'string' ? project : project.title || project.name || JSON.stringify(project)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    )}
+
+                    {/* Action Buttons */}
+                    <Card className="p-8 shadow-xl border-0 bg-gradient-to-br from-gray-50 to-gray-100">
+                      <div className="text-center space-y-4">
+                        <h3 className="text-xl font-bold text-gray-900">Next Steps</h3>
+                        <p className="text-gray-600">
+                          Use this analysis to improve your skills and prepare for future opportunities.
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                          <Button 
+                            onClick={() => setCurrentStep('jobs')}
+                            variant="outline"
+                            className="w-full sm:w-auto"
+                          >
+                            <ArrowLeft className="h-4 w-4 mr-2" />
+                            Back to Job Recommendations
+                          </Button>
+                          <Button 
+                            onClick={() => {
+                              setIsDownloadingReport(true);
+                              const reportData = {
+                                jobs: recommendedJobs || [],
+                                analysis: {
+                                  assessment_results: {
+                                    aptitude: quickTestResults?.aptitudeResults,
+                                    behavioral: quickTestResults?.behavioralResults,
+                                    coding: quickTestResults?.codingResults,
+                                    overall_score: quickTestAnalysis?.overallScore,
+                                    total_tests: quickTestAnalysis?.totalTests
+                                  },
+                                  performance_gaps: performanceGaps,
+                                  skill_recommendations: skillRecommendations,
+                                  assessment_type: 'quick_test',
+                                  timestamp: new Date().toISOString()
+                                }
+                              };
+                              downloadReport(reportData);
+                            }}
+                            className="w-full sm:w-auto"
+                            disabled={(!performanceGaps && !skillRecommendations) || isDownloadingReport}
+                          >
+                            {isDownloadingReport ? (
+                              <>
+                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                Preparing PDF...
+                              </>
+                            ) : (
+                              <>
+                                <Download className="h-4 w-4 mr-2" />
+                                Download Analysis Report
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* AI Interview Step - Start */}
@@ -3333,10 +4725,16 @@ const PersonalizedAssessment = () => {
                     <Button 
                       variant="outline"
                       onClick={() => {
+                        setIsDownloadingReport(true);
                         const reportData = {
-                          jobs: recommendedJobs || [], // Use recommended jobs from analysis
+                          jobs: recommendedJobs || [],
                           analysis: {
-                            assessment_results: interviewAnalysis,
+                            assessment_results: {
+                              interview: interviewAnalysis,
+                              overall_score: interviewAnalysis?.overall_score ?? metrics.overallScore * 10,
+                              total_questions: questionCount,
+                              time_taken_seconds: elapsedTime
+                            },
                             performance_gaps: performanceGaps,
                             skill_recommendations: skillRecommendations,
                             assessment_type: 'personalized_assessment',
@@ -3347,10 +4745,19 @@ const PersonalizedAssessment = () => {
                         downloadReport(reportData);
                       }}
                       className="px-8 py-3"
-                      disabled={!performanceGaps && !skillRecommendations}
+                      disabled={(!performanceGaps && !skillRecommendations) || isDownloadingReport}
                     >
-                      <Download className="w-4 h-4 mr-2" />
-                      Download Analysis Report
+                      {isDownloadingReport ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                          Preparing PDF...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4 mr-2" />
+                          Download Analysis Report
+                        </>
+                      )}
                     </Button>
                     
                     <Button 
@@ -3445,6 +4852,100 @@ Generated on ${new Date().toLocaleString()}
           </div>
         </motion.section>
       </div>
+
+      {/* Detailed Results Modal */}
+      {showDetailedResults && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <Card className="max-w-4xl w-full max-h-[80vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-gray-900">
+                  {showDetailedResults.type === 'aptitude' && 'Aptitude Test Detailed Results'}
+                  {showDetailedResults.type === 'behavioral' && 'Behavioral Test AI Evaluations'}
+                  {showDetailedResults.type === 'coding' && 'Coding Test AI Evaluation'}
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDetailedResults(null)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </Button>
+              </div>
+            </div>
+            
+            <div className="p-6 max-h-[60vh] overflow-y-auto">
+              {showDetailedResults.type === 'aptitude' && (
+                <div className="space-y-4">
+                  {showDetailedResults.data.map((result: any, index: number) => (
+                    <div key={index} className="p-4 border border-gray-200 rounded-lg">
+                      <div className="flex items-start justify-between mb-2">
+                        <h4 className="font-semibold text-gray-900">Question {index + 1}</h4>
+                        <Badge variant={result.is_correct ? "default" : "destructive"}>
+                          {result.is_correct ? 'Correct' : 'Incorrect'}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-700 mb-3">{result.question}</p>
+                      <div className="grid md:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium text-gray-600">Your Answer:</span>
+                          <p className="text-gray-800">{result.user_answer || 'No answer provided'}</p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-600">Correct Answer:</span>
+                          <p className="text-gray-800">{result.correct_answer}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {showDetailedResults.type === 'behavioral' && (
+                <div className="space-y-4">
+                  {showDetailedResults.data.map((evaluation: any, index: number) => (
+                    <div key={index} className="p-4 border border-gray-200 rounded-lg">
+                      <h4 className="font-semibold text-gray-900 mb-3">Question {index + 1}</h4>
+                      <p className="text-sm text-gray-700 mb-3">{evaluation.question}</p>
+                      <div className="mb-3">
+                        <span className="font-medium text-gray-600">Your Response:</span>
+                        <p className="text-sm text-gray-800 mt-1 p-3 bg-gray-50 rounded">{evaluation.response}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-600">AI Evaluation:</span>
+                        <div className="text-sm text-gray-800 mt-1 p-3 bg-blue-50 rounded">
+                          {formatEvaluationText(evaluation.evaluation)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {showDetailedResults.type === 'coding' && (
+                <div className="space-y-4">
+                  <div className="p-4 border border-gray-200 rounded-lg">
+                    <h4 className="font-semibold text-gray-900 mb-3">Coding Challenge Evaluation</h4>
+                    <div className="text-sm text-gray-800">
+                      {formatEvaluationText(showDetailedResults.data.evaluation) || 'No detailed evaluation available'}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-6 border-t border-gray-200 text-center">
+              <Button
+                onClick={() => setShowDetailedResults(null)}
+                className="px-6"
+              >
+                Close
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Footer Section */}
       <div

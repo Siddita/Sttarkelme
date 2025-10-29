@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Loader from "./components/Loader";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -11,7 +11,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 // Pages
 import Index from "./pages/Index";
 import AptitudeTest from "./pages/AptitudeTest";
-import Analytics from "./pages/Analytics";
+import QuickTestAnalysis from "./pages/QuickTestAnalysis";
 import Interview from "./pages/Interview";
 import Companies from "./pages/Companies";
 import NotFound from "./pages/NotFound";
@@ -30,17 +30,65 @@ import InterviewPage from "./pages/InterviewPage";
 import Quiz from "./pages/Quiz";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
-import PersonalizedAssessment from "./pages/PersonalizedAssessment";
+import PersonalizedAssessment from "./pages/PersonalizedAssessment.tsx";
 import AssessmentAnalysis from "./pages/AssessmentAnalysis";
 import CodingRoundPage from "./pages/CodingRoundPage";
 import WritingTestPage from "./pages/WritingTestPage";
 
 const queryClient = new QueryClient();
 
+// Scroll to top on route change
+const ScrollToTop = () => {
+  const location = useLocation();
+  
+  useEffect(() => {
+    // Force scroll to top immediately with multiple methods
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    
+    // Also try with multiple delays to handle any layout shifts
+    const timeouts = [
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }, 0),
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }, 10),
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }, 50),
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }, 100)
+    ];
+    
+    // Cleanup timeouts
+    return () => {
+      timeouts.forEach(clearTimeout);
+    };
+  }, [location.pathname]);
+  
+  return null;
+};
+
 const App = () => {
   const [showLoader, setShowLoader] = useState(true);
 
   useEffect(() => {
+    // Disable browser scroll restoration
+    if ('scrollRestoration' in history) {
+      history.scrollRestoration = 'manual';
+    }
+    
     const timer = setTimeout(() => setShowLoader(false), 900);
     return () => clearTimeout(timer);
   }, []);
@@ -54,11 +102,12 @@ const App = () => {
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <ScrollToTop />
             {/* <Navbar /> */}
             <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/assessment/aptitude" element={<AptitudeTest />} />
-            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/quick-test-analysis" element={<QuickTestAnalysis />} />
             <Route path="/interview" element={<Interview />} />
             <Route path="/companies" element={<Companies />} />
             <Route path="/blogs" element={<Blogs />} />

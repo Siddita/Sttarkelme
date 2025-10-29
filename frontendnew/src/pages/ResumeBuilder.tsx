@@ -33,13 +33,14 @@ import {
   X,
   RefreshCw
 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { motion } from 'framer-motion';
 import Footer from "@/components/Footer";
 import { Navbar } from "@/components/ui/navbar-menu";
 import { toast } from "sonner";
 import './OutlinedText.css';
 import ResumeTemplate from '@/components/ResumeTemplate';
+import { TextHoverEffect } from "@/components/ui/text-hover-effect";
 import {
   parseResumeResumeParsePost,
   generateResumeResumeGeneratePost,
@@ -66,14 +67,49 @@ const ResumeBuilder = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
+  // Ensure page starts at the top when navigating to Resume Builder
+  useLayoutEffect(() => {
+    // Force immediate scroll to top with multiple methods
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, []);
+
+  // Additional scroll to top with delays to handle any layout shifts
+  useEffect(() => {
+    const timeouts = [
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }, 0),
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }, 10),
+      setTimeout(() => {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }, 50)
+    ];
+    
+    // Cleanup timeouts
+    return () => {
+      timeouts.forEach(clearTimeout);
+    };
+  }, []);
+
   // Resume Builder State
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [parsedResumeData, setParsedResumeData] = useState<any>(null);
   const [generatedResume, setGeneratedResume] = useState<string>("");
-  const [isParsing, setIsParsing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isParsingComplete, setIsParsingComplete] = useState(false);
+  const [parsingProgress, setParsingProgress] = useState(0);
   const [currentResumeData, setCurrentResumeData] = useState({
     personal_info: {
       name: "",
@@ -95,112 +131,45 @@ const ResumeBuilder = () => {
   const [jobDescription, setJobDescription] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState<'professional' | 'creative' | 'minimal' | 'executive'>('professional');
   const [showGeneratedPreview, setShowGeneratedPreview] = useState(false);
+  // Multi-step form navigation
+  const [formStep, setFormStep] = useState<number>(0);
+  const maxFormStep = 7;
 
-  // Mock data for development
-  const mockResumeData = {
-    personal_info: {
-      name: "John Doe",
-      email: "john.doe@email.com",
-      phone: "+1 (555) 123-4567",
-      location: "San Francisco, CA",
-      linkedin: "https://linkedin.com/in/johndoe",
-      github: "https://github.com/johndoe",
-      website: "https://johndoe.dev"
-    },
-    summary: "Experienced software engineer with 5+ years developing scalable web applications using React, Node.js, and cloud technologies. Passionate about creating efficient solutions and leading development teams.",
-    skills: ["React", "Node.js", "TypeScript", "Python", "AWS", "Docker", "PostgreSQL", "MongoDB"],
-    experience: [
-      {
-        company: "Tech Corp",
-        position: "Senior Software Engineer",
-        start_date: "2022-01",
-        end_date: "Present",
-        description: "Led development of microservices architecture and mentored junior developers",
-        achievements: ["Improved system performance by 40%", "Reduced deployment time by 60%"]
-      },
-      {
-        company: "StartupXYZ",
-        position: "Full Stack Developer",
-        start_date: "2020-06",
-        end_date: "2021-12",
-        description: "Developed full-stack applications using React and Node.js",
-        achievements: ["Built 3 major features from scratch", "Increased user engagement by 25%"]
-      }
-    ],
-    education: [
-      {
-        institution: "University of Technology",
-        degree: "Bachelor of Science",
-        field: "Computer Science",
-        start_date: "2016-09",
-        end_date: "2020-05",
-        gpa: "3.8"
-      }
-    ],
-    projects: [
-      {
-        name: "E-commerce Platform",
-        description: "Built a full-stack e-commerce platform with React and Node.js",
-        technologies: ["React", "Node.js", "MongoDB", "Stripe"],
-        url: "https://github.com/johndoe/ecommerce"
-      }
-    ],
-    certifications: [
-      {
-        name: "AWS Certified Developer",
-        issuer: "Amazon Web Services",
-        date: "2023-03",
-        url: "https://aws.amazon.com/certification/"
-      }
-    ],
-    hobbies: ["Photography", "Hiking", "Open Source Contributions"]
-  };
 
-  const mockGeneratedResume = `JOHN DOE
-Senior Software Engineer
-john.doe@email.com • +1 (555) 123-4567 • San Francisco, CA
-LinkedIn: linkedin.com/in/johndoe • GitHub: github.com/johndoe
-
-PROFESSIONAL SUMMARY
-Experienced software engineer with 5+ years developing scalable web applications using React, Node.js, and cloud technologies. Passionate about creating efficient solutions and leading development teams.
-
-TECHNICAL SKILLS
-• Frontend: React, TypeScript, HTML5, CSS3
-• Backend: Node.js, Python, Express.js
-• Databases: PostgreSQL, MongoDB, Redis
-• Cloud & DevOps: AWS, Docker, Kubernetes
-• Tools: Git, Jenkins, Jira
-
-PROFESSIONAL EXPERIENCE
-
-Senior Software Engineer | Tech Corp | Jan 2022 - Present
-• Led development of microservices architecture serving 100K+ users
-• Mentored 3 junior developers and improved team productivity by 30%
-• Improved system performance by 40% through optimization
-• Reduced deployment time by 60% using CI/CD pipelines
-
-Full Stack Developer | StartupXYZ | Jun 2020 - Dec 2021
-• Developed full-stack applications using React and Node.js
-• Built 3 major features from scratch, increasing user engagement by 25%
-• Collaborated with design team to implement responsive UI components
-
-EDUCATION
-Bachelor of Science in Computer Science | University of Technology | 2016-2020
-GPA: 3.8/4.0
-
-PROJECTS
-E-commerce Platform
-• Built a full-stack e-commerce platform with React and Node.js
-• Technologies: React, Node.js, MongoDB, Stripe
-• GitHub: github.com/johndoe/ecommerce
-
-CERTIFICATIONS
-• AWS Certified Developer (2023)
-
-INTERESTS
-Photography, Hiking, Open Source Contributions`;
 
   // API Hooks for working endpoints
+  const { mutate: parseResume, isLoading: isParseLoading } = parseResumeResumeParsePost({
+    onSuccess: (data) => {
+      if (data.success && data.data) {
+        // Simulate progress for better UX (starting from 10% since we already set it)
+        setParsingProgress(50);
+        setTimeout(() => {
+          setParsingProgress(75);
+          setTimeout(() => {
+            setParsedResumeData(data.data);
+            setCurrentResumeData(data.data);
+            setParsingProgress(100);
+            setIsParsingComplete(true);
+            toast.success("Resume parsed successfully! Data has been populated in the form below.");
+            
+            // Reset success state after 3 seconds
+            setTimeout(() => {
+              setIsParsingComplete(false);
+              setParsingProgress(0);
+            }, 3000);
+          }, 500);
+        }, 500);
+      } else {
+        toast.error("Failed to parse resume");
+        setParsingProgress(0);
+      }
+    },
+    onError: (error) => {
+      toast.error("Error parsing resume: " + error.message);
+      setParsingProgress(0);
+    }
+  });
+
   const { mutate: generateResume, isLoading: isGenerateLoading } = generateResumeResumeGeneratePost({
     onSuccess: (data) => {
       if (data.success && data.generated_resume) {
@@ -261,18 +230,53 @@ Photography, Hiking, Open Source Contributions`;
   const { mutate: parseResumeLegacy, isLoading: isParseLegacyLoading } = parseResumeLegacyParseResumePost({
     onSuccess: (data) => {
       if (data.success && data.data) {
-        setParsedResumeData(data.data);
-        setCurrentResumeData(data.data);
-        toast.success("Resume parsed successfully! (Legacy endpoint)");
-        setIsParsing(false);
+        // Simulate progress for better UX (starting from 10% since we already set it)
+        setParsingProgress(50);
+        setTimeout(() => {
+          setParsingProgress(75);
+          setTimeout(() => {
+            setParsedResumeData(data.data);
+            setCurrentResumeData(data.data);
+            setParsingProgress(100);
+            setIsParsingComplete(true);
+            toast.success("Resume parsed successfully! (Legacy endpoint) Data has been populated in the form below.");
+            
+            // Reset success state after 3 seconds
+            setTimeout(() => {
+              setIsParsingComplete(false);
+              setParsingProgress(0);
+            }, 3000);
+          }, 500);
+        }, 500);
       } else {
         toast.error("Failed to parse resume");
-        setIsParsing(false);
+        setParsingProgress(0);
       }
     },
     onError: (error) => {
-      toast.error("Error parsing resume: " + error.message);
-      setIsParsing(false);
+      console.error("Legacy parse error details:", {
+        error,
+        message: error?.message,
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        data: error?.response?.data,
+        url: error?.config?.url,
+        method: error?.config?.method
+      });
+      setParsingProgress(0);
+      
+      // More specific error messages
+      if (error?.response?.status === 500) {
+        toast.error("Server error: Both parsing services are temporarily unavailable. Please try again later.");
+      } else if (error?.response?.status === 413) {
+        toast.error("File too large: Please upload a smaller file.");
+      } else if (error?.response?.status === 415) {
+        toast.info("Please upload a PDF file. DOCX support is coming soon!");
+      } else if (error?.response?.status === 401) {
+        toast.error("Authentication error: Please refresh the page and try again.");
+      } else {
+        toast.error(`Failed to parse resume (legacy): ${error?.message || 'Unknown error'}`);
+      }
     }
   });
 
@@ -356,16 +360,6 @@ Photography, Hiking, Open Source Contributions`;
   }, []);
 
 
-  // Mock function for parse (since both main and legacy endpoints are returning 500)
-  const mockParseResume = () => {
-    setIsParsing(true);
-    setTimeout(() => {
-      setParsedResumeData(mockResumeData);
-      setCurrentResumeData(mockResumeData);
-      toast.success(`Resume "${uploadedFile?.name}" parsed successfully! (Using sample data - API endpoints currently unavailable)`);
-      setIsParsing(false);
-    }, 2000);
-  };
 
   const scrollToTemplates = () => {
     templatesRef.current?.scrollIntoView({ 
@@ -383,10 +377,23 @@ Photography, Hiking, Open Source Contributions`;
 
   // Resume Builder Handlers
   const validateAndSetFile = (file: File) => {
-    // Validate file type
-    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    if (!allowedTypes.includes(file.type)) {
-      toast.error("Please upload a PDF, DOC, or DOCX file");
+    // Check for DOCX files specifically
+    if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+        file.name.toLowerCase().endsWith('.docx')) {
+      toast.info("DOCX support is coming soon! Please upload a PDF file instead.");
+      return false;
+    }
+    
+    // Check for DOC files specifically
+    if (file.type === 'application/msword' || 
+        file.name.toLowerCase().endsWith('.doc')) {
+      toast.info("DOC support is coming soon! Please upload a PDF file instead.");
+      return false;
+    }
+    
+    // Only allow PDF files
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      toast.info("Please upload a PDF file. DOCX support is coming soon!");
       return false;
     }
     
@@ -440,8 +447,36 @@ Photography, Hiking, Open Source Contributions`;
       return;
     }
 
-    // Use mock data since both main and legacy parse endpoints are returning 500 errors
-    mockParseResume();
+    // Show immediate parsing indication
+    setParsingProgress(10);
+    setIsParsingComplete(false);
+    toast.info("Starting resume parsing...");
+
+    // Create FormData object for multipart/form-data
+    const formData = new FormData();
+    formData.append('file', uploadedFile);
+
+    // Use real API endpoint
+    parseResume(formData);
+  };
+
+  const handleParseResumeLegacy = () => {
+    if (!uploadedFile) {
+      toast.error("Please upload a resume file first");
+      return;
+    }
+
+    // Show immediate parsing indication
+    setParsingProgress(10);
+    setIsParsingComplete(false);
+    toast.info("Trying alternative parsing method...");
+
+    // Create FormData object for multipart/form-data
+    const formData = new FormData();
+    formData.append('file', uploadedFile);
+
+    // Use legacy API endpoint as fallback
+    parseResumeLegacy(formData);
   };
 
   const handleGenerateResume = () => {
@@ -478,10 +513,27 @@ Photography, Hiking, Open Source Contributions`;
       return;
     }
 
+    // Debug: Log the data being sent
+    console.log("Exporting PDF with data:", currentResumeData);
+    console.log("Selected template:", selectedTemplate);
+    console.log("Data sections with content:", {
+      personal_info: !!currentResumeData.personal_info.name,
+      summary: !!currentResumeData.summary,
+      skills: currentResumeData.skills.length,
+      experience: currentResumeData.experience.length,
+      education: currentResumeData.education.length,
+      projects: currentResumeData.projects.length,
+      certifications: currentResumeData.certifications.length,
+      hobbies: currentResumeData.hobbies.length
+    });
+    
     setIsExporting(true);
-    // Try main endpoint first
+    // Try main endpoint first - send data with template included
     exportPdf({
-      data: currentResumeData
+      data: {
+        ...currentResumeData,
+        template: selectedTemplate
+      }
     });
   };
 
@@ -492,9 +544,12 @@ Photography, Hiking, Open Source Contributions`;
     }
 
     setIsExporting(true);
-    // Use legacy endpoint
+    // Use legacy endpoint - send data with template included
     exportPdfLegacy({
-      data: currentResumeData
+      data: {
+        ...currentResumeData,
+        template: selectedTemplate
+      }
     });
   };
 
@@ -504,10 +559,27 @@ Photography, Hiking, Open Source Contributions`;
       return;
     }
 
+    // Debug: Log the data being sent
+    console.log("Exporting DOCX with data:", currentResumeData);
+    console.log("Selected template:", selectedTemplate);
+    console.log("Data sections with content:", {
+      personal_info: !!currentResumeData.personal_info.name,
+      summary: !!currentResumeData.summary,
+      skills: currentResumeData.skills.length,
+      experience: currentResumeData.experience.length,
+      education: currentResumeData.education.length,
+      projects: currentResumeData.projects.length,
+      certifications: currentResumeData.certifications.length,
+      hobbies: currentResumeData.hobbies.length
+    });
+    
     setIsExporting(true);
-    // Try main endpoint first
+    // Try main endpoint first - send data with template included
     exportDocx({
-      data: currentResumeData
+      data: {
+        ...currentResumeData,
+        template: selectedTemplate
+      }
     });
   };
 
@@ -518,9 +590,12 @@ Photography, Hiking, Open Source Contributions`;
     }
 
     setIsExporting(true);
-    // Use legacy endpoint
+    // Use legacy endpoint - send data with template included
     exportDocxLegacy({
-      data: currentResumeData
+      data: {
+        ...currentResumeData,
+        template: selectedTemplate
+      }
     });
   };
 
@@ -849,59 +924,59 @@ Photography, Hiking, Open Source Contributions`;
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
             rows={rows}
-            className="pr-12"
+            className="pr-10 lg:pr-12 text-sm"
           />
         ) : (
           <Input 
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className="pr-12"
+            className="pr-10 lg:pr-12 text-sm"
           />
         )}
         
-        <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
+        <div className="absolute right-1 lg:right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
           {isActive && isRecording ? (
             <div className="flex items-center gap-1">
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+              <div className="w-1.5 h-1.5 lg:w-2 lg:h-2 bg-red-500 rounded-full animate-pulse"></div>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={stopVoiceRecording}
-                className="h-8 w-8 p-0"
+                className="h-6 w-6 lg:h-8 lg:w-8 p-0"
                 title="Stop recording"
               >
-                <Square className="h-3 w-3" />
+                <Square className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
               </Button>
             </div>
           ) : isProcessing ? (
             <div className="flex items-center gap-1">
-              <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
-              <span className="text-xs text-blue-600">Processing...</span>
+              <Loader2 className="h-2.5 w-2.5 lg:h-3 lg:w-3 animate-spin text-blue-500" />
+              <span className="text-xs text-blue-600 hidden sm:inline">Processing...</span>
             </div>
           ) : (
             <Button
               size="sm"
               variant="outline"
               onClick={() => startVoiceRecording(fieldName)}
-              className="h-8 w-8 p-0"
+              className="h-6 w-6 lg:h-8 lg:w-8 p-0"
               title="Start voice recording"
               disabled={isProcessing}
             >
-              <Mic className="h-3 w-3" />
+              <Mic className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
             </Button>
           )}
         </div>
         
         {isActive && transcript && (
-          <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-blue-700">Voice: {transcript}</span>
+          <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs lg:text-sm">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <span className="text-blue-700 flex-1 break-words">Voice: {transcript}</span>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => applyTranscript(fieldName)}
-                className="h-6 px-2 text-xs"
+                className="h-5 lg:h-6 px-2 text-xs w-full sm:w-auto"
               >
                 Apply
               </Button>
@@ -923,60 +998,21 @@ Photography, Hiking, Open Source Contributions`;
       popular: true,
       data: {
         personal_info: {
-          name: "John Doe",
-          email: "john.doe@email.com",
-          phone: "+1 (555) 123-4567",
-          location: "San Francisco, CA",
-          linkedin: "https://linkedin.com/in/johndoe",
-          github: "https://github.com/johndoe",
-          website: "https://johndoe.dev"
+          name: "",
+          email: "",
+          phone: "",
+          location: "",
+          linkedin: "",
+          github: "",
+          website: ""
         },
-        summary: "Experienced software engineer with 5+ years developing scalable web applications using React, Node.js, and cloud technologies. Passionate about creating efficient solutions and leading development teams.",
-        skills: ["React", "Node.js", "TypeScript", "Python", "AWS", "Docker", "PostgreSQL", "MongoDB"],
-        experience: [
-          {
-            company: "Tech Corp",
-            position: "Senior Software Engineer",
-            start_date: "2022-01",
-            end_date: "Present",
-            description: "Led development of microservices architecture and mentored junior developers",
-            achievements: ["Improved system performance by 40%", "Reduced deployment time by 60%"]
-          },
-          {
-            company: "StartupXYZ",
-            position: "Full Stack Developer",
-            start_date: "2020-06",
-            end_date: "2021-12",
-            description: "Developed full-stack applications using React and Node.js",
-            achievements: ["Built 3 major features from scratch", "Increased user engagement by 25%"]
-          }
-        ],
-        education: [
-          {
-            institution: "University of Technology",
-            degree: "Bachelor of Science",
-            field: "Computer Science",
-            start_date: "2016-09",
-            end_date: "2020-05",
-            gpa: "3.8"
-          }
-        ],
-        projects: [
-          {
-            name: "E-commerce Platform",
-            description: "Built a full-stack e-commerce platform with React and Node.js",
-            technologies: ["React", "Node.js", "MongoDB", "Stripe"],
-            url: "https://github.com/johndoe/ecommerce"
-          }
-        ],
-        certifications: [
-          {
-            name: "AWS Certified Solutions Architect",
-            issuer: "Amazon Web Services",
-            date: "2023-03"
-          }
-        ],
-        hobbies: ["Photography", "Hiking", "Open Source Contributions"]
+        summary: "",
+        skills: [],
+        experience: [],
+        education: [],
+        projects: [],
+        certifications: [],
+        hobbies: []
       }
     },
     creative: {
@@ -988,60 +1024,21 @@ Photography, Hiking, Open Source Contributions`;
       popular: false,
       data: {
         personal_info: {
-          name: "Sarah Johnson",
-          email: "sarah.j@creative.com",
-          phone: "+1 (555) 987-6543",
-          location: "New York, NY",
-          linkedin: "https://linkedin.com/in/sarahjohnson",
-          github: "https://github.com/sarahj",
-          website: "https://sarahjohnson.design"
+          name: "",
+          email: "",
+          phone: "",
+          location: "",
+          linkedin: "",
+          github: "",
+          website: ""
         },
-        summary: "Creative UI/UX designer with 4+ years of experience crafting beautiful, user-centered digital experiences. Specialized in mobile app design and brand identity.",
-        skills: ["Figma", "Adobe Creative Suite", "Sketch", "Prototyping", "User Research", "HTML/CSS", "JavaScript", "React"],
-        experience: [
-          {
-            company: "Design Studio Co.",
-            position: "Senior UI/UX Designer",
-            start_date: "2021-08",
-            end_date: "Present",
-            description: "Lead design for mobile and web applications serving 100K+ users",
-            achievements: ["Increased user engagement by 45%", "Reduced bounce rate by 30%"]
-          },
-          {
-            company: "Creative Agency",
-            position: "UI Designer",
-            start_date: "2019-06",
-            end_date: "2021-07",
-            description: "Designed interfaces for various client projects",
-            achievements: ["Won 2 design awards", "Led 5 successful product launches"]
-          }
-        ],
-        education: [
-          {
-            institution: "Art Institute of Design",
-            degree: "Bachelor of Fine Arts",
-            field: "Graphic Design",
-            start_date: "2015-09",
-            end_date: "2019-05",
-            gpa: "3.9"
-          }
-        ],
-        projects: [
-          {
-            name: "Mobile Banking App",
-            description: "Designed intuitive mobile banking experience with focus on accessibility",
-            technologies: ["Figma", "Principle", "After Effects"],
-            url: "https://dribbble.com/sarahj/banking-app"
-          }
-        ],
-        certifications: [
-          {
-            name: "Google UX Design Certificate",
-            issuer: "Google",
-            date: "2022-08"
-          }
-        ],
-        hobbies: ["Digital Art", "Photography", "Travel", "Coffee Brewing"]
+        summary: "",
+        skills: [],
+        experience: [],
+        education: [],
+        projects: [],
+        certifications: [],
+        hobbies: []
       }
     },
     minimal: {
@@ -1053,60 +1050,21 @@ Photography, Hiking, Open Source Contributions`;
       popular: false,
       data: {
         personal_info: {
-          name: "Alex Chen",
-          email: "alex.chen@tech.com",
-          phone: "+1 (555) 456-7890",
-          location: "Seattle, WA",
-          linkedin: "https://linkedin.com/in/alexchen",
-          github: "https://github.com/alexchen",
-          website: "https://alexchen.dev"
+          name: "",
+          email: "",
+          phone: "",
+          location: "",
+          linkedin: "",
+          github: "",
+          website: ""
         },
-        summary: "Full-stack developer specializing in modern web technologies. Passionate about clean code, performance optimization, and building scalable applications.",
-        skills: ["JavaScript", "TypeScript", "React", "Vue.js", "Node.js", "Python", "Go", "Kubernetes", "Docker"],
-        experience: [
-          {
-            company: "Tech Startup",
-            position: "Lead Developer",
-            start_date: "2021-03",
-            end_date: "Present",
-            description: "Architect and develop scalable web applications",
-            achievements: ["Built system handling 1M+ requests/day", "Reduced API response time by 50%"]
-          },
-          {
-            company: "Software Corp",
-            position: "Full Stack Developer",
-            start_date: "2019-01",
-            end_date: "2021-02",
-            description: "Developed and maintained web applications",
-            achievements: ["Implemented CI/CD pipeline", "Mentored 3 junior developers"]
-          }
-        ],
-        education: [
-          {
-            institution: "Tech University",
-            degree: "Master of Science",
-            field: "Computer Science",
-            start_date: "2017-09",
-            end_date: "2019-05",
-            gpa: "3.7"
-          }
-        ],
-        projects: [
-          {
-            name: "Open Source Library",
-            description: "Created popular JavaScript library with 10K+ GitHub stars",
-            technologies: ["JavaScript", "TypeScript", "Jest", "Webpack"],
-            url: "https://github.com/alexchen/awesome-lib"
-          }
-        ],
-        certifications: [
-          {
-            name: "Certified Kubernetes Administrator",
-            issuer: "Cloud Native Computing Foundation",
-            date: "2023-01"
-          }
-        ],
-        hobbies: ["Open Source", "Hiking", "Reading", "Chess"]
+        summary: "",
+        skills: [],
+        experience: [],
+        education: [],
+        projects: [],
+        certifications: [],
+        hobbies: []
       }
     },
     executive: {
@@ -1118,60 +1076,21 @@ Photography, Hiking, Open Source Contributions`;
       popular: true,
       data: {
         personal_info: {
-          name: "Michael Rodriguez",
-          email: "m.rodriguez@executive.com",
-          phone: "+1 (555) 321-9876",
-          location: "Chicago, IL",
-          linkedin: "https://linkedin.com/in/michaelrodriguez",
+          name: "",
+          email: "",
+          phone: "",
+          location: "",
+          linkedin: "",
           github: "",
-          website: "https://michaelrodriguez.com"
+          website: ""
         },
-        summary: "Strategic technology executive with 15+ years of experience leading high-performing teams and driving digital transformation initiatives. Proven track record of delivering business results through innovative technology solutions.",
-        skills: ["Strategic Planning", "Team Leadership", "Digital Transformation", "Agile Methodologies", "Budget Management", "Vendor Relations", "Change Management"],
-        experience: [
-          {
-            company: "Fortune 500 Corp",
-            position: "VP of Engineering",
-            start_date: "2020-01",
-            end_date: "Present",
-            description: "Lead engineering organization of 150+ professionals across multiple product lines",
-            achievements: ["Increased team productivity by 35%", "Reduced time-to-market by 40%", "Led $50M digital transformation initiative"]
-          },
-          {
-            company: "Tech Solutions Inc.",
-            position: "Director of Engineering",
-            start_date: "2017-06",
-            end_date: "2019-12",
-            description: "Managed engineering teams and technical strategy",
-            achievements: ["Built engineering team from 20 to 80 people", "Implemented DevOps practices", "Improved system reliability by 60%"]
-          }
-        ],
-        education: [
-          {
-            institution: "Business School",
-            degree: "Master of Business Administration",
-            field: "Technology Management",
-            start_date: "2015-09",
-            end_date: "2017-05",
-            gpa: "3.8"
-          }
-        ],
-        projects: [
-          {
-            name: "Enterprise Digital Platform",
-            description: "Led development of company-wide digital platform serving 10,000+ employees",
-            technologies: ["Cloud Architecture", "Microservices", "DevOps", "Security"],
-            url: ""
-          }
-        ],
-        certifications: [
-          {
-            name: "Certified Information Security Manager",
-            issuer: "ISACA",
-            date: "2022-06"
-          }
-        ],
-        hobbies: ["Leadership Development", "Public Speaking", "Golf", "Wine Tasting"]
+        summary: "",
+        skills: [],
+        experience: [],
+        education: [],
+        projects: [],
+        certifications: [],
+        hobbies: []
       }
     }
   };
@@ -1569,7 +1488,7 @@ Photography, Hiking, Open Source Contributions`;
               Create professional, ATS-optimized resumes that stand out to hiring managers. Get AI-powered suggestions and industry-specific templates.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" onClick={scrollToBuilding}>
+              <Button size="lg" onClick={scrollToTemplates}>
                 Start Building
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -1711,7 +1630,7 @@ Photography, Hiking, Open Source Contributions`;
                 >
                   <input
                     type="file"
-                    accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    accept=".pdf,application/pdf"
                     onChange={handleFileUpload}
                     className="hidden"
                     id="resume-upload"
@@ -1722,7 +1641,10 @@ Photography, Hiking, Open Source Contributions`;
                       {isDragOver ? 'Drop your file here' : 'Upload your existing resume'}
                     </p>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Supports PDF, DOC, and DOCX files (max 10MB)
+                      Only PDF files are currently supported (max 10MB)
+                    </p>
+                    <p className="text-xs text-amber-600 mb-4">
+                      DOCX support is coming soon!
                     </p>
                     <Button 
                       variant="outline" 
@@ -1758,55 +1680,88 @@ Photography, Hiking, Open Source Contributions`;
                         </Button>
                       </div>
                     </div>
-                    <div className="flex gap-2 justify-center">
-                      <Button 
-                        onClick={handleParseResume}
-                        disabled={isParsing}
-                        className="flex items-center gap-2"
-                      >
-                        {isParsing ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Wand2 className="h-4 w-4" />
-                        )}
-                        {isParsing ? "Parsing..." : "Parse Resume"}
-                      </Button>
+                    <div className="space-y-4">
+                      {/* Progress indicator */}
+                      {(isParseLoading || parsingProgress > 0) && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                             <span>
+                               {parsingProgress <= 10 ? "Starting parse..." : 
+                                parsingProgress < 50 ? "Analyzing document..." :
+                                parsingProgress < 75 ? "Extracting data..." :
+                                parsingProgress < 100 ? "Populating form..." : "Complete!"}
+                             </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="bg-primary h-2 rounded-full transition-all duration-500 ease-out"
+                              style={{ width: `${parsingProgress}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Success indicator */}
+                      {isParsingComplete && (
+                        <div className="flex items-center justify-center gap-2 text-sm text-green-600 bg-green-50 border border-green-200 rounded-lg p-3">
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span>Resume data successfully loaded into form below!</span>
+                        </div>
+                      )}
+                      
+                      <div className="flex gap-2 justify-center">
+                        <Button 
+                          onClick={handleParseResume}
+                          disabled={isParseLoading || parsingProgress > 0}
+                          className="flex items-center gap-2"
+                        >
+                          {isParseLoading || parsingProgress > 0 ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Wand2 className="h-4 w-4" />
+                          )}
+                          {isParseLoading || parsingProgress > 0 ? "Parsing..." : "Parse Resume"}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
             </Card>
 
-            <div className="grid lg:grid-cols-2 gap-8">
+            <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
               {/* Form */}
-              <Card className="p-6 border-primary/10">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h3 className="font-bold text-xl">Resume Information</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Use the microphone icon to speak your information instead of typing. 
-                      {audioDevices.length === 0 && " (Using browser speech recognition)"}
-                    </p>
+              <Card className="p-6 border-primary/10 shadow-lg">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8 gap-4">
+                  <div className="flex-1">
+                    <h3 className="font-bold text-xl lg:text-2xl text-gray-800">Resume Information</h3>
+                    {isParsingComplete && (
+                      <div className="mt-2 flex items-center gap-2 text-sm text-green-600">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span>Form has been populated with parsed data!</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                  {isRecording && (
-                    <div className="flex items-center gap-2 px-3 py-1 bg-red-50 border border-red-200 rounded-full">
-                      <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                      <span className="text-sm text-red-700 font-medium">Recording...</span>
-                    </div>
-                  )}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    {isRecording && (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-full">
+                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                        <span className="text-sm text-red-700 font-medium">Recording...</span>
+                      </div>
+                    )}
                     {isTranscribing && (
-                      <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-full">
-                        <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+                      <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-full">
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
                         <span className="text-sm text-blue-700 font-medium">Transcribing...</span>
                       </div>
                     )}
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">Template:</span>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                      <span className="text-sm text-muted-foreground font-medium">Template:</span>
                       <select 
                         value={selectedTemplate}
                         onChange={(e) => setSelectedTemplate(e.target.value as 'professional' | 'creative' | 'minimal' | 'executive')}
-                        className="text-sm border rounded px-2 py-1"
+                        className="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
                       >
                         <option value="professional">Professional</option>
                         <option value="creative">Creative</option>
@@ -1814,29 +1769,19 @@ Photography, Hiking, Open Source Contributions`;
                         <option value="executive">Executive</option>
                       </select>
                     </div>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => {
-                        setCurrentResumeData(mockResumeData);
-                        toast.success("Sample data loaded!");
-                      }}
-                      className="text-sm"
-                    >
-                      Load Sample Data
-                    </Button>
                   </div>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-6">
+                  {formStep === 0 && (<>
                   {/* Personal Information */}
                   <div className="space-y-4">
-                    <h4 className="font-semibold text-lg border-b pb-2">Personal Information</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="text-sm font-medium mb-2 block">Full Name</label>
+                    <h4 className="font-semibold text-lg text-gray-700 border-b border-primary/20 pb-2">Personal Information</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className={`transition-all duration-500 ${isParsingComplete && currentResumeData.personal_info.name ? 'bg-green-50 border border-green-200 rounded-lg p-2' : ''}`}>
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">Full Name</label>
                         <VoiceInput
                           fieldName="personal_info.name"
-                          placeholder="John Doe"
+                          placeholder="Enter your full name"
                           value={currentResumeData.personal_info.name}
                           onChange={(value) => setCurrentResumeData(prev => ({
                             ...prev,
@@ -1844,11 +1789,11 @@ Photography, Hiking, Open Source Contributions`;
                           }))}
                         />
                     </div>
-                    <div>
-                        <label className="text-sm font-medium mb-2 block">Email</label>
+                    <div className={`transition-all duration-500 ${isParsingComplete && currentResumeData.personal_info.email ? 'bg-green-50 border border-green-200 rounded-lg p-2' : ''}`}>
+                        <label className="text-sm font-semibold text-gray-700 mb-2 block">Email</label>
                         <VoiceInput
                           fieldName="personal_info.email"
-                          placeholder="john.doe@email.com"
+                          placeholder="Enter your email address"
                           value={currentResumeData.personal_info.email}
                           onChange={(value) => setCurrentResumeData(prev => ({
                             ...prev,
@@ -1856,10 +1801,8 @@ Photography, Hiking, Open Source Contributions`;
                           }))}
                         />
                     </div>
-                  </div>
-                    <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Phone</label>
+                    <div className={`transition-all duration-500 ${isParsingComplete && currentResumeData.personal_info.phone ? 'bg-green-50 border border-green-200 rounded-lg p-2' : ''}`}>
+                      <label className="text-sm font-semibold text-gray-700 mb-2 block">Phone</label>
                         <VoiceInput
                           fieldName="personal_info.phone"
                           placeholder="+1 (555) 123-4567"
@@ -1869,22 +1812,23 @@ Photography, Hiking, Open Source Contributions`;
                             personal_info: { ...prev.personal_info, phone: value }
                           }))}
                         />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Location</label>
+                    </div>
+                    <div className={`transition-all duration-500 ${isParsingComplete && currentResumeData.personal_info.location ? 'bg-green-50 border border-green-200 rounded-lg p-2' : ''}`}>
+                      <label className="text-sm font-semibold text-gray-700 mb-2 block">Location</label>
                         <VoiceInput
                           fieldName="personal_info.location"
-                          placeholder="San Francisco, CA"
+                          placeholder="Enter your location"
                           value={currentResumeData.personal_info.location}
                           onChange={(value) => setCurrentResumeData(prev => ({
                             ...prev,
                             personal_info: { ...prev.personal_info, location: value }
                           }))}
                         />
-                      </div>
+                    </div>
                   </div>
-                  <div>
-                      <label className="text-sm font-medium mb-2 block">LinkedIn</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-sm font-semibold text-gray-700 mb-2 block">LinkedIn</label>
                       <VoiceInput
                         fieldName="personal_info.linkedin"
                         placeholder="https://linkedin.com/in/johndoe"
@@ -1896,7 +1840,7 @@ Photography, Hiking, Open Source Contributions`;
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-medium mb-2 block">GitHub</label>
+                      <label className="text-sm font-semibold text-gray-700 mb-2 block">GitHub</label>
                       <VoiceInput
                         fieldName="personal_info.github"
                         placeholder="https://github.com/johndoe"
@@ -1908,15 +1852,16 @@ Photography, Hiking, Open Source Contributions`;
                       />
                     </div>
                   </div>
+                  </div>
 
                   {/* Professional Summary */}
-                  <div className="space-y-4">
-                    <h4 className="font-semibold text-lg border-b pb-2">Professional Summary</h4>
+                  <div className="space-y-3">
+                    <h4 className="font-semibold text-lg text-gray-700 border-b border-primary/20 pb-2">Professional Summary</h4>
                     <VoiceInput
                       fieldName="summary"
                       type="textarea"
                       placeholder="Brief overview of your professional background and career objectives..."
-                      rows={4}
+                      rows={3}
                       value={currentResumeData.summary}
                       onChange={(value) => setCurrentResumeData(prev => ({
                         ...prev,
@@ -1926,24 +1871,25 @@ Photography, Hiking, Open Source Contributions`;
                   </div>
 
                   {/* Skills */}
-                  <div className="space-y-4">
-                    <h4 className="font-semibold text-lg border-b pb-2">Skills</h4>
-                    <div className="flex flex-wrap gap-2 mb-2">
+                  <div className="space-y-3">
+                    <h4 className="font-semibold text-lg text-gray-700 border-b border-primary/20 pb-2">Skills</h4>
+                    <div className="flex flex-wrap gap-1 lg:gap-2 mb-2">
                       {currentResumeData.skills.map((skill, index) => (
-                        <Badge key={index} variant="secondary" className="flex items-center gap-1">
+                        <Badge key={index} variant="secondary" className="flex items-center gap-1 text-xs">
                           {skill}
                           <button
                             onClick={() => removeSkill(skill)}
-                            className="ml-1 hover:text-red-500"
+                            className="ml-1 hover:text-red-500 text-sm"
                           >
                             ×
                           </button>
                         </Badge>
                       ))}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <Input
                         placeholder="Add a skill"
+                        className="text-sm"
                         onKeyPress={(e) => {
                           if (e.key === 'Enter') {
                             addSkill(e.currentTarget.value);
@@ -1959,105 +1905,628 @@ Photography, Hiking, Open Source Contributions`;
                             input.value = '';
                           }
                         }}
+                        className="text-sm"
                       >
                         Add
-                  </Button>
+                      </Button>
                     </div>
                   </div>
+                  </>)}
 
+                  {formStep === 1 && (<>
+                  {/* Experience */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold text-lg text-gray-700 border-b border-primary/20 pb-2">Work Experience</h4>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addExperience}
+                        className="text-xs"
+                      >
+                        Add Experience
+                      </Button>
+                    </div>
+                    {currentResumeData.experience.map((exp, index) => (
+                      <div key={index} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h5 className="font-medium text-sm">Experience {index + 1}</h5>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeExperience(index)}
+                            className="text-red-600 hover:text-red-700 text-xs"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-sm font-semibold text-gray-700 mb-2 block">Company</label>
+                            <Input
+                              value={exp.company}
+                              onChange={(e) => updateExperience(index, 'company', e.target.value)}
+                              placeholder="Company Name"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-gray-700 mb-2 block">Position</label>
+                            <Input
+                              value={exp.position}
+                              onChange={(e) => updateExperience(index, 'position', e.target.value)}
+                              placeholder="Job Title"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-gray-700 mb-2 block">Start Date</label>
+                            <Input
+                              value={exp.start_date}
+                              onChange={(e) => updateExperience(index, 'start_date', e.target.value)}
+                              placeholder="YYYY-MM"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-gray-700 mb-2 block">End Date</label>
+                            <Input
+                              value={exp.end_date}
+                              onChange={(e) => updateExperience(index, 'end_date', e.target.value)}
+                              placeholder="YYYY-MM or Present"
+                              className="text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-sm font-semibold text-gray-700 mb-2 block">Description</label>
+                          <Textarea
+                            value={exp.description}
+                            onChange={(e) => updateExperience(index, 'description', e.target.value)}
+                            placeholder="Describe your role and responsibilities..."
+                            rows={2}
+                            className="text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-semibold text-gray-700 mb-2 block">Achievements (one per line)</label>
+                          <Textarea
+                            value={exp.achievements.join('\n')}
+                            onChange={(e) => updateExperience(index, 'achievements', e.target.value.split('\n').filter(a => a.trim()))}
+                            placeholder="• Improved performance by 40%&#10;• Led team of 5 developers&#10;• Reduced costs by $50K"
+                            rows={3}
+                            className="text-sm"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  </>)}
+
+                  {formStep === 2 && (<>
+                  {/* Education */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold text-lg text-gray-700 border-b border-primary/20 pb-2">Education</h4>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentResumeData(prev => ({
+                          ...prev,
+                          education: [...prev.education, {
+                            institution: "",
+                            degree: "",
+                            field: "",
+                            start_date: "",
+                            end_date: "",
+                            gpa: ""
+                          }]
+                        }))}
+                        className="text-xs"
+                      >
+                        Add Education
+                      </Button>
+                    </div>
+                    {currentResumeData.education.map((edu, index) => (
+                      <div key={index} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h5 className="font-medium text-sm">Education {index + 1}</h5>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setCurrentResumeData(prev => ({
+                              ...prev,
+                              education: prev.education.filter((_, i) => i !== index)
+                            }))}
+                            className="text-red-600 hover:text-red-700 text-xs"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-sm font-semibold text-gray-700 mb-2 block">Institution</label>
+                            <Input
+                              value={edu.institution}
+                              onChange={(e) => setCurrentResumeData(prev => ({
+                                ...prev,
+                                education: prev.education.map((ed, i) => 
+                                  i === index ? { ...ed, institution: e.target.value } : ed
+                                )
+                              }))}
+                              placeholder="University Name"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-gray-700 mb-2 block">Degree</label>
+                            <Input
+                              value={edu.degree}
+                              onChange={(e) => setCurrentResumeData(prev => ({
+                                ...prev,
+                                education: prev.education.map((ed, i) => 
+                                  i === index ? { ...ed, degree: e.target.value } : ed
+                                )
+                              }))}
+                              placeholder="Bachelor of Science"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-gray-700 mb-2 block">Field of Study</label>
+                            <Input
+                              value={edu.field}
+                              onChange={(e) => setCurrentResumeData(prev => ({
+                                ...prev,
+                                education: prev.education.map((ed, i) => 
+                                  i === index ? { ...ed, field: e.target.value } : ed
+                                )
+                              }))}
+                              placeholder="Computer Science"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-gray-700 mb-2 block">GPA</label>
+                            <Input
+                              value={edu.gpa}
+                              onChange={(e) => setCurrentResumeData(prev => ({
+                                ...prev,
+                                education: prev.education.map((ed, i) => 
+                                  i === index ? { ...ed, gpa: e.target.value } : ed
+                                )
+                              }))}
+                              placeholder="3.8"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-gray-700 mb-2 block">Start Date</label>
+                            <Input
+                              value={edu.start_date}
+                              onChange={(e) => setCurrentResumeData(prev => ({
+                                ...prev,
+                                education: prev.education.map((ed, i) => 
+                                  i === index ? { ...ed, start_date: e.target.value } : ed
+                                )
+                              }))}
+                              placeholder="YYYY-MM"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-gray-700 mb-2 block">End Date</label>
+                            <Input
+                              value={edu.end_date}
+                              onChange={(e) => setCurrentResumeData(prev => ({
+                                ...prev,
+                                education: prev.education.map((ed, i) => 
+                                  i === index ? { ...ed, end_date: e.target.value } : ed
+                                )
+                              }))}
+                              placeholder="YYYY-MM"
+                              className="text-sm"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  </>)}
+
+                  {formStep === 3 && (<>
+                  {/* Projects */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold text-lg text-gray-700 border-b border-primary/20 pb-2">Projects</h4>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentResumeData(prev => ({
+                          ...prev,
+                          projects: [...prev.projects, {
+                            name: "",
+                            description: "",
+                            technologies: [],
+                            url: ""
+                          }]
+                        }))}
+                        className="text-xs"
+                      >
+                        Add Project
+                      </Button>
+                    </div>
+                    {currentResumeData.projects.map((project, index) => (
+                      <div key={index} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h5 className="font-medium text-sm">Project {index + 1}</h5>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setCurrentResumeData(prev => ({
+                              ...prev,
+                              projects: prev.projects.filter((_, i) => i !== index)
+                            }))}
+                            className="text-red-600 hover:text-red-700 text-xs"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-sm font-semibold text-gray-700 mb-2 block">Project Name</label>
+                            <Input
+                              value={project.name}
+                              onChange={(e) => setCurrentResumeData(prev => ({
+                                ...prev,
+                                projects: prev.projects.map((proj, i) => 
+                                  i === index ? { ...proj, name: e.target.value } : proj
+                                )
+                              }))}
+                              placeholder="E-commerce Platform"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-gray-700 mb-2 block">URL</label>
+                            <Input
+                              value={project.url}
+                              onChange={(e) => setCurrentResumeData(prev => ({
+                                ...prev,
+                                projects: prev.projects.map((proj, i) => 
+                                  i === index ? { ...proj, url: e.target.value } : proj
+                                )
+                              }))}
+                              placeholder="https://github.com/username/project"
+                              className="text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-sm font-semibold text-gray-700 mb-2 block">Description</label>
+                          <Textarea
+                            value={project.description}
+                            onChange={(e) => setCurrentResumeData(prev => ({
+                              ...prev,
+                              projects: prev.projects.map((proj, i) => 
+                                i === index ? { ...proj, description: e.target.value } : proj
+                              )
+                            }))}
+                            placeholder="Describe the project and your role..."
+                            rows={2}
+                            className="text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-semibold text-gray-700 mb-2 block">Technologies (comma separated)</label>
+                          <Input
+                            value={project.technologies.join(', ')}
+                            onChange={(e) => setCurrentResumeData(prev => ({
+                              ...prev,
+                              projects: prev.projects.map((proj, i) => 
+                                i === index ? { ...proj, technologies: e.target.value.split(',').map(t => t.trim()).filter(t => t) } : proj
+                              )
+                            }))}
+                            placeholder="React, Node.js, MongoDB, AWS"
+                            className="text-sm"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  </>)}
+
+                  {formStep === 4 && (<>
+                  {/* Certifications */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold text-lg text-gray-700 border-b border-primary/20 pb-2">Certifications</h4>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentResumeData(prev => ({
+                          ...prev,
+                          certifications: [...prev.certifications, {
+                            name: "",
+                            issuer: "",
+                            date: "",
+                            url: ""
+                          }]
+                        }))}
+                        className="text-xs"
+                      >
+                        Add Certification
+                      </Button>
+                    </div>
+                    {currentResumeData.certifications.map((cert, index) => (
+                      <div key={index} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h5 className="font-medium text-sm">Certification {index + 1}</h5>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setCurrentResumeData(prev => ({
+                              ...prev,
+                              certifications: prev.certifications.filter((_, i) => i !== index)
+                            }))}
+                            className="text-red-600 hover:text-red-700 text-xs"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-sm font-semibold text-gray-700 mb-2 block">Certification Name</label>
+                            <Input
+                              value={cert.name}
+                              onChange={(e) => setCurrentResumeData(prev => ({
+                                ...prev,
+                                certifications: prev.certifications.map((c, i) => 
+                                  i === index ? { ...c, name: e.target.value } : c
+                                )
+                              }))}
+                              placeholder="AWS Certified Developer"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-gray-700 mb-2 block">Issuing Organization</label>
+                            <Input
+                              value={cert.issuer}
+                              onChange={(e) => setCurrentResumeData(prev => ({
+                                ...prev,
+                                certifications: prev.certifications.map((c, i) => 
+                                  i === index ? { ...c, issuer: e.target.value } : c
+                                )
+                              }))}
+                              placeholder="Amazon Web Services"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-gray-700 mb-2 block">Date</label>
+                            <Input
+                              value={cert.date}
+                              onChange={(e) => setCurrentResumeData(prev => ({
+                                ...prev,
+                                certifications: prev.certifications.map((c, i) => 
+                                  i === index ? { ...c, date: e.target.value } : c
+                                )
+                              }))}
+                              placeholder="2023-03"
+                              className="text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-semibold text-gray-700 mb-2 block">URL</label>
+                            <Input
+                              value={cert.url}
+                              onChange={(e) => setCurrentResumeData(prev => ({
+                                ...prev,
+                                certifications: prev.certifications.map((c, i) => 
+                                  i === index ? { ...c, url: e.target.value } : c
+                                )
+                              }))}
+                              placeholder="https://aws.amazon.com/certification/"
+                              className="text-sm"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  </>)}
+
+                  {formStep === 5 && (<>
+                  {/* Hobbies */}
+                  <div className="space-y-3">
+                    <h4 className="font-semibold text-lg text-gray-700 border-b border-primary/20 pb-2">Hobbies & Interests</h4>
+                    <div className="flex flex-wrap gap-1 lg:gap-2 mb-2">
+                      {currentResumeData.hobbies.map((hobby, index) => (
+                        <Badge key={index} variant="secondary" className="flex items-center gap-1 text-xs">
+                          {hobby}
+                          <button
+                            onClick={() => setCurrentResumeData(prev => ({
+                              ...prev,
+                              hobbies: prev.hobbies.filter((_, i) => i !== index)
+                            }))}
+                            className="ml-1 hover:text-red-500 text-sm"
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Input
+                        placeholder="Add a hobby or interest"
+                        className="text-sm"
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            const hobby = e.currentTarget.value.trim();
+                            if (hobby && !currentResumeData.hobbies.includes(hobby)) {
+                              setCurrentResumeData(prev => ({
+                                ...prev,
+                                hobbies: [...prev.hobbies, hobby]
+                              }));
+                              e.currentTarget.value = '';
+                            }
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          const input = document.querySelector('input[placeholder="Add a hobby or interest"]') as HTMLInputElement;
+                          if (input?.value) {
+                            const hobby = input.value.trim();
+                            if (hobby && !currentResumeData.hobbies.includes(hobby)) {
+                              setCurrentResumeData(prev => ({
+                                ...prev,
+                                hobbies: [...prev.hobbies, hobby]
+                              }));
+                              input.value = '';
+                            }
+                          }
+                        }}
+                        className="text-sm"
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+                  </>)}
+
+                  {formStep === 6 && (<>
                   {/* Job Description for AI Generation */}
-                  <div className="space-y-4">
-                    <h4 className="font-semibold text-lg border-b pb-2">Job Description (Optional)</h4>
+                  <div className="space-y-3 lg:space-y-4">
+                    <h4 className="font-semibold text-base lg:text-lg border-b pb-2">Job Description</h4>
                     <VoiceInput
                       fieldName="jobDescription"
                       type="textarea"
-                      placeholder="Paste the job description here to get AI-powered resume suggestions..."
+                      placeholder="Paste the job description here to get AI-powered resume suggestions... (required to generate)"
                       rows={3}
                       value={jobDescription}
                       onChange={(value) => setJobDescription(value)}
                     />
-                  </div>
+                    {!jobDescription?.trim() && (
+                      <div className="text-xs text-amber-600">Please enter a job description to enable Ai Generate your perfect Resume.</div>
+                    )}
 
-
-
-                  {/* Action Buttons */}
-                  <div className="space-y-4 pt-4">
-                    {/* Main Action Buttons */}
-                    <div className="flex gap-2 flex-wrap">
-                      <Button 
-                        onClick={handleGenerateResume}
-                        disabled={isGenerateLoading || isGenerateLegacyLoading || !currentResumeData.personal_info.name}
-                        className="flex items-center gap-2"
-                      >
-                        {(isGenerateLoading || isGenerateLegacyLoading) ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Wand2 className="h-4 w-4" />
-                        )}
-                        {(isGenerateLoading || isGenerateLegacyLoading) ? "Generating..." : "Generate Resume"}
-                      </Button>
-                      <Button 
-                        variant="outline"
-                        onClick={handleExportPdf}
-                        disabled={isPdfExportLoading || isPdfLegacyLoading || !currentResumeData.personal_info.name}
-                        className="flex items-center gap-2"
-                      >
-                        {(isPdfExportLoading || isPdfLegacyLoading) ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Download className="h-4 w-4" />
-                        )}
-                        Export PDF
-                      </Button>
-                      <Button 
-                        variant="outline"
-                        onClick={handleExportDocx}
-                        disabled={isDocxExportLoading || isDocxLegacyLoading || !currentResumeData.personal_info.name}
-                        className="flex items-center gap-2"
-                      >
-                        {(isDocxExportLoading || isDocxLegacyLoading) ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Download className="h-4 w-4" />
-                        )}
-                        Export DOCX
-                      </Button>
+                    {/* Action Buttons at end of Step 7 */}
+                    <div className="space-y-3 lg:space-y-4 pt-4">
+                      <h4 className="font-semibold text-lg text-gray-700 border-b border-primary/20 pb-2"></h4>
+                      <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
+                        <Button 
+                          onClick={handleGenerateResume}
+                          disabled={isGenerateLoading || isGenerateLegacyLoading || !currentResumeData.personal_info.name || !jobDescription?.trim()}
+                          className="flex items-center gap-2 text-sm w-full sm:w-auto"
+                        >
+                          {(isGenerateLoading || isGenerateLegacyLoading) ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Wand2 className="h-4 w-4" />
+                          )}
+                          {(isGenerateLoading || isGenerateLegacyLoading) ? "Generating..." : "Generate Resume"}
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          onClick={handleExportPdf}
+                          disabled={isPdfExportLoading || isPdfLegacyLoading || !currentResumeData.personal_info.name}
+                          className="flex items-center gap-2 text-sm w-full sm:w-auto"
+                        >
+                          {(isPdfExportLoading || isPdfLegacyLoading) ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
+                          Export PDF
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          onClick={handleExportDocx}
+                          disabled={isDocxExportLoading || isDocxLegacyLoading || !currentResumeData.personal_info.name}
+                          className="flex items-center gap-2 text-sm w-full sm:w-auto"
+                        >
+                          {(isDocxExportLoading || isDocxLegacyLoading) ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
+                          Export DOCX
+                        </Button>
+                      </div>
                     </div>
-
                   </div>
+                  </>)}
+
+                  {/* Step navigation */}
+                  <div className="flex items-center justify-between mt-4">
+                    <span className="text-xs text-muted-foreground">Step {formStep + 1} of {maxFormStep}</span>
+                    <div className="flex gap-2">
+                      {formStep > 0 && (
+                        <Button variant="outline" size="sm" type="button" onClick={() => setFormStep(s => Math.max(0, s - 1))}>Previous</Button>
+                      )}
+                      {formStep < maxFormStep - 1 && (
+                        <Button size="sm" type="button" onClick={() => setFormStep(s => s + 1)}>Next</Button>
+                      )}
+                    </div>
+                  </div>
+
+
+
+
                 </div>
               </Card>
 
               {/* Preview */}
-              <Card className="p-6 border-primary/10">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-bold text-xl">Resume Preview</h3>
-                  <div className="flex gap-2">
+              <Card className="p-6 border-primary/10 shadow-lg">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+                  <h3 className="font-bold text-xl lg:text-2xl text-gray-800">Live Preview</h3>
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">Template:</span>
-                      <Badge variant="outline" className="capitalize">
+                      <span className="text-sm text-muted-foreground font-medium">Template:</span>
+                      <Badge variant="outline" className="capitalize text-sm px-3 py-1">
                         {selectedTemplate}
                       </Badge>
                     </div>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" className="text-sm px-4 py-2">
                       <Eye className="h-4 w-4 mr-2" />
-                      Preview
+                      Full Preview
                     </Button>
                   </div>
                 </div>
-                <div className="aspect-[3/4] bg-gray-50 border rounded-lg p-4 shadow-sm overflow-y-auto">
-                  {currentResumeData.personal_info.name ? (
-                    <div className="scale-75 origin-top-left w-[133%] h-[133%]">
-                      <ResumeTemplate 
-                        data={currentResumeData} 
-                        template={selectedTemplate}
-                      />
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-dashed border-gray-300 rounded-xl p-4 shadow-inner">
+                  <div className="aspect-[3/4] bg-white border rounded-lg shadow-lg overflow-hidden">
+                    {currentResumeData.personal_info.name ? (
+                      <div className="h-full overflow-y-auto">
+                        <div className="scale-75 origin-top-left w-[133%] h-[133%]">
+                          <ResumeTemplate 
+                            data={currentResumeData} 
+                            template={selectedTemplate}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-center p-8">
+                        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                          <Eye className="h-8 w-8 text-primary/50" />
+                        </div>
+                        <h4 className="text-lg font-medium text-gray-600 mb-2">Preview Your Resume</h4>
+                        <p className="text-sm text-gray-500">
+                          Fill in your information on the left to see a live preview of your resume here
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  ) : (
-                    <div className="text-center text-gray-400 text-sm h-full flex items-center justify-center">
-                      Fill in your information to see the preview
-                    </div>
-                  )}
                 </div>
               </Card>
             </div>
@@ -2065,39 +2534,19 @@ Photography, Hiking, Open Source Contributions`;
 
         </section>
 
-        {/* Testimonials Section */}
-        <section className="relative w-full py-20 bg-gradient-to-b from-white to-cyan-100 overflow-hidden">
-          <div className="text-center pt-14 relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <h2 className="text-xl mb-6 sm:text-4xl md:text-6xl lg:text-4xl font-normal leading-tight text-[#2D3253] z-50">
-              Success <span className="bg-gradient-primary bg-clip-text text-transparent">Stories</span>
-            </h2>
-            <div className="grid md:grid-cols-3 gap-6">
-              {testimonials.map((testimonial, index) => (
-                <Card key={index} className="p-6 border-primary/10">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center">
-                      <span className="text-primary font-bold text-sm">
-                        {testimonial.name.split(' ').map(n => n[0]).join('')}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="font-medium">{testimonial.name}</p>
-                      <p className="text-xs text-muted-foreground">{testimonial.role} at {testimonial.company}</p>
-                    </div>
-                  </div>
-                  <p className="text-muted-foreground mb-4 italic">"{testimonial.quote}"</p>
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-green-500" />
-                    <span className="text-sm text-green-500 font-medium">{testimonial.improvement} more interviews</span>
-                  </div>
-                </Card>
-              ))}
+        {/* Testimonials Section removed per request */}
+
+        {/* Footer Section */}
+        <div className="-mt-16 relative z-10 min-h-screen max-w-screen-2xl mx-auto px-2 sm:px-6 lg:px-8 border-0 rounded-tl-[50px] rounded-tr-[50px] lg:rounded-tl-[70px] lg:rounded-tr-[70px] overflow-hidden bg-[#FFFFFF] animate-fade-in">
+          {/* Footer */}
+          <Footer />
+
+          <div className="px-4 sm:px-6 lg:px-8 text-center">
+            <div className="h-[16rem] flex items-center justify-center tracking-widest">
+              <TextHoverEffect text=" AInode " />
             </div>
           </div>
-        </section>
-
-        {/* Footer */}
-        <Footer />
+        </div>
       </div>
 
       {/* AI Generated Resume Preview Modal */}

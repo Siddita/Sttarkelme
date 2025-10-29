@@ -581,7 +581,7 @@ const JobListing = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: "easeOut" }}
           viewport={{ once: true }}
-          className="relative z-40 lg:min-h-screen max-w-screen-2xl mx-auto pt-8 bg-gradient-to-b from-cyan-100 to-white overflow-hidden"
+          className="relative lg:min-h-screen max-w-screen-2xl mx-auto pt-8 bg-gradient-to-b from-cyan-100 to-white overflow-hidden"
           style={{ willChange: 'transform, opacity' }}
         >
           <div className="relative max-w-7xl mx-auto pt-8 lg:pt-12">
@@ -682,7 +682,7 @@ const JobListing = () => {
                 transition={{ duration: 0.6, ease: "easeOut" }}
               >
                 <Card className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-                  <div className="flex items-center justify-between mb-6">
+                  {/* <div className="flex items-center justify-between mb-6">
                     <div>
                       <h3 className="text-2xl font-bold text-[#2D3253]">Your Resumes</h3>
                       <p className="text-sm text-muted-foreground mt-1">
@@ -706,9 +706,41 @@ const JobListing = () => {
                         Upload New
                       </Button>
                     </div>
+                  </div> */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-y-4 mb-6 px-4">
+                    {/* Title and Description */}
+                    <div className="text-center sm:text-left">
+                      <h3 className="text-xl sm:text-2xl font-bold text-[#2D3253]">
+                        Your Resumes
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Manage and analyze your uploaded resumes
+                      </p>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-wrap sm:flex-nowrap justify-center sm:justify-end items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => refetchResumes()}
+                        className="flex items-center gap-2"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Refresh
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => document.getElementById('resume-upload')?.click()}
+                        className="flex items-center gap-2"
+                      >
+                        <Upload className="w-4 h-4" />
+                        Upload New
+                      </Button>
+                    </div>
                   </div>
                   
-                  <div className="grid gap-4">
+                  {/* <div className="grid gap-4">
                     {resumes.map((resume) => (
                       <div key={resume.id} className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
                         <div className="flex items-center gap-3">
@@ -755,7 +787,65 @@ const JobListing = () => {
                         </div>
                       </div>
                     ))}
+                  </div> */}
+
+                  <div className="grid gap-4">
+                    {resumes.map((resume) => (
+                      <div
+                        key={resume.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
+                      >
+                        {/* Resume Info */}
+                        <div className="flex items-start sm:items-center gap-3 flex-1">
+                          <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
+                            <FileText className="h-5 w-5 text-primary" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-base sm:text-lg">
+                              {resume.filename || `Resume ${resume.id}`}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Uploaded: {new Date(resume.created_at).toLocaleDateString()}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <Badge variant="outline" className="text-xs">
+                                {resume.filename?.split('.').pop()?.toUpperCase() || 'PDF'}
+                              </Badge>
+                              {selectedResumeId === resume.id && (
+                                <Badge variant="default" className="text-xs">
+                                  Active
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleResumeSelect(resume.id)}
+                            className="flex items-center gap-2"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View Analysis
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleResumeDelete(resume.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-2"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
+
+                  
                   
                   {/* Resume Statistics */}
                   <div className="mt-6 pt-6 border-t border-gray-200">
@@ -1064,8 +1154,8 @@ const JobListing = () => {
             )}
 
           {/* Search Bar */}
-          <div className="max-w-4xl mx-auto mb-12">
-            <div className="relative">
+          <div className="max-w-4xl mx-auto mb-12 mt-24">
+            <div className="relative m-6">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
               <Input
                 type="text"
@@ -1129,28 +1219,29 @@ const JobListing = () => {
           </div>
 
             {/* Advanced Filters */}
-            <div className="max-w-7xl mx-auto mb-12">
-              <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 border border-primary/20 shadow-xl">
-                <div className="flex items-center justify-between mb-8">
-                  <div className="flex items-center gap-3">
-                    <Filter className="h-6 w-6 text-primary" />
-                    <h3 className="text-xl font-bold text-[#2D3253]">Advanced Job Filters</h3>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    {resumeAnalysis && (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="resume-matching"
-                          checked={useResumeMatching}
-                          onChange={(e) => setUseResumeMatching(e.target.checked)}
-                          className="w-4 h-4 text-primary rounded focus:ring-primary"
-                        />
-                        <label htmlFor="resume-matching" className="text-sm font-medium text-[#2D3253]">
-                          Match with Resume
-                        </label>
-                      </div>
-                    )}
+            <div className="max-w-7xl mx-auto mb-12 pb-14">
+              <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-6 m-6 lg:ml-20 lg:mr-20 sm:p-8 border border-primary/20 shadow-sm">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-y-4 mb-8">
+                <div className="flex items-center gap-3 justify-center sm:justify-start">
+                  <Filter className="h-6 w-6 text-primary" />
+                  <h3 className="text-lg sm:text-xl font-bold text-[#2D3253]">Advanced Job Filters</h3>
+                </div>
+                <div className="flex flex-wrap justify-center sm:justify-end items-center gap-3">
+                  {resumeAnalysis && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="resume-matching"
+                        checked={useResumeMatching}
+                        onChange={(e) => setUseResumeMatching(e.target.checked)}
+                        className="w-4 h-4 text-primary rounded focus:ring-primary"
+                      />
+                      <label htmlFor="resume-matching" className="text-sm font-medium text-[#2D3253]">
+                        Match with Resume
+                      </label>
+                    </div>
+                  )}
                   <Button
                     variant="outline"
                     onClick={() => {
@@ -1199,20 +1290,6 @@ const JobListing = () => {
                     </select>
                   </div>
 
-                  {/* Location Filter */}
-                  <div>
-                    <label className="block text-sm font-semibold text-[#2D3253] mb-2">Location</label>
-                    <select
-                      value={selectedLocation}
-                      onChange={(e) => setSelectedLocation(e.target.value)}
-                      className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary bg-white shadow-sm hover:border-gray-300 transition-colors"
-                    >
-                      {locations.map((location) => (
-                        <option key={location} value={location}>{location}</option>
-                      ))}
-                    </select>
-                  </div>
-
                   {/* Experience Level Filter */}
                   <div>
                     <label className="block text-sm font-semibold text-[#2D3253] mb-2">Experience Level</label>
@@ -1226,222 +1303,216 @@ const JobListing = () => {
                       ))}
                     </select>
                   </div>
-                </div>
 
-                {/* Second Row - Secondary Filters */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Salary Range Filter */}
+                  {/* Location Filter */}
                   <div>
-                    <label className="block text-sm font-semibold text-[#2D3253] mb-2">Salary Range</label>
+                    <label className="block text-sm font-semibold text-[#2D3253] mb-2">Location</label>
                     <select
-                      value={selectedSalaryRange}
-                      onChange={(e) => setSelectedSalaryRange(e.target.value)}
+                      value={selectedLocation}
+                      onChange={(e) => setSelectedLocation(e.target.value)}
                       className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary bg-white shadow-sm hover:border-gray-300 transition-colors"
                     >
-                      {salaryRanges.map((range) => (
-                        <option key={range} value={range}>{range}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Work Arrangement Filter */}
-                  <div>
-                    <label className="block text-sm font-semibold text-[#2D3253] mb-2">Work Arrangement</label>
-                    <select
-                      value={selectedWorkArrangement}
-                      onChange={(e) => setSelectedWorkArrangement(e.target.value)}
-                      className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary bg-white shadow-sm hover:border-gray-300 transition-colors"
-                    >
-                      {workArrangements.map((arrangement) => (
-                        <option key={arrangement} value={arrangement}>{arrangement}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Company Size Filter */}
-                  <div>
-                    <label className="block text-sm font-semibold text-[#2D3253] mb-2">Company Size</label>
-                    <select
-                      value={selectedCompanySize}
-                      onChange={(e) => setSelectedCompanySize(e.target.value)}
-                      className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary bg-white shadow-sm hover:border-gray-300 transition-colors"
-                    >
-                      {companySizes.map((size) => (
-                        <option key={size} value={size}>{size}</option>
+                      {locations.map((location) => (
+                        <option key={location} value={location}>{location}</option>
                       ))}
                     </select>
                   </div>
                 </div>
 
-                {/* Active Filters Summary */}
-                <div className="mt-6 pt-6 border-t border-gray-200">
-                  <div className="flex flex-wrap gap-2">
-                    {selectedCategory !== "All" && (
-                      <Badge variant="secondary" className="px-3 py-1">
-                        Category: {selectedCategory}
-                      </Badge>
-                    )}
-                    {selectedJobType !== "All" && (
-                      <Badge variant="secondary" className="px-3 py-1">
-                        Type: {selectedJobType}
-                      </Badge>
-                    )}
-                    {selectedLocation !== "All" && (
-                      <Badge variant="secondary" className="px-3 py-1">
-                        Location: {selectedLocation}
-                      </Badge>
-                    )}
-                    {selectedExperience !== "All" && (
-                      <Badge variant="secondary" className="px-3 py-1">
-                        Experience: {selectedExperience}
-                      </Badge>
-                    )}
-                    {selectedSalaryRange !== "All" && (
-                      <Badge variant="secondary" className="px-3 py-1">
-                        Salary: {selectedSalaryRange}
-                      </Badge>
-                    )}
-                    {selectedWorkArrangement !== "All" && (
-                      <Badge variant="secondary" className="px-3 py-1">
-                        Work: {selectedWorkArrangement}
-                      </Badge>
-                    )}
-                    {selectedCompanySize !== "All" && (
-                      <Badge variant="secondary" className="px-3 py-1">
-                        Company: {selectedCompanySize}
-                      </Badge>
-                    )}
+              {/* Secondary Filters */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[{
+                  label: "Salary Range",
+                  value: selectedSalaryRange,
+                  onChange: setSelectedSalaryRange,
+                  options: salaryRanges
+                }, {
+                  label: "Work Arrangement",
+                  value: selectedWorkArrangement,
+                  onChange: setSelectedWorkArrangement,
+                  options: workArrangements
+                }, {
+                  label: "Company Size",
+                  value: selectedCompanySize,
+                  onChange: setSelectedCompanySize,
+                  options: companySizes
+                }].map(({ label, value, onChange, options }) => (
+                  <div key={label}>
+                    <label className="block text-sm font-semibold text-[#2D3253] mb-3">{label}</label>
+                    <select
+                      value={value}
+                      onChange={(e) => onChange(e.target.value)}
+                      className="w-full p-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary bg-white shadow-sm hover:border-gray-300 transition-colors"
+                    >
+                      {options.map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
                   </div>
+                ))}
+              </div>
+
+              {/* Active Filters Summary */}
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <div className="flex flex-wrap gap-2">
+                  {selectedCategory !== "All" && (
+                    <Badge variant="secondary" className="px-3 py-1">Category: {selectedCategory}</Badge>
+                  )}
+                  {selectedJobType !== "All" && (
+                    <Badge variant="secondary" className="px-3 py-1">Type: {selectedJobType}</Badge>
+                  )}
+                  {selectedLocation !== "All" && (
+                    <Badge variant="secondary" className="px-3 py-1">Location: {selectedLocation}</Badge>
+                  )}
+                  {selectedExperience !== "All" && (
+                    <Badge variant="secondary" className="px-3 py-1">Experience: {selectedExperience}</Badge>
+                  )}
+                  {selectedSalaryRange !== "All" && (
+                    <Badge variant="secondary" className="px-3 py-1">Salary: {selectedSalaryRange}</Badge>
+                  )}
+                  {selectedWorkArrangement !== "All" && (
+                    <Badge variant="secondary" className="px-3 py-1">Work: {selectedWorkArrangement}</Badge>
+                  )}
+                  {selectedCompanySize !== "All" && (
+                    <Badge variant="secondary" className="px-3 py-1">Company: {selectedCompanySize}</Badge>
+                  )}
                 </div>
               </div>
             </div>
 
 
           {/* Job Listings */}
-            <div className="max-w-6xl mx-auto">
-              {jobsLoading && (
-                <div className="text-center py-8">
-                  <div className="text-lg text-gray-600">Loading jobs...</div>
-                </div>
-              )}
-              {jobsError && (
-                <div className="text-center py-8">
-                  <div className="text-lg text-red-600">Error loading jobs: {jobsError.message}</div>
-                </div>
-              )}
-              <div className="grid gap-6">
-            {(useResumeMatching ? getResumeBasedJobs() : (jobs || []))
-              .filter(job => selectedCategory === "All" || job.category === selectedCategory)
-                  .filter(job => selectedJobType === "All" || job.employment_type === selectedJobType)
-                  .filter(job => selectedLocation === "All" || job.location === selectedLocation)
-                  .filter(job => selectedExperience === "All" || job.seniority_level === selectedExperience)
-                  .filter(job => selectedWorkArrangement === "All" || job.work_type === selectedWorkArrangement)
-                  .filter(job => selectedCompanySize === "All" || job.companySize === selectedCompanySize)
-                  .filter(job => {
-                    if (selectedSalaryRange === "All") return true;
-                    const jobSalary = job.salary_min && job.salary_max ? `${job.salary_min} - ${job.salary_max}` : job.salary || '';
-                    switch (selectedSalaryRange) {
-                      case "Under ₹5L":
-                        return jobSalary.includes("₹3L") || jobSalary.includes("₹4L") || jobSalary.includes("₹5L");
-                      case "₹5L - ₹8L":
-                        return jobSalary.includes("₹5L") || jobSalary.includes("₹6L") || jobSalary.includes("₹7L") || jobSalary.includes("₹8L");
-                      case "₹8L - ₹12L":
-                        return jobSalary.includes("₹8L") || jobSalary.includes("₹9L") || jobSalary.includes("₹10L") || jobSalary.includes("₹11L") || jobSalary.includes("₹12L");
-                      case "₹12L - ₹18L":
-                        return jobSalary.includes("₹12L") || jobSalary.includes("₹13L") || jobSalary.includes("₹14L") || jobSalary.includes("₹15L") || jobSalary.includes("₹16L") || jobSalary.includes("₹17L") || jobSalary.includes("₹18L");
-                      case "₹18L - ₹25L":
-                        return jobSalary.includes("₹18L") || jobSalary.includes("₹20L") || jobSalary.includes("₹22L") || jobSalary.includes("₹24L") || jobSalary.includes("₹25L");
-                      case "₹25L - ₹35L":
-                        return jobSalary.includes("₹25L") || jobSalary.includes("₹28L") || jobSalary.includes("₹30L") || jobSalary.includes("₹32L") || jobSalary.includes("₹35L");
-                      case "₹35L+":
-                        return jobSalary.includes("₹35L") || jobSalary.includes("₹40L") || jobSalary.includes("₹45L") || jobSalary.includes("₹50L");
-                      default:
-                        return true;
-                    }
-                  })
-                  .filter(job => job.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                (job.company_name || job.company || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                (job.skills || []).some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase())))
-              .map((job) => (
-                    <motion.div
-                      key={job.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.6 }}
-                      whileHover={{ scale: 1.02 }}
+<div className="max-w-6xl mx-auto px-3 sm:px-6">
+  {jobsLoading && (
+    <div className="text-center py-8">
+      <div className="text-lg text-gray-600">Loading jobs...</div>
+    </div>
+  )}
+  {jobsError && (
+    <div className="text-center py-8">
+      <div className="text-lg text-red-600">Error loading jobs: {jobsError.message}</div>
+    </div>
+  )}
+
+  <div className="grid gap-4 sm:gap-6 my-6">
+    {(useResumeMatching ? getResumeBasedJobs() : (jobs || []))
+      .filter(job => selectedCategory === "All" || job.category === selectedCategory)
+      .filter(job => selectedJobType === "All" || job.employment_type === selectedJobType)
+      .filter(job => selectedLocation === "All" || job.location === selectedLocation)
+      .filter(job => selectedExperience === "All" || job.seniority_level === selectedExperience)
+      .filter(job => selectedWorkArrangement === "All" || job.work_type === selectedWorkArrangement)
+      .filter(job => selectedCompanySize === "All" || job.companySize === selectedCompanySize)
+      .filter(job => {
+        if (selectedSalaryRange === "All") return true;
+        const jobSalary = job.salary_min && job.salary_max ? `${job.salary_min} - ${job.salary_max}` : job.salary || '';
+        switch (selectedSalaryRange) {
+          case "Under ₹5L":
+            return jobSalary.includes("₹3L") || jobSalary.includes("₹4L") || jobSalary.includes("₹5L");
+          case "₹5L - ₹8L":
+            return jobSalary.includes("₹5L") || jobSalary.includes("₹6L") || jobSalary.includes("₹7L") || jobSalary.includes("₹8L");
+          case "₹8L - ₹12L":
+            return jobSalary.includes("₹8L") || jobSalary.includes("₹9L") || jobSalary.includes("₹10L") || jobSalary.includes("₹11L") || jobSalary.includes("₹12L");
+          case "₹12L - ₹18L":
+            return jobSalary.includes("₹12L") || jobSalary.includes("₹13L") || jobSalary.includes("₹14L") || jobSalary.includes("₹15L") || jobSalary.includes("₹16L") || jobSalary.includes("₹17L") || jobSalary.includes("₹18L");
+          case "₹18L - ₹25L":
+            return jobSalary.includes("₹18L") || jobSalary.includes("₹20L") || jobSalary.includes("₹22L") || jobSalary.includes("₹24L") || jobSalary.includes("₹25L");
+          case "₹25L - ₹35L":
+            return jobSalary.includes("₹25L") || jobSalary.includes("₹28L") || jobSalary.includes("₹30L") || jobSalary.includes("₹32L") || jobSalary.includes("₹35L");
+          case "₹35L+":
+            return jobSalary.includes("₹35L") || jobSalary.includes("₹40L") || jobSalary.includes("₹45L") || jobSalary.includes("₹50L");
+          default:
+            return true;
+        }
+      })
+      .filter(job => job.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                    (job.company_name || job.company || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    (job.skills || []).some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase())))
+      .map((job) => (
+        <motion.div
+          key={job.id}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          whileHover={{ scale: 1.02 }}
+        >
+          <Card className="p-4 sm:p-6 hover:shadow-lg transition-all duration-300 border-primary/10 hover:border-primary/30">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div className="flex-1">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <h3 className="font-bold text-lg sm:text-xl truncate">{job.title}</h3>
+                  {job.featured && (
+                    <Badge variant="secondary" className="text-xs">Featured</Badge>
+                  )}
+                  {useResumeMatching && (job as any).matchScore > 0 && (
+                    <Badge
+                      variant={(job as any).matchScore > 70 ? "default" : (job as any).matchScore > 40 ? "secondary" : "outline"}
+                      className="text-xs"
                     >
-                      <Card className="p-6 hover:shadow-lg transition-all duration-300 border-primary/10 hover:border-primary/30">
-                        <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="font-bold text-xl">{job.title}</h3>
-                            {job.featured && (
-                              <Badge variant="secondary" className="text-xs">Featured</Badge>
-                            )}
-                            {useResumeMatching && (job as any).matchScore > 0 && (
-                              <Badge 
-                                variant={(job as any).matchScore > 70 ? "default" : (job as any).matchScore > 40 ? "secondary" : "outline"}
-                                className="text-xs"
-                              >
-                                {Math.round((job as any).matchScore)}% Match
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-primary font-medium mb-1">{typeof job.company_name === 'string' ? job.company_name : typeof job.company === 'string' ? job.company : 'N/A'}</p>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <MapPin className="h-4 w-4" />
-                              {typeof job.location === 'string' ? job.location : typeof job.country === 'string' ? job.country : 'N/A'}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Clock className="h-4 w-4" />
-                              {typeof job.employment_type === 'string' ? job.employment_type : typeof job.type === 'string' ? job.type : 'N/A'}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <DollarSign className="h-4 w-4" />
-                              {typeof job.salary_min === 'string' || typeof job.salary_min === 'number' ? 
-                                (typeof job.salary_max === 'string' || typeof job.salary_max === 'number' ? 
-                                  `${job.salary_min} - ${job.salary_max}` : 
-                                  job.salary_min) : 
-                                (typeof job.salary === 'string' ? job.salary : 'N/A')}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Clock className="h-4 w-4" />
-                              {job.created_at ? new Date(job.created_at).toLocaleDateString() : 'N/A'}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <p className="text-muted-foreground mb-4">{typeof job.description === 'string' ? job.description : JSON.stringify(job.description) || 'No description available'}</p>
-                      
-                        <div className="flex items-center justify-between">
-                          <div className="flex flex-wrap gap-2">
-                            {(job.skills || []).map((skill, index) => (
-                              <Badge key={index} variant="outline" className="text-xs">
-                            {typeof skill === 'string' ? skill : JSON.stringify(skill)}
-                          </Badge>
-                        ))}
-                    </div>
-                    
-                          <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm">
-                              <Bookmark className="w-4 h-4" />
-                      </Button>
-                      <Button variant="outline" size="sm">
-                              <Share2 className="w-4 h-4" />
-                      </Button>
-                            <Button size="sm">
-                              Apply Now
-                              <ArrowRight className="w-4 h-4 ml-1" />
-                      </Button>
-                    </div>
+                      {Math.round((job as any).matchScore)}% Match
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-primary font-medium mb-1 text-sm sm:text-base">
+                  {typeof job.company_name === 'string' ? job.company_name : typeof job.company === 'string' ? job.company : 'N/A'}
+                </p>
+
+                <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <MapPin className="h-3 w-3 sm:h-4 sm:w-4" />
+                    {job.location || job.country || 'N/A'}
                   </div>
-                </Card>
-                    </motion.div>
-              ))}
+                  <div className="flex items-center gap-1">
+                    <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+                    {job.employment_type || job.type || 'N/A'}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
+                    {job.salary_min && job.salary_max
+                      ? `${job.salary_min} - ${job.salary_max}`
+                      : job.salary || 'N/A'}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+                    {job.created_at ? new Date(job.created_at).toLocaleDateString() : 'N/A'}
+                  </div>
+                </div>
               </div>
-          </div>
+            </div>
+
+            <p className="text-muted-foreground mt-3 mb-4 text-sm sm:text-base line-clamp-3">
+              {typeof job.description === 'string'
+                ? job.description
+                : JSON.stringify(job.description) || 'No description available'}
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                {(job.skills || []).map((skill, index) => (
+                  <Badge key={index} variant="outline" className="text-xs sm:text-sm">
+                    {typeof skill === 'string' ? skill : JSON.stringify(skill)}
+                  </Badge>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap gap-2 justify-center sm:justify-end w-full sm:w-auto">
+                <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                  <Bookmark className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                  <Share2 className="w-4 h-4" />
+                </Button>
+                <Button size="sm" className="w-full sm:w-auto flex items-center justify-center">
+                  Apply Now
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </motion.div>
+      ))}
+  </div>
+</div>
+
 
           {/* Load More */}
           <div className="text-center mt-12">
@@ -1451,20 +1522,22 @@ const JobListing = () => {
             </Button>
           </div>
           </div>
+          </div>
         </motion.section>
       </div>
 
-      {/* Footer Section */}
-      <div
-        className="-mt-16 relative z-10 min-h-screen max-w-screen-2xl mx-auto px-2 sm:px-6 lg:px-8 border border-blue-300 rounded-tl-[70px] rounded-tr-[70px] overflow-hidden bg-[#FFFFFF] animate-fade-in"
-      >
-        <Footer />
-        <div className="px-4 sm:px-6 lg:px-8 text-center">
-          <div className="h-[16rem] flex items-center justify-center tracking-widest">
-            <TextHoverEffect text=" AInode " />
+      {/* Footer Section 7 */}
+        <div
+          className="-mt-16 relative z-10 min-h-screen max-w-screen-2xl mx-auto px-2 sm:px-6 lg:px-8 border border-blue-300 rounded-tl-[50px] rounded-tr-[50px] lg:rounded-tl-[70px] lg:rounded-tr-[70px] overflow-hidden bg-[#FFFFFF] animate-fade-in"
+        >
+          <Footer />
+
+          <div className="px-4 sm:px-6 lg:px-8 text-center">
+            <div className="h-[16rem] flex items-center justify-center tracking-widest">
+              <TextHoverEffect text=" AInode " />
+            </div>
           </div>
         </div>
-      </div>
     </div>
   );
 };

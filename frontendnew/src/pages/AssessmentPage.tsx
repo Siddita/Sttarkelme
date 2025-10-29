@@ -83,6 +83,63 @@ const AssessmentPage = () => {
   const [downloadedReport, setDownloadedReport] = useState<any>(null);
   const [generatedPdf, setGeneratedPdf] = useState<any>(null);
 
+  // Helper function to parse JSON strings safely
+  const parseJsonSafely = (data: any) => {
+    if (typeof data === 'string') {
+      try {
+        return JSON.parse(data);
+      } catch (error) {
+        console.warn('Failed to parse JSON string:', error);
+        return data;
+      }
+    }
+    return data;
+  };
+
+  // Helper function to format JSON objects as readable content
+  const formatJsonContent = (content: any) => {
+    const parsed = parseJsonSafely(content);
+    
+    if (Array.isArray(parsed)) {
+      return (
+        <ul className="space-y-2">
+          {parsed.map((item, index) => (
+            <li key={index} className="flex items-start gap-2">
+              <span className="text-xs mt-1 text-primary">•</span>
+              <span className="text-sm leading-relaxed">{typeof item === 'string' ? item : JSON.stringify(item)}</span>
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    
+    if (typeof parsed === 'object' && parsed !== null) {
+      return (
+        <div className="space-y-3">
+          {Object.entries(parsed).map(([key, value]) => (
+            <div key={key} className="p-3 bg-gray-50 rounded-lg">
+              <h5 className="font-semibold text-sm mb-2 capitalize">{key.replace(/_/g, ' ')}</h5>
+              {Array.isArray(value) ? (
+                <ul className="space-y-1">
+                  {value.map((item, index) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <span className="text-xs mt-1 text-primary">•</span>
+                      <span className="text-sm">{typeof item === 'string' ? item : JSON.stringify(item)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm">{typeof value === 'string' ? value : JSON.stringify(value)}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    
+    return <span className="text-sm">{String(parsed)}</span>;
+  };
+
   // Quiz service hooks
   const { mutate: generateAptitudeQuestions, isLoading: isGeneratingAptitude } = generateQuestionsGenerateAptitudePost({
     onSuccess: (data) => {
@@ -1177,9 +1234,7 @@ const AssessmentPage = () => {
                   <div className="mb-6">
                     <h4 className="text-lg font-semibold text-blue-800 mb-3">Action Items</h4>
                     <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <pre className="text-sm text-blue-700 whitespace-pre-wrap">
-                        {JSON.stringify(performanceGaps.action_items, null, 2)}
-                      </pre>
+                      {formatJsonContent(performanceGaps.action_items)}
                     </div>
                   </div>
                 )}
@@ -1189,9 +1244,7 @@ const AssessmentPage = () => {
                   <div className="mb-6">
                     <h4 className="text-lg font-semibold text-purple-800 mb-3">Learning Resources</h4>
                     <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                      <pre className="text-sm text-purple-700 whitespace-pre-wrap">
-                        {JSON.stringify(performanceGaps.learning_resources, null, 2)}
-                      </pre>
+                      {formatJsonContent(performanceGaps.learning_resources)}
                     </div>
                   </div>
                 )}
@@ -1201,9 +1254,7 @@ const AssessmentPage = () => {
                   <div className="mb-6">
                     <h4 className="text-lg font-semibold text-indigo-800 mb-3">Learning Timeline</h4>
                     <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-                      <pre className="text-sm text-indigo-700 whitespace-pre-wrap">
-                        {JSON.stringify(performanceGaps.timeline, null, 2)}
-                      </pre>
+                      {formatJsonContent(performanceGaps.timeline)}
                     </div>
                   </div>
                 )}
@@ -1254,9 +1305,7 @@ const AssessmentPage = () => {
                   <div className="mb-6">
                     <h4 className="text-lg font-semibold text-purple-800 mb-3">Courses & Resources</h4>
                     <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                      <pre className="text-sm text-purple-700 whitespace-pre-wrap">
-                        {JSON.stringify(skillRecommendations.courses_resources, null, 2)}
-                      </pre>
+                      {formatJsonContent(skillRecommendations.courses_resources)}
                     </div>
                   </div>
                 )}
@@ -1286,9 +1335,7 @@ const AssessmentPage = () => {
                   <div className="mb-6">
                     <h4 className="text-lg font-semibold text-indigo-800 mb-3">Learning Timeline</h4>
                     <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-                      <pre className="text-sm text-indigo-700 whitespace-pre-wrap">
-                        {JSON.stringify(skillRecommendations.timeline, null, 2)}
-                      </pre>
+                      {formatJsonContent(skillRecommendations.timeline)}
                     </div>
                   </div>
                 )}

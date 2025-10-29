@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Menu as MenuIcon, X, ChevronDown, User, LogOut, ChevronDown as ChevronDownIcon } from "lucide-react"; // hamburger + close icons
 import { useAuth } from "@/contexts/AuthContext";
 // import { Menu, X, ChevronDown } from "lucide-react";
@@ -24,20 +24,34 @@ export const MenuItem = ({
   active,
   item,
   children,
+  isActive = false,
 }: {
   setActive: (item: string) => void;
   active: string | null;
   item: string;
   children?: React.ReactNode;
+  isActive?: boolean;
 }) => {
   return (
     <div onMouseEnter={() => setActive(item)} className="relative">
-      <motion.p
+      <motion.div
         transition={{ duration: 0.3 }}
-        className="cursor-pointer text-black hover:opacity-90 dark:text-white"
+        className={cn(
+          "cursor-pointer text-black hover:opacity-90 dark:text-white transition-colors duration-200",
+          isActive && "text-blue-600 dark:text-blue-400 font-semibold"
+        )}
       >
         {item}
-      </motion.p>
+        {isActive && (
+          <motion.div
+            className="absolute -bottom-1 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400"
+            layoutId="activeIndicator"
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ duration: 0.3 }}
+          />
+        )}
+      </motion.div>
       {/* Desktop dropdown only */}
       {active !== null && (
         <motion.div
@@ -271,32 +285,58 @@ export const ProductItem = ({
   description,
   href,
   src,
+  isActive = false,
 }: {
   title: string;
   description: string;
   href: string;
   src: string;
+  isActive?: boolean;
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   
   const handleClick = () => {
     navigate(href);
   };
 
+  // Check if this specific service item is active
+  const isCurrentPageActive = location.pathname === href || 
+    (href === "/services/ai-assessment" && location.pathname.startsWith("/ai-assessment")) ||
+    (href === "/services/ai-assessment" && location.pathname.startsWith("/soft-skills")) ||
+    (href === "/services/ai-assessment" && location.pathname.startsWith("/personalized-assessment")) ||
+    (href === "/services/ai-assessment" && location.pathname.startsWith("/quick-test-analysis")) ||
+    (href === "/services/ai-assessment" && location.pathname.startsWith("/assessment")) ||
+    (href === "/services/ai-assessment" && location.pathname.startsWith("/assessment-analysis")) ||
+    (href === "/services/ai-assessment" && location.pathname.startsWith("/coding-round")) ||
+    (href === "/services/ai-assessment" && location.pathname.startsWith("/writing-test"));
+
   return (
     <button 
       onClick={handleClick}
-      className="flex flex-col space-y-3 hover:bg-gray-50 dark:hover:bg-gray-800 p-3 rounded-lg transition-colors w-full text-left"
+      className={cn(
+        "flex flex-col space-y-3 hover:bg-gray-50 dark:hover:bg-gray-800 p-3 rounded-lg transition-colors w-full text-left relative",
+        isCurrentPageActive && "bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-700"
+      )}
     >
+      {isCurrentPageActive && (
+        <div className="absolute top-2 right-2 w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full"></div>
+      )}
       <img
         src={src}
         width={80}
         height={60}
         alt={title}
-        className="w-20 h-15 object-cover rounded-md shadow-lg mx-auto"
+        className={cn(
+          "w-20 h-15 object-cover rounded-md shadow-lg mx-auto transition-all duration-200",
+          isCurrentPageActive && "ring-2 ring-blue-200 dark:ring-blue-700"
+        )}
       />
       <div className="text-center">
-        <h4 className="text-lg font-bold mb-2 text-black dark:text-white">
+        <h4 className={cn(
+          "text-lg font-bold mb-2 text-black dark:text-white transition-colors duration-200",
+          isCurrentPageActive && "text-blue-600 dark:text-blue-400"
+        )}>
           {title}
         </h4>
         <p className="text-neutral-500 text-xs leading-relaxed dark:text-neutral-300">
@@ -323,16 +363,43 @@ export const HoveredLink = ({ children, ...rest }: any) => {
 // -----------------
 export function Navbar({ className }: { className?: string }) {
   const [active, setActive] = useState<string | null>(null);
+  const location = useLocation();
+
+  // Helper function to determine if a menu item is active
+  const isMenuItemActive = (path: string) => {
+    if (path === "/") {
+      return location.pathname === "/";
+    }
+    return location.pathname.startsWith(path);
+  };
+
+  // Helper function to check if any service submenu item is active
+  const isServicesActive = () => {
+    const servicePaths = [
+      "/services/resume-builder",
+      "/services/jobs", 
+      "/services/ai-assessment",
+      "/ai-assessment",
+      "/soft-skills",
+      "/personalized-assessment",
+      "/quick-test-analysis",
+      "/assessment",
+      "/assessment-analysis",
+      "/coding-round",
+      "/writing-test"
+    ];
+    return servicePaths.some(path => location.pathname.startsWith(path));
+  };
 
   return (
     <div className={cn("fixed top-0 inset-x-0 z-50", className)}>
       <Menu setActive={setActive}>
         <Link to="/">
-          <MenuItem setActive={setActive} active={null} item="Home" />
+          <MenuItem setActive={setActive} active={null} item="Home" isActive={isMenuItemActive("/")} />
         </Link>
         
         <Link to="/about">
-          <MenuItem setActive={setActive} active={null} item="About Us">
+          <MenuItem setActive={setActive} active={null} item="About Us" isActive={isMenuItemActive("/about")}>
             {/* <div className="flex flex-col space-y-4 text-sm">
               <HoveredLink href="/web-dev">Web Development</HoveredLink>
               <HoveredLink href="/interface-design">Interface Design</HoveredLink>
@@ -342,35 +409,75 @@ export function Navbar({ className }: { className?: string }) {
           </MenuItem>
         </Link>
         
-        <MenuItem setActive={setActive} active={active} item="Services" >
-          <div className="text-sm grid grid-cols-3 gap-4 p-4">
-            <ProductItem
-              title="Resume Builder"
-              href="/services/resume-builder"
-              src="/Images/Icons/resume.png"
-              description="Create professional resumes in minutes with our easy-to-use builder."
-            />
-            <ProductItem
-              title="Job Listing"
-              href="/services/jobs"
-              src="/Images/Icons/jb.png"
-              description="Find your dream job from thousands of listings."
-            />
-            <ProductItem
-              title="AI Assessment"
-              href="/services/ai-assessment"
-              src="/Images/Icons/ai-brain.png"
-              description="AI-driven coding assessments to evaluate and enhance your skills."
-            />
-          </div>
-        </MenuItem>
+        <div onMouseEnter={() => setActive("Services")} className="relative">
+          <motion.div
+            transition={{ duration: 0.3 }}
+            className={cn(
+              "cursor-pointer text-black hover:opacity-90 dark:text-white transition-colors duration-200",
+              isServicesActive() && "text-blue-600 dark:text-blue-400 font-semibold"
+            )}
+          >
+            Services
+            {isServicesActive() && (
+              <motion.div
+                className="absolute -bottom-1 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400"
+                layoutId="activeIndicator"
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ duration: 0.3 }}
+              />
+            )}
+          </motion.div>
+          {/* Desktop dropdown only */}
+          {active !== null && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.85, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+            >
+              {active === "Services" && (
+                <div
+                  className="absolute top-[calc(100%+1.2rem)] left-1/2 transform -translate-x-1/2 pt-4 w-screen hidden md:block"
+                  style={{ maxWidth: "800px" }}
+                >
+                  <motion.div
+                    layoutId="active"
+                    className="bg-white dark:bg-black backdrop-blur-sm rounded-2xl overflow-hidden border border-black/20 dark:border-white/20 shadow-xl"
+                  >
+                    <motion.div layout className="w-full h-full">
+                      <div className="text-sm grid grid-cols-3 gap-4 p-4">
+                        <ProductItem
+                          title="Resume Builder"
+                          href="/services/resume-builder"
+                          src="/Images/Icons/resume.png"
+                          description="Create professional resumes in minutes with our easy-to-use builder."
+                        />
+                        <ProductItem
+                          title="Job Listing"
+                          href="/services/jobs"
+                          src="/Images/Icons/jb.png"
+                          description="Find your dream job from thousands of listings."
+                        />
+                        <ProductItem
+                          title="AI Assessment"
+                          href="/services/ai-assessment"
+                          src="/Images/Icons/ai-brain.png"
+                          description="AI-driven coding assessments to evaluate and enhance your skills."
+                        />
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </div>
 
         {/* <MenuItem setActive={setActive} active={active} item="Blogs/News" /> */}
         <Link to="/blogs">
-        <MenuItem setActive={setActive} active={null} item="Blogs/News" />
+        <MenuItem setActive={setActive} active={null} item="Blogs/News" isActive={isMenuItemActive("/blogs")} />
         </Link>
         <Link to="/mentorship">
-          <MenuItem setActive={setActive} active={null} item="Mentorship" />
+          <MenuItem setActive={setActive} active={null} item="Mentorship" isActive={isMenuItemActive("/mentorship")} />
         </Link>
         <Link to= "https://zettanix.in/auth/login">
         <MenuItem setActive={setActive} active={null} item="Try Placemate" />

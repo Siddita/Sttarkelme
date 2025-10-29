@@ -302,7 +302,7 @@ return (
         whileInView={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.5, ease: "easeOut", delay: 0.2 }}
         viewport={{ once: true }}
-        className="-mt-16 relative z-10 min-h-screen max-w-screen-2xl mx-auto pb-10 bg-gradient-to-t from-[#031527] to-[#031527] overflow-hidden shadow-2xl"
+        className="-mt-16 relative z-10 min-h-screen max-w-screen-2xl mx-auto pb-10 bg-gradient-to-t from-[#031527] to-[#031527] overflow-hidden shadow-sm"
       >
         <div className="flex mt-36 mb-20 justify-center items-center h-full">
           <div className=" relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -317,7 +317,7 @@ return (
 
       {/* Success Stories Section */}
       <motion.section
-        className="min-h max-w-screen-2xl mx-auto pb-28 bg-gradient-to-t from-[#D2FAFE] to-[#FFFFFF] overflow-hidden "
+        className="min-h max-w-screen-2xl z-10 rounded-tl-[50px] rounded-tr-[50px] lg:rounded-tl-[70px] lg:rounded-tr-[70px] mx-auto pb-28 bg-gradient-to-t from-[#D2FAFE] to-[#FFFFFF] overflow-hidden "
       >
         <div className="text-center relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="mt-12">
@@ -330,7 +330,7 @@ return (
 
     {/* Footer Section 7 */}
     <div
-      className="-mt-16 relative z-10 min-h-screen max-w-screen-2xl mx-auto px-2 sm:px-6 lg:px-8 border border-blue-300 rounded-tl-[70px] rounded-tr-[70px] overflow-hidden bg-[#FFFFFF] animate-fade-in"
+      className="-mt-16 relative z-10 min-h-screen max-w-screen-2xl mx-auto px-2 sm:px-6 lg:px-8 border border-blue-300 rounded-tl-[50px] rounded-tr-[50px] lg:rounded-tl-[70px] lg:rounded-tr-[70px] overflow-hidden bg-[#FFFFFF] animate-fade-in"
     >
       {/* Footer */}
       <Footer />
