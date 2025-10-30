@@ -572,10 +572,31 @@ const PersonalizedAssessment = () => {
         const aptitudeData = JSON.parse(aptitudeTestData);
         
         try {
-          // Prepare data for evaluation
-          const questionIds = aptitudeData.questions.map((_: any, index: number) => index);
-          const selectedOptions = aptitudeData.answers.map((answer: string) => answer || '');
-          
+          // Prepare data for evaluation - use stable question IDs and normalize answers
+          const questionIds = aptitudeData.questions.map((q: any, index: number) => (
+            q?.id ?? q?.question_id ?? q?.uuid ?? index
+          ));
+
+          const selectedOptions = aptitudeData.answers.map((answer: any, idx: number) => {
+            const value = (answer ?? '').toString().trim();
+            // If already a letter A-D
+            if (/^[A-D]$/i.test(value)) return value.toUpperCase();
+            // If numeric index → convert to A-D
+            const num = Number(value);
+            if (!Number.isNaN(num) && num >= 0 && num < 26) {
+              return String.fromCharCode(65 + num);
+            }
+            // If text option, try to match against question options
+            const question = aptitudeData.questions[idx];
+            const options: string[] = Array.isArray(question?.options) ? question.options : [];
+            const matchIdx = options.findIndex((opt) =>
+              typeof value === 'string' && opt?.toLowerCase?.() === value.toLowerCase()
+            );
+            if (matchIdx >= 0) return String.fromCharCode(65 + matchIdx);
+            // Fallback
+            return value || 'A';
+          });
+
           const evaluationResponse = await apiClient("POST", "/quiz/evaluate_aptitude", {
             question_ids: questionIds,
             selected_options: selectedOptions

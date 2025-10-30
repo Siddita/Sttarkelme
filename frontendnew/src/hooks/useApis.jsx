@@ -854,18 +854,7 @@ export const getAnalysisApiV1Resumes_ResumeId_AnalysisGet = (options) => {
   });
 };
 
-/**
- * @description Hook for /resumes/api/v1/resumes/admin/all [GET]
- * @returns {import('@tanstack/react-query').QueryResult<ResumeRead[]>}
- */
-export const adminListAllApiV1ResumesAdminAllGet = (options) => {
-  const queryKey = ['admin_list_all_api_v1_resumes_admin_all_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/resumes/api/v1/resumes/admin/all'),
-    ...options,
-  });
-};
+// Removed admin list-all resumes endpoint from client to avoid exposing global listing in UI
 
 /**
  * @description Hook for /resumes/ [GET]

@@ -891,6 +891,56 @@ const ResumeBuilder = () => {
       }));
     } else if (fieldName === 'jobDescription') {
       setJobDescription(transcript);
+    } else if (fieldName.startsWith('experience.')) {
+      const [, idxStr, key] = fieldName.split('.');
+      const index = parseInt(idxStr, 10);
+      setCurrentResumeData(prev => ({
+        ...prev,
+        experience: prev.experience.map((exp, i) =>
+          i === index
+            ? {
+                ...exp,
+                [key!]: key === 'achievements'
+                  ? transcript.split(/\n|[,;•]+/).map(a => a.trim()).filter(Boolean)
+                  : transcript
+              }
+            : exp
+        )
+      }));
+    } else if (fieldName.startsWith('education.')) {
+      const [, idxStr, key] = fieldName.split('.');
+      const index = parseInt(idxStr, 10);
+      setCurrentResumeData(prev => ({
+        ...prev,
+        education: prev.education.map((ed, i) =>
+          i === index ? { ...ed, [key!]: transcript } : ed
+        )
+      }));
+    } else if (fieldName.startsWith('projects.')) {
+      const [, idxStr, key] = fieldName.split('.');
+      const index = parseInt(idxStr, 10);
+      setCurrentResumeData(prev => ({
+        ...prev,
+        projects: prev.projects.map((proj, i) =>
+          i === index
+            ? {
+                ...proj,
+                [key!]: key === 'technologies'
+                  ? transcript.split(/\n|[,;]+/).map(t => t.trim()).filter(Boolean)
+                  : transcript
+              }
+            : proj
+        )
+      }));
+    } else if (fieldName.startsWith('certifications.')) {
+      const [, idxStr, key] = fieldName.split('.');
+      const index = parseInt(idxStr, 10);
+      setCurrentResumeData(prev => ({
+        ...prev,
+        certifications: prev.certifications.map((c, i) =>
+          i === index ? { ...c, [key!]: transcript } : c
+        )
+      }));
     }
     
     setTranscript("");
@@ -915,6 +965,23 @@ const ResumeBuilder = () => {
   }) => {
     const isActive = activeField === fieldName;
     const isProcessing = isTranscribing;
+    const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+
+    // Keep initial focus in the Job Description field without resetting caret on each keystroke
+    useEffect(() => {
+      if (fieldName === 'jobDescription' && inputRef.current) {
+        if (document.activeElement !== inputRef.current) {
+          inputRef.current.focus();
+          try {
+            const len = (value ?? '').length;
+            // @ts-ignore set caret to end if supported
+            inputRef.current.setSelectionRange?.(len, len);
+          } catch {}
+        }
+      }
+      // only when this VoiceInput is for jobDescription toggles in
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fieldName]);
     
     return (
       <div className="relative">
@@ -925,6 +992,7 @@ const ResumeBuilder = () => {
             placeholder={placeholder}
             rows={rows}
             className="pr-10 lg:pr-12 text-sm"
+            ref={inputRef as any}
           />
         ) : (
           <Input 
@@ -932,10 +1000,11 @@ const ResumeBuilder = () => {
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
             className="pr-10 lg:pr-12 text-sm"
+            ref={inputRef as any}
           />
         )}
         
-        <div className="absolute right-1 lg:right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
+        <div className="absolute right-1 lg:right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1 pointer-events-none">
           {isActive && isRecording ? (
             <div className="flex items-center gap-1">
               <div className="w-1.5 h-1.5 lg:w-2 lg:h-2 bg-red-500 rounded-full animate-pulse"></div>
@@ -943,7 +1012,7 @@ const ResumeBuilder = () => {
                 size="sm"
                 variant="outline"
                 onClick={stopVoiceRecording}
-                className="h-6 w-6 lg:h-8 lg:w-8 p-0"
+                className="h-6 w-6 lg:h-8 lg:w-8 p-0 pointer-events-auto"
                 title="Stop recording"
               >
                 <Square className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
@@ -959,7 +1028,7 @@ const ResumeBuilder = () => {
               size="sm"
               variant="outline"
               onClick={() => startVoiceRecording(fieldName)}
-              className="h-6 w-6 lg:h-8 lg:w-8 p-0"
+              className="h-6 w-6 lg:h-8 lg:w-8 p-0 pointer-events-auto"
               title="Start voice recording"
               disabled={isProcessing}
             >
@@ -1945,59 +2014,61 @@ const ResumeBuilder = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="text-sm font-semibold text-gray-700 mb-2 block">Company</label>
-                            <Input
-                              value={exp.company}
-                              onChange={(e) => updateExperience(index, 'company', e.target.value)}
+                            <VoiceInput
+                              fieldName={`experience.${index}.company`}
                               placeholder="Company Name"
-                              className="text-sm"
+                              value={exp.company}
+                              onChange={(value) => updateExperience(index, 'company', value)}
                             />
                           </div>
                           <div>
                             <label className="text-sm font-semibold text-gray-700 mb-2 block">Position</label>
-                            <Input
-                              value={exp.position}
-                              onChange={(e) => updateExperience(index, 'position', e.target.value)}
+                            <VoiceInput
+                              fieldName={`experience.${index}.position`}
                               placeholder="Job Title"
-                              className="text-sm"
+                              value={exp.position}
+                              onChange={(value) => updateExperience(index, 'position', value)}
                             />
                           </div>
                           <div>
                             <label className="text-sm font-semibold text-gray-700 mb-2 block">Start Date</label>
-                            <Input
-                              value={exp.start_date}
-                              onChange={(e) => updateExperience(index, 'start_date', e.target.value)}
+                            <VoiceInput
+                              fieldName={`experience.${index}.start_date`}
                               placeholder="YYYY-MM"
-                              className="text-sm"
+                              value={exp.start_date}
+                              onChange={(value) => updateExperience(index, 'start_date', value)}
                             />
                           </div>
                           <div>
                             <label className="text-sm font-semibold text-gray-700 mb-2 block">End Date</label>
-                            <Input
-                              value={exp.end_date}
-                              onChange={(e) => updateExperience(index, 'end_date', e.target.value)}
+                            <VoiceInput
+                              fieldName={`experience.${index}.end_date`}
                               placeholder="YYYY-MM or Present"
-                              className="text-sm"
+                              value={exp.end_date}
+                              onChange={(value) => updateExperience(index, 'end_date', value)}
                             />
                           </div>
                         </div>
                         <div>
                           <label className="text-sm font-semibold text-gray-700 mb-2 block">Description</label>
-                          <Textarea
-                            value={exp.description}
-                            onChange={(e) => updateExperience(index, 'description', e.target.value)}
+                          <VoiceInput
+                            fieldName={`experience.${index}.description`}
+                            type="textarea"
                             placeholder="Describe your role and responsibilities..."
                             rows={2}
-                            className="text-sm"
+                            value={exp.description}
+                            onChange={(value) => updateExperience(index, 'description', value)}
                           />
                         </div>
                         <div>
                           <label className="text-sm font-semibold text-gray-700 mb-2 block">Achievements (one per line)</label>
-                          <Textarea
-                            value={exp.achievements.join('\n')}
-                            onChange={(e) => updateExperience(index, 'achievements', e.target.value.split('\n').filter(a => a.trim()))}
+                          <VoiceInput
+                            fieldName={`experience.${index}.achievements`}
+                            type="textarea"
                             placeholder="• Improved performance by 40%&#10;• Led team of 5 developers&#10;• Reduced costs by $50K"
                             rows={3}
-                            className="text-sm"
+                            value={exp.achievements.join('\n')}
+                            onChange={(value) => updateExperience(index, 'achievements', value.split('\n').filter(a => a.trim()))}
                           />
                         </div>
                       </div>
@@ -2050,86 +2121,86 @@ const ResumeBuilder = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="text-sm font-semibold text-gray-700 mb-2 block">Institution</label>
-                            <Input
+                            <VoiceInput
+                              fieldName={`education.${index}.institution`}
+                              placeholder="University Name"
                               value={edu.institution}
-                              onChange={(e) => setCurrentResumeData(prev => ({
+                              onChange={(value) => setCurrentResumeData(prev => ({
                                 ...prev,
                                 education: prev.education.map((ed, i) => 
-                                  i === index ? { ...ed, institution: e.target.value } : ed
+                                  i === index ? { ...ed, institution: value } : ed
                                 )
                               }))}
-                              placeholder="University Name"
-                              className="text-sm"
                             />
                           </div>
                           <div>
                             <label className="text-sm font-semibold text-gray-700 mb-2 block">Degree</label>
-                            <Input
+                            <VoiceInput
+                              fieldName={`education.${index}.degree`}
+                              placeholder="Bachelor of Science"
                               value={edu.degree}
-                              onChange={(e) => setCurrentResumeData(prev => ({
+                              onChange={(value) => setCurrentResumeData(prev => ({
                                 ...prev,
                                 education: prev.education.map((ed, i) => 
-                                  i === index ? { ...ed, degree: e.target.value } : ed
+                                  i === index ? { ...ed, degree: value } : ed
                                 )
                               }))}
-                              placeholder="Bachelor of Science"
-                              className="text-sm"
                             />
                           </div>
                           <div>
                             <label className="text-sm font-semibold text-gray-700 mb-2 block">Field of Study</label>
-                            <Input
+                            <VoiceInput
+                              fieldName={`education.${index}.field`}
+                              placeholder="Computer Science"
                               value={edu.field}
-                              onChange={(e) => setCurrentResumeData(prev => ({
+                              onChange={(value) => setCurrentResumeData(prev => ({
                                 ...prev,
                                 education: prev.education.map((ed, i) => 
-                                  i === index ? { ...ed, field: e.target.value } : ed
+                                  i === index ? { ...ed, field: value } : ed
                                 )
                               }))}
-                              placeholder="Computer Science"
-                              className="text-sm"
                             />
                           </div>
                           <div>
                             <label className="text-sm font-semibold text-gray-700 mb-2 block">GPA</label>
-                            <Input
-                              value={edu.gpa}
-                              onChange={(e) => setCurrentResumeData(prev => ({
+                            <VoiceInput
+                              fieldName={`education.${index}.gpa`}
+                              placeholder="3.8"
+                              value={edu.gpa as string}
+                              onChange={(value) => setCurrentResumeData(prev => ({
                                 ...prev,
                                 education: prev.education.map((ed, i) => 
-                                  i === index ? { ...ed, gpa: e.target.value } : ed
+                                  i === index ? { ...ed, gpa: value } : ed
                                 )
                               }))}
-                              placeholder="3.8"
-                              className="text-sm"
                             />
                           </div>
                           <div>
                             <label className="text-sm font-semibold text-gray-700 mb-2 block">Start Date</label>
-                            <Input
+                            <VoiceInput
+                              fieldName={`education.${index}.start_date`}
+                              placeholder="YYYY-MM"
                               value={edu.start_date}
-                              onChange={(e) => setCurrentResumeData(prev => ({
+                              onChange={(value) => setCurrentResumeData(prev => ({
                                 ...prev,
                                 education: prev.education.map((ed, i) => 
-                                  i === index ? { ...ed, start_date: e.target.value } : ed
+                                  i === index ? { ...ed, start_date: value } : ed
                                 )
                               }))}
-                              placeholder="YYYY-MM"
-                              className="text-sm"
                             />
                           </div>
                           <div>
                             <label className="text-sm font-semibold text-gray-700 mb-2 block">End Date</label>
-                            <Input
+                            <VoiceInput
+                              fieldName={`education.${index}.end_date`}
+                              placeholder="YYYY-MM"
                               value={edu.end_date}
-                              onChange={(e) => setCurrentResumeData(prev => ({
+                              onChange={(value) => setCurrentResumeData(prev => ({
                                 ...prev,
                                 education: prev.education.map((ed, i) => 
-                                  i === index ? { ...ed, end_date: e.target.value } : ed
+                                  i === index ? { ...ed, end_date: value } : ed
                                 )
                               }))}
-                              placeholder="YYYY-MM"
-                              className="text-sm"
                             />
                           </div>
                         </div>
@@ -2181,60 +2252,61 @@ const ResumeBuilder = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="text-sm font-semibold text-gray-700 mb-2 block">Project Name</label>
-                            <Input
+                            <VoiceInput
+                              fieldName={`projects.${index}.name`}
+                              placeholder="E-commerce Platform"
                               value={project.name}
-                              onChange={(e) => setCurrentResumeData(prev => ({
+                              onChange={(value) => setCurrentResumeData(prev => ({
                                 ...prev,
                                 projects: prev.projects.map((proj, i) => 
-                                  i === index ? { ...proj, name: e.target.value } : proj
+                                  i === index ? { ...proj, name: value } : proj
                                 )
                               }))}
-                              placeholder="E-commerce Platform"
-                              className="text-sm"
                             />
                           </div>
                           <div>
                             <label className="text-sm font-semibold text-gray-700 mb-2 block">URL</label>
-                            <Input
+                            <VoiceInput
+                              fieldName={`projects.${index}.url`}
+                              placeholder="https://github.com/username/project"
                               value={project.url}
-                              onChange={(e) => setCurrentResumeData(prev => ({
+                              onChange={(value) => setCurrentResumeData(prev => ({
                                 ...prev,
                                 projects: prev.projects.map((proj, i) => 
-                                  i === index ? { ...proj, url: e.target.value } : proj
+                                  i === index ? { ...proj, url: value } : proj
                                 )
                               }))}
-                              placeholder="https://github.com/username/project"
-                              className="text-sm"
                             />
                           </div>
                         </div>
                         <div>
                           <label className="text-sm font-semibold text-gray-700 mb-2 block">Description</label>
-                          <Textarea
-                            value={project.description}
-                            onChange={(e) => setCurrentResumeData(prev => ({
-                              ...prev,
-                              projects: prev.projects.map((proj, i) => 
-                                i === index ? { ...proj, description: e.target.value } : proj
-                              )
-                            }))}
+                          <VoiceInput
+                            fieldName={`projects.${index}.description`}
+                            type="textarea"
                             placeholder="Describe the project and your role..."
                             rows={2}
-                            className="text-sm"
+                            value={project.description}
+                            onChange={(value) => setCurrentResumeData(prev => ({
+                              ...prev,
+                              projects: prev.projects.map((proj, i) => 
+                                i === index ? { ...proj, description: value } : proj
+                              )
+                            }))}
                           />
                         </div>
                         <div>
                           <label className="text-sm font-semibold text-gray-700 mb-2 block">Technologies (comma separated)</label>
-                          <Input
+                          <VoiceInput
+                            fieldName={`projects.${index}.technologies`}
+                            placeholder="React, Node.js, MongoDB, AWS"
                             value={project.technologies.join(', ')}
-                            onChange={(e) => setCurrentResumeData(prev => ({
+                            onChange={(value) => setCurrentResumeData(prev => ({
                               ...prev,
                               projects: prev.projects.map((proj, i) => 
-                                i === index ? { ...proj, technologies: e.target.value.split(',').map(t => t.trim()).filter(t => t) } : proj
+                                i === index ? { ...proj, technologies: value.split(',').map(t => t.trim()).filter(t => t) } : proj
                               )
                             }))}
-                            placeholder="React, Node.js, MongoDB, AWS"
-                            className="text-sm"
                           />
                         </div>
                       </div>
@@ -2285,58 +2357,58 @@ const ResumeBuilder = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="text-sm font-semibold text-gray-700 mb-2 block">Certification Name</label>
-                            <Input
+                            <VoiceInput
+                              fieldName={`certifications.${index}.name`}
+                              placeholder="AWS Certified Developer"
                               value={cert.name}
-                              onChange={(e) => setCurrentResumeData(prev => ({
+                              onChange={(value) => setCurrentResumeData(prev => ({
                                 ...prev,
                                 certifications: prev.certifications.map((c, i) => 
-                                  i === index ? { ...c, name: e.target.value } : c
+                                  i === index ? { ...c, name: value } : c
                                 )
                               }))}
-                              placeholder="AWS Certified Developer"
-                              className="text-sm"
                             />
                           </div>
                           <div>
                             <label className="text-sm font-semibold text-gray-700 mb-2 block">Issuing Organization</label>
-                            <Input
+                            <VoiceInput
+                              fieldName={`certifications.${index}.issuer`}
+                              placeholder="Amazon Web Services"
                               value={cert.issuer}
-                              onChange={(e) => setCurrentResumeData(prev => ({
+                              onChange={(value) => setCurrentResumeData(prev => ({
                                 ...prev,
                                 certifications: prev.certifications.map((c, i) => 
-                                  i === index ? { ...c, issuer: e.target.value } : c
+                                  i === index ? { ...c, issuer: value } : c
                                 )
                               }))}
-                              placeholder="Amazon Web Services"
-                              className="text-sm"
                             />
                           </div>
                           <div>
                             <label className="text-sm font-semibold text-gray-700 mb-2 block">Date</label>
-                            <Input
+                            <VoiceInput
+                              fieldName={`certifications.${index}.date`}
+                              placeholder="2023-03"
                               value={cert.date}
-                              onChange={(e) => setCurrentResumeData(prev => ({
+                              onChange={(value) => setCurrentResumeData(prev => ({
                                 ...prev,
                                 certifications: prev.certifications.map((c, i) => 
-                                  i === index ? { ...c, date: e.target.value } : c
+                                  i === index ? { ...c, date: value } : c
                                 )
                               }))}
-                              placeholder="2023-03"
-                              className="text-sm"
                             />
                           </div>
                           <div>
                             <label className="text-sm font-semibold text-gray-700 mb-2 block">URL</label>
-                            <Input
+                            <VoiceInput
+                              fieldName={`certifications.${index}.url`}
+                              placeholder="https://aws.amazon.com/certification/"
                               value={cert.url}
-                              onChange={(e) => setCurrentResumeData(prev => ({
+                              onChange={(value) => setCurrentResumeData(prev => ({
                                 ...prev,
                                 certifications: prev.certifications.map((c, i) => 
-                                  i === index ? { ...c, url: e.target.value } : c
+                                  i === index ? { ...c, url: value } : c
                                 )
                               }))}
-                              placeholder="https://aws.amazon.com/certification/"
-                              className="text-sm"
                             />
                           </div>
                         </div>
@@ -2498,10 +2570,7 @@ const ResumeBuilder = () => {
                         {selectedTemplate}
                       </Badge>
                     </div>
-                    <Button variant="outline" size="sm" className="text-sm px-4 py-2">
-                      <Eye className="h-4 w-4 mr-2" />
-                      Full Preview
-                    </Button>
+                    {/* Full Preview button removed per request */}
                   </div>
                 </div>
                 <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-dashed border-gray-300 rounded-xl p-4 shadow-inner">

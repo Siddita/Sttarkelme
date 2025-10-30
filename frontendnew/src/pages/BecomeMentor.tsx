@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,6 +13,7 @@ import {
   Users, 
   BookOpen, 
   CheckCircle,
+  Target,
   ArrowLeft,
   Sparkles
 } from "lucide-react";
@@ -19,7 +21,7 @@ import { Link } from "react-router-dom";
 import { Navbar } from "@/components/ui/navbar-menu";
 import Footer from "@/components/Footer";
 import { TextHoverEffect } from "@/components/ui/text-hover-effect";
-import { updateMeMePatch } from "@/hooks/useApis";
+import { mentorshipMeGet, myGoalsMeMenteeGoalsGet, updateMeMePatch } from "@/hooks/useApis";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -31,6 +33,12 @@ const BecomeMentor = () => {
     availability: "",
     motivation: ""
   });
+  // Local UI-only mentor reviews store
+  const [goalReviews, setGoalReviews] = useState<Record<number, { remarks: string; approved: boolean }>>({});
+
+  // Read profile to detect mentor role and fetch mentee goals (placeholder: using current user's goals until API is available)
+  const { data: profile } = mentorshipMeGet();
+  const { data: menteeGoals } = myGoalsMeMenteeGoalsGet({ enabled: !!profile });
 
   // Mutation for updating profile to become a mentor
   const updateProfileMutation = updateMeMePatch({
@@ -112,7 +120,7 @@ const BecomeMentor = () => {
                   </p>
                   
                   <motion.div 
-                    className="flex justify-center animate-fade-in"
+                    className="flex gap-3 justify-center animate-fade-in"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
@@ -123,6 +131,13 @@ const BecomeMentor = () => {
                         Back to Mentorship
                       </Button>
                     </Link>
+                    {profile?.is_mentor && (
+                      <a href="#mentor-reviews">
+                        <Button size="lg" className="hover-scale">
+                          Review Mentee Goals
+                        </Button>
+                      </a>
+                    )}
                   </motion.div>
                 </motion.div>
               </div>
@@ -299,6 +314,81 @@ const BecomeMentor = () => {
           </motion.div>
         </div>
       </section>
+
+      {/* Mentee Goals Review (Mentor workspace) */}
+      {profile?.is_mentor && (
+        <section id="mentor-reviews" className="py-20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-10">
+              <h2 className="text-3xl md:text-4xl font-bold mb-2">
+                Review <span className="bg-gradient-primary bg-clip-text text-transparent">Mentee Goals</span>
+              </h2>
+              <p className="text-muted-foreground">
+                See mentee-submitted goals and add remarks. Approving marks a goal as completed.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {(menteeGoals || []).map((goal: any) => (
+                <Card key={goal.id} className="p-6 bg-gradient-card border-primary/10">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center space-x-2">
+                      <Target className="h-5 w-5 text-primary" />
+                      <div>
+                        <h3 className="font-semibold text-lg">Goal #{goal.id}</h3>
+                        <p className="text-xs text-muted-foreground">Mentee Goal</p>
+                      </div>
+                    </div>
+                    {goalReviews[goal.id]?.approved ? (
+                      <Badge variant="default" className="bg-green-600">Completed</Badge>
+                    ) : (
+                      <Badge variant="secondary">Pending</Badge>
+                    )}
+                  </div>
+
+                  <div className="mb-3 p-3 bg-primary/5 rounded-lg border border-primary/10">
+                    <p className="text-xs text-muted-foreground mb-1">Mentee notes</p>
+                    <p className="text-sm text-[#2D3253]">{goal.notes || '—'}</p>
+                  </div>
+
+                  <Textarea
+                    placeholder="Write remarks/comments..."
+                    value={goalReviews[goal.id]?.remarks || ''}
+                    onChange={(e) => setGoalReviews(prev => ({
+                      ...prev,
+                      [goal.id]: { remarks: e.target.value, approved: prev[goal.id]?.approved || false }
+                    }))}
+                    disabled={goalReviews[goal.id]?.approved}
+                  />
+
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {goal.target_date ? `Target: ${new Date(goal.target_date).toLocaleDateString()}` : 'No target date'}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={goalReviews[goal.id]?.approved}
+                      onClick={() => setGoalReviews(prev => ({
+                        ...prev,
+                        [goal.id]: { remarks: prev[goal.id]?.remarks || '', approved: true }
+                      }))}
+                    >
+                      Approve & Close
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+
+            {(menteeGoals || []).length === 0 && (
+              <div className="text-center py-12 text-muted-foreground">
+                No mentee goals available yet.
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
             {/* Requirements Section */}
             <section className="py-20">

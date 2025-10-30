@@ -82,12 +82,15 @@ export const MenuItem = ({
 export const Menu = ({
   setActive,
   children,
+  mobileServices,
 }: {
   setActive: (item: string | null) => void;
   children: React.ReactNode;
+  mobileServices?: React.ReactNode;
 }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [servicesMobileOpen, setServicesMobileOpen] = useState(false);
   const { isAuthenticated, user, logout } = useAuth();
   
   // Debug profile dropdown state
@@ -224,7 +227,11 @@ export const Menu = ({
         {/* Mobile Hamburger */}
         <button
           className="md:hidden flex items-center justify-center p-2 rounded-md focus:outline-none"
-          onClick={() => setMobileOpen(!mobileOpen)}
+          onClick={() => {
+            setMobileOpen(!mobileOpen);
+            if (mobileOpen) setServicesMobileOpen(false);
+          }}
+          aria-label="Toggle menu"
         >
           {mobileOpen ? <X className="h-6 w-6" /> : <MenuIcon className="h-6 w-6" />}
         </button>
@@ -233,7 +240,33 @@ export const Menu = ({
       {/* Mobile Menu */}
       {mobileOpen && (
         <div className="md:hidden border-t border-gray-200 dark:border-white/20 px-4 py-4 space-y-4 bg-white dark:bg-black">
-          {children}
+          {/* Show top-level links */}
+          <div className="flex flex-col space-y-6">
+            {children}
+          </div>
+
+          {/* Mobile Services collapsible */}
+          <div className="pt-0">
+            <button
+              onClick={() => setServicesMobileOpen(!servicesMobileOpen)}
+              className="w-full flex items-center justify-between px-0 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              <div className="flex items-center space-x-2">
+                Services
+              </div>
+              <ChevronDown className={`h-4 w-4 transition-transform ${servicesMobileOpen ? "rotate-180" : "rotate-0"}`} />
+            </button>
+
+            {servicesMobileOpen && (
+              <div
+                className="mt-2 p-2 rounded-lg bg-white dark:bg-black border border-gray-100 dark:border-white/10 max-h-64 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {mobileServices}
+              </div>
+            )}
+
+          </div>
+
           <div className="flex flex-col space-y-3">
             {isAuthenticated ? (
               <>
@@ -254,24 +287,24 @@ export const Menu = ({
                 </button>
               </>
             ) : (
-              <>
+              <div className="flex items-center gap-3">
                 <Link
                   to="/login"
-                  className="block text-sm font-medium transition-colors duration-200 text-muted-foreground hover:text-foreground"
+                  className="text-sm font-medium transition-colors duration-200 text-muted-foreground hover:text-foreground"
                 >
                   <div className="inline-flex items-center justify-center px-5 py-2 border border-gray-600 border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-2xl font-medium transition-colors cursor-pointer hover:scale-105 anim duration-800">
-                      Sign In
+                    Sign In
                   </div>
                 </Link>
                 <Link
                   to="/signup"
-                  className="block text-sm font-medium transition-colors duration-200 text-white hover:text-white"
+                  className="text-sm font-medium transition-colors duration-200 text-white hover:text-white"
                 >
                   <div className="inline-flex items-center justify-center px-5 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 rounded-2xl font-medium transition-colors cursor-pointer hover:scale-105 anim duration-800">
-                      Sign Up
+                    Sign Up
                   </div>
                 </Link>
-              </>
+              </div>
             )}
           </div>
         </div>
@@ -393,7 +426,28 @@ export function Navbar({ className }: { className?: string }) {
 
   return (
     <div className={cn("fixed top-0 inset-x-0 z-50", className)}>
-      <Menu setActive={setActive}>
+      <Menu setActive={setActive} mobileServices={(
+        <div className="text-sm grid grid-cols-3 gap-4 p-4">
+          <ProductItem
+            title="Resume Builder"
+            href="/services/resume-builder"
+            src="/Images/Icons/resume.png"
+            description="Create professional resumes in minutes with our easy-to-use builder."
+          />
+          <ProductItem
+            title="Job Listing"
+            href="/services/jobs"
+            src="/Images/Icons/jb.png"
+            description="Find your dream job from thousands of listings."
+          />
+          <ProductItem
+            title="AI Assessment"
+            href="/services/ai-assessment"
+            src="/Images/Icons/ai-brain.png"
+            description="AI-driven coding assessments to evaluate and enhance your skills."
+          />
+        </div>
+      )}>
         <Link to="/">
           <MenuItem setActive={setActive} active={null} item="Home" isActive={isMenuItemActive("/")} />
         </Link>
@@ -409,7 +463,7 @@ export function Navbar({ className }: { className?: string }) {
           </MenuItem>
         </Link>
         
-        <div onMouseEnter={() => setActive("Services")} className="relative">
+        <div onMouseEnter={() => setActive("Services")} className="relative hidden md:block">
           <motion.div
             transition={{ duration: 0.3 }}
             className={cn(

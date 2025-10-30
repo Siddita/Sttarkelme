@@ -85,6 +85,8 @@ const Mentorship = () => {
     end_time: "", 
     timezone: "IST" 
   });
+  // Mentor review state for goals (UI only for now)
+  const [goalReviews, setGoalReviews] = useState<Record<number, { remarks: string; approved: boolean }>>({});
 
   // Check if user is authenticated first
   const token = localStorage.getItem('accessToken');
@@ -628,11 +630,14 @@ const Mentorship = () => {
           <section className="py-20">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-4 mb-8">
+              <TabsList className="grid w-full grid-cols-5 mb-8">
                 <TabsTrigger value="discover">Discover Mentors</TabsTrigger>
                 <TabsTrigger value="goals">My Goals</TabsTrigger>
                 <TabsTrigger value="sessions">Sessions</TabsTrigger>
                 <TabsTrigger value="skills">Skills</TabsTrigger>
+                {!profile?.is_mentor && (
+                  <TabsTrigger value="reviews">Reviews</TabsTrigger>
+                )}
               </TabsList>
 
               {/* Discover Mentors Tab */}
@@ -1026,6 +1031,42 @@ const Mentorship = () => {
                               <span>Active</span>
                             </div>
                           </div>
+
+                        {/* Mentor Review (Approve = Complete) */}
+                        <div className="mt-4 border-t pt-4">
+                          {profile?.is_mentor && (
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <h4 className="font-semibold text-sm text-[#2D3253]">Mentor Review</h4>
+                                {goalReviews[goal.id]?.approved && (
+                                  <Badge variant="default" className="bg-green-600">Completed</Badge>
+                                )}
+                              </div>
+                              <Textarea
+                                placeholder="Write remarks/comments for the mentee..."
+                                value={goalReviews[goal.id]?.remarks || ""}
+                                onChange={(e) => setGoalReviews(prev => ({
+                                  ...prev,
+                                  [goal.id]: { remarks: e.target.value, approved: prev[goal.id]?.approved || false }
+                                }))}
+                                disabled={goalReviews[goal.id]?.approved}
+                              />
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={goalReviews[goal.id]?.approved}
+                                  onClick={() => setGoalReviews(prev => ({
+                                    ...prev,
+                                    [goal.id]: { remarks: prev[goal.id]?.remarks || "", approved: true }
+                                  }))}
+                                >
+                                  Approve & Close
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                         </Card>
                       </motion.div>
                     ))
@@ -1153,6 +1194,56 @@ const Mentorship = () => {
                   )}
                 </div>
               </TabsContent>
+
+              {/* Reviews Tab (Mentee view) */}
+              {!profile?.is_mentor && (
+                <TabsContent value="reviews" className="space-y-6">
+                  <motion.div 
+                    className="text-center mb-6"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6 }}
+                  >
+                    <h2 className="text-3xl font-bold mb-2">
+                      Mentor <span className="bg-gradient-primary bg-clip-text text-transparent">Reviews</span>
+                    </h2>
+                    <p className="text-muted-foreground">See remarks and approval status from your mentor</p>
+                  </motion.div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {goals?.map((goal: any) => (
+                      <Card key={goal.id} className="p-6 bg-gradient-card border-primary/10">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center space-x-2">
+                            <Target className="h-5 w-5 text-primary" />
+                            <div>
+                              <h3 className="font-semibold text-lg">{getSkillName(goal.skill_id)}</h3>
+                              <p className="text-xs text-muted-foreground">Goal Reviews</p>
+                            </div>
+                          </div>
+                          {goalReviews[goal.id]?.approved ? (
+                            <Badge variant="default" className="bg-green-600">Completed</Badge>
+                          ) : (
+                            <Badge variant="secondary">Pending</Badge>
+                          )}
+                        </div>
+
+                        <div className="text-sm bg-white/80 rounded-lg p-3 border border-primary/10 min-h-[72px]">
+                          {goalReviews[goal.id]?.remarks ? (
+                            <p className="text-[#2D3253] whitespace-pre-wrap">{goalReviews[goal.id].remarks}</p>
+                          ) : (
+                            <p className="text-muted-foreground">No remarks yet.</p>
+                          )}
+                        </div>
+
+                        <div className="mt-3 text-xs text-muted-foreground">
+                          {goal.target_date ? `Target: ${new Date(goal.target_date).toLocaleDateString()}` : 'No target date'}
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </TabsContent>
+              )}
 
               {/* Skills Tab */}
               <TabsContent value="skills" className="space-y-6">

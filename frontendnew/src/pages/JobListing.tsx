@@ -38,7 +38,6 @@ import { TextHoverEffect } from "@/components/ui/text-hover-effect";
 import './OutlinedText.css';
 import { 
   uploadResumeApiV1ResumesPost, 
-  listResumesApiV1ResumesGet,
   getResumeApiV1Resumes_ResumeId_Get,
   getAnalysisApiV1Resumes_ResumeId_AnalysisGet,
   deleteResumeApiV1Resumes_ResumeId_Delete,
@@ -91,13 +90,12 @@ const JobListing = () => {
   
 
   const { mutate: uploadResume, isLoading } = uploadResumeApiV1ResumesPost();
-  
-  // Resume API hooks
-  const { data: resumes, refetch: refetchResumes } = listResumesApiV1ResumesGet();
   const { data: selectedResume } = getResumeApiV1Resumes_ResumeId_Get({
     enabled: !!selectedResumeId,
     resume_id: selectedResumeId
   });
+  // Only show the resume that is just uploaded (or explicitly selected)
+  const visibleResumes = selectedResumeId ? [{ id: selectedResumeId }] as any[] : [];
   const { data: resumeAnalysis, refetch: refetchAnalysis, isLoading: isAnalysisLoading, error: analysisError } = getAnalysisApiV1Resumes_ResumeId_AnalysisGet({
     enabled: !!selectedResumeId,
     resume_id: selectedResumeId
@@ -120,9 +118,12 @@ const JobListing = () => {
       const formData = new FormData();
       formData.append('file', file, file.name);
       uploadResume(formData, {
-        onSuccess: () => {
+        onSuccess: (created: any) => {
           setIsUploading(false);
-          refetchResumes();
+          // set the just uploaded resume id and show it
+          const newId = created?.id ?? created?.resume?.id;
+          if (newId) setSelectedResumeId(String(newId));
+          setShowResumeAnalysis(false);
         },
         onError: () => {
           setIsUploading(false);
@@ -140,7 +141,6 @@ const JobListing = () => {
   const handleResumeDelete = (resumeId: string) => {
     deleteResume({ resume_id: resumeId }, {
       onSuccess: () => {
-        refetchResumes();
         if (selectedResumeId === resumeId) {
           setSelectedResumeId(null);
           setShowResumeAnalysis(false);
@@ -674,7 +674,7 @@ const JobListing = () => {
 
 
           {/* Resume Management Section */}
-          {resumes && resumes.length > 0 && (
+          {selectedResumeId && (
               <motion.div 
                 className="max-w-6xl mx-auto mb-12"
                 initial={{ opacity: 0, y: 20 }}
@@ -721,15 +721,6 @@ const JobListing = () => {
                     {/* Action Buttons */}
                     <div className="flex flex-wrap sm:flex-nowrap justify-center sm:justify-end items-center gap-2">
                       <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => refetchResumes()}
-                        className="flex items-center gap-2"
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                        Refresh
-                      </Button>
-                      <Button
                         size="sm"
                         onClick={() => document.getElementById('resume-upload')?.click()}
                         className="flex items-center gap-2"
@@ -740,57 +731,10 @@ const JobListing = () => {
                     </div>
                   </div>
                   
-                  {/* <div className="grid gap-4">
-                    {resumes.map((resume) => (
-                      <div key={resume.id} className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                            <FileText className="h-5 w-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-lg">{resume.filename || `Resume ${resume.id}`}</p>
-                            <p className="text-sm text-muted-foreground">
-                              Uploaded: {new Date(resume.created_at).toLocaleDateString()}
-                            </p>
-                            <div className="flex items-center gap-2 mt-1">
-                              <Badge variant="outline" className="text-xs">
-                                {resume.filename?.split('.').pop()?.toUpperCase() || 'PDF'}
-                              </Badge>
-                              {selectedResumeId === resume.id && (
-                                <Badge variant="default" className="text-xs">
-                                  Active
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleResumeSelect(resume.id)}
-                            className="flex items-center gap-2"
-                          >
-                            <Eye className="w-4 h-4" />
-                            View Analysis
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleResumeDelete(resume.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-2"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div> */}
+                  {/* Removed prior resumes listing UI */}
 
                   <div className="grid gap-4">
-                    {resumes.map((resume) => (
+                    {visibleResumes.map((resume) => (
                       <div
                         key={resume.id}
                         className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
@@ -802,14 +746,14 @@ const JobListing = () => {
                           </div>
                           <div>
                             <p className="font-medium text-base sm:text-lg">
-                              {resume.filename || `Resume ${resume.id}`}
+                              {selectedResume?.filename || `Resume ${resume.id}`}
                             </p>
                             <p className="text-sm text-muted-foreground">
-                              Uploaded: {new Date(resume.created_at).toLocaleDateString()}
+                              {selectedResume?.created_at ? `Uploaded: ${new Date(selectedResume.created_at).toLocaleDateString()}` : ''}
                             </p>
                             <div className="flex flex-wrap items-center gap-2 mt-1">
                               <Badge variant="outline" className="text-xs">
-                                {resume.filename?.split('.').pop()?.toUpperCase() || 'PDF'}
+                                {selectedResume?.filename?.split('.').pop()?.toUpperCase() || 'PDF'}
                               </Badge>
                               {selectedResumeId === resume.id && (
                                 <Badge variant="default" className="text-xs">
@@ -847,27 +791,7 @@ const JobListing = () => {
 
                   
                   
-                  {/* Resume Statistics */}
-                  <div className="mt-6 pt-6 border-t border-gray-200">
-                    <div className="grid md:grid-cols-3 gap-4">
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-primary">{resumes.length}</p>
-                        <p className="text-sm text-muted-foreground">Total Resumes</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-green-600">
-                          {resumes.filter(r => r.id === selectedResumeId).length > 0 ? '1' : '0'}
-                        </p>
-                        <p className="text-sm text-muted-foreground">Active Resume</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-blue-600">
-                          {useResumeMatching ? jobs.filter(job => getJobMatchScore(job) > 0).length : 0}
-                        </p>
-                        <p className="text-sm text-muted-foreground">Job Matches</p>
-                      </div>
-                    </div>
-                  </div>
+                  {/* Statistics removed per request */}
                 </Card>
               </motion.div>
             )}
@@ -903,184 +827,85 @@ const JobListing = () => {
                     </div>
                   </div>
                   
-                  {isAnalysisLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <div className="text-center">
-                        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                        <p className="text-muted-foreground">Analyzing your resume...</p>
-                      </div>
-                    </div>
-                  ) : isAnalysisComplete && analysisData ? (
-                    <>
-                      {/* Analytics Dashboard */}
-                      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        {/* Skills Overview */}
-                        <Card className="p-4 bg-white/80 border-green-200">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                              <Award className="h-4 w-4 text-green-600" />
-                            </div>
-                            <h4 className="font-semibold text-sm text-[#2D3253]">Skills Count</h4>
-                          </div>
-                          <p className="text-2xl font-bold text-green-600">
-                            {analysisData?.skills?.length || 0}
-                          </p>
-                          {analysisData && !analysisData.skills && (
-                            <p className="text-xs text-muted-foreground mt-1">No skills detected</p>
-                          )}
-                        </Card>
-
-                        {/* Experience Level */}
-                        <Card className="p-4 bg-white/80 border-blue-200">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                              <TrendingUp className="h-4 w-4 text-blue-600" />
-                            </div>
-                            <h4 className="font-semibold text-sm text-[#2D3253]">Experience</h4>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {analysisData?.experience_level || 'Not specified'}
-                          </p>
-                        </Card>
-
-                        {/* Match Score */}
-                        <Card className="p-4 bg-white/80 border-purple-200">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                              <Target className="h-4 w-4 text-purple-600" />
-                            </div>
-                            <h4 className="font-semibold text-sm text-[#2D3253]">Job Matches</h4>
-                          </div>
-                          <p className="text-2xl font-bold text-purple-600">
-                            {useResumeMatching ? jobs.filter(job => getJobMatchScore(job) > 0).length : 0}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {useResumeMatching ? 'Active matching' : 'Enable matching'}
-                          </p>
-                        </Card>
-
-                        {/* Analysis Quality */}
-                        <Card className="p-4 bg-white/80 border-orange-200">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
-                              <BarChart3 className="h-4 w-4 text-orange-600" />
-                            </div>
-                            <h4 className="font-semibold text-sm text-[#2D3253]">Analysis</h4>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {analysisData?.summary ? 'Complete' : 'In Progress'}
-                          </p>
-                        </Card>
-                      </div>
+                   {isAnalysisComplete && analysisData ? (
+                     <>
+                       {/* Analytics Overview */}
+                       <div className="mb-6 flex justify-center md:justify-end">
+                         <Card className="p-4 bg-white/90 border-green-200 shadow-sm rounded-xl w-full max-w-xs sm:max-w-sm">
+                           <div className="flex items-center gap-3 mb-2">
+                             <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                               <Award className="h-4 w-4 text-green-600" />
+                             </div>
+                             <h4 className="font-semibold text-sm text-[#2D3253]">Skills Count</h4>
+                           </div>
+                           <p className="text-3xl font-extrabold tracking-tight text-green-600">
+                             {analysisData?.skills?.length || 0}
+                           </p>
+                           {analysisData && !analysisData.skills && (
+                             <p className="text-xs text-muted-foreground mt-1">No skills detected</p>
+                           )}
+                         </Card>
+                       </div>
                       
-                      <div className="grid md:grid-cols-2 gap-6">
-                        <div>
-                          <h4 className="font-semibold mb-3 text-lg">Skills Detected</h4>
-                          <div className="flex flex-wrap gap-2">
-                            {analysisData?.skills?.map((skill, index) => (
-                              <Badge key={index} variant="secondary" className="text-xs">
-                                {skill}
-                              </Badge>
-                            ))}
-                          </div>
-                          
-                          {/* Skill Categories */}
-                          {analysisData?.skills && (
-                            <div className="mt-4">
-                              <h5 className="font-medium mb-2 text-sm">Skill Categories</h5>
-                              <div className="grid grid-cols-2 gap-2 text-xs">
-                                <div className="flex justify-between">
-                                  <span>Technical:</span>
-                                  <span className="font-medium">
-                                    {analysisData.skills.filter(skill => 
-                                      ['javascript', 'python', 'react', 'node', 'java', 'c++', 'sql', 'html', 'css'].some(tech => 
-                                        skill.toLowerCase().includes(tech)
-                                      )
-                                    ).length}
-                                  </span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span>Soft Skills:</span>
-                                  <span className="font-medium">
-                                    {analysisData.skills.filter(skill => 
-                                      ['leadership', 'communication', 'teamwork', 'problem solving', 'management'].some(soft => 
-                                        skill.toLowerCase().includes(soft)
-                                      )
-                                    ).length}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <div>
-                          <h4 className="font-semibold mb-3 text-lg">Job Recommendations</h4>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm">
-                              <Target className="h-4 w-4 text-primary" />
-                              <span>Focus on {analysisData?.experience_level || 'your experience level'} roles</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm">
-                              <Target className="h-4 w-4 text-primary" />
-                              <span>Highlight your top {analysisData?.skills?.slice(0, 3).join(', ') || 'skills'}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm">
-                              <Target className="h-4 w-4 text-primary" />
-                              <span>Consider remote/hybrid opportunities</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm">
-                              <Target className="h-4 w-4 text-primary" />
-                              <span>Apply to {jobs.filter(job => getJobMatchScore(job) > 70).length} high-match jobs</span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {analysisData?.summary && (
-                          <div className="md:col-span-2">
-                            <h4 className="font-semibold mb-3 text-lg">AI Analysis Summary</h4>
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                              {analysisData.summary}
-                            </p>
-                          </div>
-                        )}
-                      </div>
+                       <div className="space-y-6">
+                         {/* Skill Categories under Skills Count */}
+                         {analysisData?.skills && (
+                           <div>
+                             <h4 className="font-semibold mb-3 text-lg">Skill Categories</h4>
+                             <Card className="p-4 bg-white/90 border-primary/10 shadow-sm max-w-lg">
+                               <div className="grid grid-cols-2 gap-4 text-sm">
+                                 <div className="flex items-center justify-between">
+                                   <span className="text-muted-foreground">Technical:</span>
+                                   <span className="font-semibold text-[#2D3253]">
+                                     {analysisData.skills.filter(skill =>
+                                       ['javascript', 'python', 'react', 'node', 'java', 'c++', 'sql', 'html', 'css'].some(tech =>
+                                         skill.toLowerCase().includes(tech)
+                                       )
+                                     ).length}
+                                   </span>
+                                 </div>
+                                 <div className="flex items-center justify-between">
+                                   <span className="text-muted-foreground">Soft Skills:</span>
+                                   <span className="font-semibold text-[#2D3253]">
+                                     {analysisData.skills.filter(skill =>
+                                       ['leadership', 'communication', 'teamwork', 'problem solving', 'management'].some(soft =>
+                                         skill.toLowerCase().includes(soft)
+                                       )
+                                     ).length}
+                                   </span>
+                                 </div>
+                               </div>
+                             </Card>
+                           </div>
+                         )}
+
+                         {/* Skills Detected below categories */}
+                         <div>
+                           <h4 className="font-semibold mb-3 text-lg">Skills Detected</h4>
+                           <div className="flex flex-wrap gap-2.5 bg-white/90 rounded-xl p-4 border border-primary/10 shadow-sm">
+                             {analysisData?.skills?.map((skill, index) => (
+                               <Badge
+                                 key={index}
+                                 variant="secondary"
+                                 className="text-[11px] leading-none px-3 py-2 rounded-full whitespace-nowrap bg-white border border-primary/10 shadow-sm"
+                               >
+                                 {skill}
+                               </Badge>
+                             ))}
+                           </div>
+                         </div>
+
+                         {/* Summary at the bottom */}
+                         {analysisData?.summary && (
+                           <div>
+                             <h4 className="font-semibold mb-3 text-lg">AI Analysis Summary</h4>
+                             <p className="text-sm text-muted-foreground leading-relaxed">
+                               {analysisData.summary}
+                             </p>
+                           </div>
+                         )}
+                       </div>
                     </>
-                  ) : isAnalysisPending ? (
-                    <div className="text-center py-12">
-                      <div className="w-16 h-16 bg-yellow-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                        <RefreshCw className="h-8 w-8 text-yellow-600 animate-spin" />
-                      </div>
-                      <h3 className="text-lg font-semibold mb-2 text-yellow-800">Analysis in Progress</h3>
-                      <p className="text-muted-foreground mb-4">
-                        Your resume is being analyzed. This usually takes a few minutes.
-                      </p>
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                        <p className="text-sm text-yellow-700">
-                          <strong>Status:</strong> {resumeAnalysis?.status}
-                        </p>
-                        <p className="text-xs text-yellow-600 mt-1">
-                          Please wait while our AI analyzes your resume...
-                        </p>
-                      </div>
-                      <div className="flex gap-2 justify-center">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => refetchAnalysis()}
-                        >
-                          <RefreshCw className="w-4 h-4 mr-2" />
-                          Refresh Status
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowResumeAnalysis(false)}
-                        >
-                          Close
-                        </Button>
-                      </div>
-                    </div>
                   ) : isAnalysisFailed ? (
                     <div className="text-center py-12">
                       <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -1108,47 +933,7 @@ const JobListing = () => {
                         </Button>
                       </div>
                     </div>
-                  ) : (
-                    <div className="text-center py-12">
-                      <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                        <BarChart3 className="h-8 w-8 text-gray-400" />
-                      </div>
-                      <h3 className="text-lg font-semibold mb-2 text-gray-600">No Analysis Data</h3>
-                      <p className="text-muted-foreground mb-4">
-                        Resume analysis is not available. This could be because:
-                      </p>
-                      <div className="text-sm text-muted-foreground mb-6 space-y-1">
-                        <p>• The resume hasn't been analyzed yet</p>
-                        <p>• Analysis is still in progress</p>
-                        <p>• There was an error during analysis</p>
-                        <p>• The analysis status is: {resumeAnalysis?.status || 'Unknown'}</p>
-                      </div>
-                      
-                      {/* Debug Information */}
-                      {analysisError && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 text-left">
-                          <h4 className="font-semibold text-red-800 mb-2">Error Details:</h4>
-                          <p className="text-sm text-red-700">
-                            {analysisError.message || 'Unknown error occurred'}
-                          </p>
-                          <p className="text-xs text-red-600 mt-2">
-                            Resume ID: {selectedResumeId}
-                          </p>
-                        </div>
-                      )}
-                      
-                      
-                      <div className="flex gap-2 justify-center">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowResumeAnalysis(false)}
-                        >
-                          Close
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  ) : null}
                 </Card>
               </motion.div>
             )}

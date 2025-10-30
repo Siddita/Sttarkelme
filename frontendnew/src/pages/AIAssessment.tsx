@@ -581,11 +581,11 @@ const AIAssessment = () => {
   const assessmentTypes = [
     {
       id: 1,
-      title: "Technical Skills",
+      title: "Aptitude Test",
       description: "Programming, algorithms, system design, and technical problem-solving",
       duration: "45-60 min",
       questions: "15-20",
-      focus: "Technical Competency",
+      focus: "Aptitude Test",
       sectors: ['tech', 'finance', 'ecommerce', 'consulting'],
       difficulty: ['intermediate', 'advanced'],
       comingSoon: false
