@@ -2435,10 +2435,6 @@ const PersonalizedAssessment = () => {
               <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-normal mb-6 leading-tight animate-fade-in text-[#2D3253]">
                 <span className="bg-gradient-primary bg-clip-text text-transparent">Personalized Assessment</span>
               </h1>
-              
-              <p className="text-xl text-muted-foreground mb-10 max-w-3xl mx-auto leading-relaxed animate-fade-in">
-                Get a comprehensive AI-powered assessment tailored to your experience and skills.
-              </p>
             </div>
 
             {/* Progress Indicator */}
@@ -2501,24 +2497,10 @@ const PersonalizedAssessment = () => {
             {/* Welcome Step */}
             {currentStep === 'welcome' && (
               <Card className="p-8 max-w-4xl mx-auto">
-                <div className="text-center mb-8">
-                  <h3 className="text-2xl font-bold mb-4">Welcome to Your Personalized Assessment</h3>
-                  <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
-                    Our AI-powered assessment will analyze your resume, identify your skills, and provide personalized job recommendations and skill evaluations.
-                  </p>
-                </div>
 
                 {/* Branching Assessment Roadmap */}
                 <section className="relative w-full bg-white py-20">
                   <div className="max-w-7xl mx-auto px-6">
-                    <div className="text-center mb-16">
-                      <h2 className="text-3xl font-bold text-[#2D3253] mb-4">
-                        Assessment Roadmap
-                      </h2>
-                      <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-                        Follow our streamlined process and choose your preferred assessment path to get personalized career recommendations.
-                      </p>
-                    </div>
 
                     {/* Roadmap with Branching */}
                     <div className="relative">
@@ -2973,6 +2955,7 @@ const PersonalizedAssessment = () => {
                             setCurrentStep('aptitude');
                             setQuickTestElapsedTime(0);
                             startQuickTestTimer();
+                            scrollToTop();
                           }}
                           className="w-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-lg py-6 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
                         >
@@ -3005,6 +2988,7 @@ const PersonalizedAssessment = () => {
                           onClick={() => {
                             setSelectedPath('ai-interview');
                             setCurrentStep('interview');
+                            scrollToTop();
                           }}
                           className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-lg py-6 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
                         >

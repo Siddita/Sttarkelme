@@ -1,3 +1,6 @@
+// navbar-menu.tsx code:
+
+
 "use client";
 import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
@@ -239,7 +242,7 @@ export const Menu = ({
 
       {/* Mobile Menu */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-gray-200 dark:border-white/20 px-4 py-4 space-y-4 bg-white dark:bg-black">
+        <div className="md:hidden border-b border-gray-300 dark:border-white/20 px-4 py-4 space-y-4 max-h-96 overflow-y-auto  bg-white dark:bg-black  mx-auto  sm:px-6 lg:px-8 overflow-hidden animate-fade-in">
           {/* Show top-level links */}
           <div className="flex flex-col space-y-6">
             {children}
@@ -259,7 +262,8 @@ export const Menu = ({
 
             {servicesMobileOpen && (
               <div
-                className="mt-2 p-2 rounded-lg bg-white dark:bg-black border border-gray-100 dark:border-white/10 max-h-64 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                className="mt-0 p-2  bg-white dark:bg-black border-l max-h-full overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                // className="mt-2 p-2 rounded-lg bg-white dark:bg-black border border-gray-100 dark:border-white/10 max-h-full overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
               >
                 {mobileServices}
               </div>
@@ -348,7 +352,7 @@ export const ProductItem = ({
     <button 
       onClick={handleClick}
       className={cn(
-        "flex flex-col space-y-3 hover:bg-gray-50 dark:hover:bg-gray-800 p-3 rounded-lg transition-colors w-full text-left relative",
+        "flex lg:flex-col flex-row lg:space-y-3 space-5 border-2 lg:border-0 hover:bg-gray-50 dark:hover:bg-gray-800 p-3 rounded-lg transition-colors w-full text-left relative",
         isCurrentPageActive && "bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-700"
       )}
     >
@@ -361,11 +365,11 @@ export const ProductItem = ({
         height={60}
         alt={title}
         className={cn(
-          "w-20 h-15 object-cover rounded-md shadow-lg mx-auto transition-all duration-200",
+          "w-20 h-15 object-cover rounded-md shadow-sm mx-auto transition-all duration-200",
           isCurrentPageActive && "ring-2 ring-blue-200 dark:ring-blue-700"
         )}
       />
-      <div className="text-center">
+      <div className="text-center pl-2">
         <h4 className={cn(
           "text-lg font-bold mb-2 text-black dark:text-white transition-colors duration-200",
           isCurrentPageActive && "text-blue-600 dark:text-blue-400"
@@ -427,7 +431,7 @@ export function Navbar({ className }: { className?: string }) {
   return (
     <div className={cn("fixed top-0 inset-x-0 z-50", className)}>
       <Menu setActive={setActive} mobileServices={(
-        <div className="text-sm grid grid-cols-3 gap-4 p-4">
+        <div className="text-sm grid grid-rows-3 gap-4 p-4">
           <ProductItem
             title="Resume Builder"
             href="/services/resume-builder"
@@ -543,255 +547,3 @@ export function Navbar({ className }: { className?: string }) {
 }
 
 export default Navbar;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// ------------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// "use client";
-// import React, { useState } from "react";
-// import { motion } from "motion/react";
-// import { cn } from "@/lib/utils";
-// import { Link, useLocation } from "react-router-dom";
-
-
-// const transition = {
-//   type: "spring",
-//   mass: 0.5,
-//   damping: 11.5,
-//   stiffness: 100,
-//   restDelta: 0.001,
-//   restSpeed: 0.001,
-// };
-
-// // -----------------
-// // Core Menu Items
-// // -----------------
-// export const MenuItem = ({
-//   setActive,
-//   active,
-//   item,
-//   children,
-// }: {
-//   setActive: (item: string) => void;
-//   active: string | null;
-//   item: string;
-//   children?: React.ReactNode;
-// }) => {
-//   return (
-//     <div onMouseEnter={() => setActive(item)} className="relative">
-//       <motion.p
-//         transition={{ duration: 0.3 }}
-//         className="cursor-pointer text-black hover:opacity-90 dark:text-white"
-//       >
-//         {item}
-//       </motion.p>
-//       {active !== null && (
-//         <motion.div
-//           initial={{ opacity: 0, scale: 0.85, y: 10 }}
-//           animate={{ opacity: 1, scale: 1, y: 0 }}
-//         //   transition={transition}
-//         >
-//           {active === item && (
-//             <div className="absolute top-[calc(100%+1.2rem)] left-1/2 transform -translate-x-1/2 pt-4 w-screen " style={{ maxWidth: "720px" }}>
-//               <motion.div
-//                 // transition={transition}
-//                 layoutId="active"
-//                 className="bg-white dark:bg-black backdrop-blur-sm rounded-2xl overflow-hidden border border-black/20 dark:border-white/20 shadow-xl"
-//               >
-//                 <motion.div layout className="w-max h-full p-4">
-//                   {children}
-//                 </motion.div>
-//               </motion.div>
-//             </div>
-//           )}
-//         </motion.div>
-//       )}
-//     </div>
-//   );
-// };
-
-// export const Menu = ({
-//   setActive,
-//   children,
-// }: {
-//   setActive: (item: string | null) => void;
-//   children: React.ReactNode;
-// }) => {
-//   return (
-//     <nav
-//       onMouseLeave={() => setActive(null)}
-//       className="relative rounded-full border border-transparent dark:bg-black dark:border-white/20 bg-white shadow-input space-x-4 py-2 top-4 flex justify-between items-center h-16 px-2 sm:px-6 lg:px-8"
-//     >
-//         <div className="flex justify-between items-center h-16 ">
-            
-//         {/* Logo */}
-//           <Link to="/" className="flex items-center space-x-2">
-//             <img
-//               src="/logos/sttarkel_logo.png"
-//               alt="Company Logo"
-//               className="h-8 sm:h-10 md:h-12 w-auto"
-//             />
-//           </Link>
-//         </div>
-//         <div className="hidden md:flex items-center space-x-6">
-
-//         {children}
-
-//         </div>
-//         <div className="hidden md:flex items-center space-x-3">
-//             {/* <a
-//             href="https://sttarkel.com/contact"
-//             target="_blank"
-//             rel="noopener noreferrer"
-//             className="text-sm font-medium transition-colors duration-200 text-muted-foreground hover:text-foreground"
-//           >
-//             Contact Us
-//           </a> */}
-//           <a
-//             href="https://sttarkel.com/login"
-//             target="_blank"
-//             rel="noopener noreferrer"
-//             className="text-sm font-medium transition-colors duration-200 text-muted-foreground hover:text-foreground"
-//           >
-//             Sign In
-//           </a>
-//         </div>
-//       {/* {children} */}
-//     </nav>
-//   );
-// };
-
-// export const ProductItem = ({
-//   title,
-//   description,
-//   href,
-//   src,
-// }: {
-//   title: string;
-//   description: string;
-//   href: string;
-//   src: string;
-// }) => {
-//   return (
-//     <a href={href} className="flex space-x-2">
-//       <img
-//         src={src}
-//         width={140}
-//         height={70}
-//         alt={title}
-//         className="shrink-0 rounded-md shadow-2xl"
-//       />
-//       <div>
-//         <h4 className="text-xl font-bold mb-1 text-black dark:text-white">
-//           {title}
-//         </h4>
-//         <p className="text-neutral-500 text-sm max-w-[10rem] dark:text-neutral-300">
-//           {description}
-//         </p>
-//       </div>
-//     </a>
-//   );
-// };
-
-// export const HoveredLink = ({ children, ...rest }: any) => {
-//   return (
-//     <a
-//       {...rest}
-//       className="text-neutral-700 dark:text-neutral-200 hover:text-black"
-//     >
-//       {children}
-//     </a>
-//   );
-// };
-
-// // -----------------
-// // Final Navbar (ready to use directly)
-// // -----------------
-// export function Navbar({ className }: { className?: string }) {
-//   const [active, setActive] = useState<string | null>(null);
-
-//   return (
-//     <div
-//       className={cn("fixed top-0 inset-x-0 max-w-5xl mx-auto z-50", className)}
-//     >
-//       <Menu setActive={setActive}>
-//         {/* <MenuItem setActive={setActive} active={active} item="Home"></MenuItem> */}
-//         <MenuItem setActive={setActive} active={active} item="About Us">
-//           <div className="flex flex-col space-y-4 text-sm">
-//             <HoveredLink href="/web-dev">Web Development</HoveredLink>
-//             <HoveredLink href="/interface-design">Interface Design</HoveredLink>
-//             <HoveredLink href="/seo">Search Engine Optimization</HoveredLink>
-//             <HoveredLink href="/branding">Branding</HoveredLink>
-//           </div>
-//         </MenuItem>
-
-//         <MenuItem setActive={setActive} active={active} item="Services">
-//           <div className="text-sm grid grid-cols-2 gap-8 p-4">
-//             <ProductItem
-//               title="Resume Builder"
-//               href="/services/resume-builder"
-//               src="https://assets.aceternity.com/demos/algochurn.webp"
-//               description="Create professional resumes in minutes with our easy-to-use builder."
-//             />
-//             <ProductItem
-//               title="Job Listing"
-//               href="/services/jobs"
-//               src="https://assets.aceternity.com/demos/tailwindmasterkit.webp"
-//               description="Find your dream job from thousands of listings."
-//             />
-//             <ProductItem
-//               title="AI Assessment"
-//               href="/services/ai-assessment"
-//               src="https://assets.aceternity.com/demos/Screenshot+2024-02-21+at+11.51.31%E2%80%AFPM.png"
-//               description="AI-driven coding assessments to evaluate and enhance your skills."
-//             />
-//             <ProductItem
-//               title="Placement"
-//               href="/services/placement"
-//               src="https://assets.aceternity.com/demos/Screenshot+2024-02-21+at+11.47.07%E2%80%AFPM.png"
-//               description="Get placed in top companies with our dedicated placement services by connect with our network of hiring partners."
-//             />
-//           </div>
-//         </MenuItem>
-
-//         <MenuItem setActive={setActive} active={active} item="Blogs/News"></MenuItem>
-//         <MenuItem setActive={setActive} active={active} item="Mentorship"></MenuItem>
-//         <MenuItem setActive={setActive} active={active} item="Try Placemate"></MenuItem>
-
-//         <MenuItem setActive={setActive} active={active} item="Pricing">
-//           <div className="flex flex-col space-y-4 text-sm">
-//             <HoveredLink href="/hobby">Hobby</HoveredLink>
-//             <HoveredLink href="/individual">Individual</HoveredLink>
-//             <HoveredLink href="/team">Team</HoveredLink>
-//             <HoveredLink href="/enterprise">Enterprise</HoveredLink>
-//           </div>
-//         </MenuItem>
-//       </Menu>
-//     </div>
-//   );
-// }

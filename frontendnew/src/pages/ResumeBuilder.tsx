@@ -40,6 +40,8 @@ import { Navbar } from "@/components/ui/navbar-menu";
 import { toast } from "sonner";
 import './OutlinedText.css';
 import ResumeTemplate from '@/components/ResumeTemplate';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { TextHoverEffect } from "@/components/ui/text-hover-effect";
 import {
   parseResumeResumeParsePost,
@@ -66,6 +68,7 @@ const ResumeBuilder = () => {
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const resumePreviewRef = useRef<HTMLDivElement>(null);
 
   // Ensure page starts at the top when navigating to Resume Builder
   useLayoutEffect(() => {
@@ -190,8 +193,8 @@ const ResumeBuilder = () => {
 
   const { mutate: exportPdf, isLoading: isPdfExportLoading } = exportPdfResumeExportPdf_Post({
     onSuccess: (data) => {
-      // Handle PDF download
-      const blob = new Blob([data], { type: 'application/pdf' });
+      // Handle PDF download - data is already a Blob from apiClient
+      const blob = data instanceof Blob ? data : new Blob([data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -209,19 +212,59 @@ const ResumeBuilder = () => {
 
   const { mutate: exportDocx, isLoading: isDocxExportLoading } = exportDocxResumeExportDocx_Post({
     onSuccess: (data) => {
-      // Handle DOCX download
-      const blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'resume.docx';
-      a.click();
-      window.URL.revokeObjectURL(url);
-      toast.success("DOCX exported successfully!");
-      setIsExporting(false);
+      try {
+        console.log("DOCX export response type:", typeof data);
+        console.log("DOCX export response:", data);
+        
+        // Handle DOCX download - data should be a Blob from apiClient
+        let blob;
+        if (data instanceof Blob) {
+          blob = data;
+          console.log("Response is already a Blob, size:", blob.size);
+        } else if (typeof data === 'string') {
+          // If somehow we get a string (base64 or text), try to handle it
+          console.warn("Received string instead of blob, attempting conversion");
+          // Try base64 decode first
+          try {
+            const binaryString = atob(data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+          } catch (e) {
+            // If not base64, treat as plain text (shouldn't happen but handle gracefully)
+            blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+          }
+        } else {
+          // Fallback: try to create blob from whatever we got
+          blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        }
+        
+        if (!blob || blob.size === 0) {
+          throw new Error("Received empty or invalid DOCX file");
+        }
+        
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `resume_${selectedTemplate || 'professional'}.docx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        toast.success("DOCX exported successfully!");
+        setIsExporting(false);
+      } catch (error) {
+        console.error("Error processing DOCX download:", error);
+        toast.error("Error processing DOCX file: " + error.message);
+        setIsExporting(false);
+      }
     },
     onError: (error) => {
-      toast.error("Error exporting DOCX: " + error.message);
+      console.error("DOCX export error:", error);
+      const errorMessage = error.response?.detail || error.message || "Unknown error";
+      toast.error("Error exporting DOCX: " + errorMessage);
       setIsExporting(false);
     }
   });
@@ -485,6 +528,12 @@ const ResumeBuilder = () => {
       return;
     }
 
+    if (!jobDescription?.trim()) {
+      toast.error("Please enter a job description first");
+      return;
+    }
+
+    console.log("Starting resume generation...");
     setIsGenerating(true);
     // Try main endpoint first
     generateResume({
@@ -528,13 +577,58 @@ const ResumeBuilder = () => {
     });
     
     setIsExporting(true);
-    // Try main endpoint first - send data with template included
-    exportPdf({
+    // Prepare data with all required fields and template
+    // Ensure all nested objects have all required fields with proper defaults
+    const exportData = {
       data: {
-        ...currentResumeData,
-        template: selectedTemplate
+        template: selectedTemplate || "professional",
+        personal_info: {
+          name: currentResumeData.personal_info?.name || "",
+          email: currentResumeData.personal_info?.email || "",
+          phone: currentResumeData.personal_info?.phone || "",
+          location: currentResumeData.personal_info?.location || "",
+          linkedin: currentResumeData.personal_info?.linkedin || "",
+          github: currentResumeData.personal_info?.github || "",
+          website: currentResumeData.personal_info?.website || ""
+        },
+        summary: currentResumeData.summary || "",
+        skills: Array.isArray(currentResumeData.skills) ? currentResumeData.skills.filter(s => s && s.trim()) : [],
+        experience: Array.isArray(currentResumeData.experience) ? currentResumeData.experience.map(exp => ({
+          company: exp?.company || "",
+          position: exp?.position || "",
+          start_date: exp?.start_date || "",
+          end_date: exp?.end_date || "",
+          description: exp?.description || "",
+          achievements: Array.isArray(exp?.achievements) ? exp.achievements.filter(a => a && a.trim()) : []
+        })) : [],
+        education: Array.isArray(currentResumeData.education) ? currentResumeData.education.map(edu => ({
+          institution: edu?.institution || "",
+          degree: edu?.degree || "",
+          field: edu?.field || "",
+          start_date: edu?.start_date || "",
+          end_date: edu?.end_date || "",
+          gpa: edu?.gpa || ""
+        })) : [],
+        projects: Array.isArray(currentResumeData.projects) ? currentResumeData.projects.map(proj => ({
+          name: proj?.name || "",
+          description: proj?.description || "",
+          technologies: Array.isArray(proj?.technologies) ? proj.technologies.filter(t => t && t.trim()) : [],
+          url: proj?.url || ""
+        })) : [],
+        certifications: Array.isArray(currentResumeData.certifications) ? currentResumeData.certifications.map(cert => ({
+          name: cert?.name || "",
+          issuer: cert?.issuer || "",
+          date: cert?.date || "",
+          url: cert?.url || ""
+        })) : [],
+        hobbies: Array.isArray(currentResumeData.hobbies) ? currentResumeData.hobbies.filter(h => h && h.trim()) : []
       }
-    });
+    };
+    
+    console.log("PDF export payload:", JSON.stringify(exportData, null, 2));
+    
+    // Try main endpoint first - send data with template included
+    exportPdf(exportData);
   };
 
   const handleExportPdfLegacy = () => {
@@ -544,13 +638,58 @@ const ResumeBuilder = () => {
     }
 
     setIsExporting(true);
-    // Use legacy endpoint - send data with template included
-    exportPdfLegacy({
+    // Prepare data with all required fields and template for legacy endpoint
+    // Ensure all nested objects have all required fields with proper defaults
+    const exportData = {
       data: {
-        ...currentResumeData,
-        template: selectedTemplate
+        template: selectedTemplate || "professional",
+        personal_info: {
+          name: currentResumeData.personal_info?.name || "",
+          email: currentResumeData.personal_info?.email || "",
+          phone: currentResumeData.personal_info?.phone || "",
+          location: currentResumeData.personal_info?.location || "",
+          linkedin: currentResumeData.personal_info?.linkedin || "",
+          github: currentResumeData.personal_info?.github || "",
+          website: currentResumeData.personal_info?.website || ""
+        },
+        summary: currentResumeData.summary || "",
+        skills: Array.isArray(currentResumeData.skills) ? currentResumeData.skills.filter(s => s && s.trim()) : [],
+        experience: Array.isArray(currentResumeData.experience) ? currentResumeData.experience.map(exp => ({
+          company: exp?.company || "",
+          position: exp?.position || "",
+          start_date: exp?.start_date || "",
+          end_date: exp?.end_date || "",
+          description: exp?.description || "",
+          achievements: Array.isArray(exp?.achievements) ? exp.achievements.filter(a => a && a.trim()) : []
+        })) : [],
+        education: Array.isArray(currentResumeData.education) ? currentResumeData.education.map(edu => ({
+          institution: edu?.institution || "",
+          degree: edu?.degree || "",
+          field: edu?.field || "",
+          start_date: edu?.start_date || "",
+          end_date: edu?.end_date || "",
+          gpa: edu?.gpa || ""
+        })) : [],
+        projects: Array.isArray(currentResumeData.projects) ? currentResumeData.projects.map(proj => ({
+          name: proj?.name || "",
+          description: proj?.description || "",
+          technologies: Array.isArray(proj?.technologies) ? proj.technologies.filter(t => t && t.trim()) : [],
+          url: proj?.url || ""
+        })) : [],
+        certifications: Array.isArray(currentResumeData.certifications) ? currentResumeData.certifications.map(cert => ({
+          name: cert?.name || "",
+          issuer: cert?.issuer || "",
+          date: cert?.date || "",
+          url: cert?.url || ""
+        })) : [],
+        hobbies: Array.isArray(currentResumeData.hobbies) ? currentResumeData.hobbies.filter(h => h && h.trim()) : []
       }
-    });
+    };
+    
+    console.log("PDF legacy export payload:", JSON.stringify(exportData, null, 2));
+    
+    // Use legacy endpoint - send data with template included
+    exportPdfLegacy(exportData);
   };
 
   const handleExportDocx = () => {
@@ -574,13 +713,68 @@ const ResumeBuilder = () => {
     });
     
     setIsExporting(true);
-    // Try main endpoint first - send data with template included
-    exportDocx({
+    // Prepare data with all required fields and template
+    // Ensure all nested objects have all required fields with proper defaults
+    const exportData = {
       data: {
-        ...currentResumeData,
-        template: selectedTemplate
+        template: selectedTemplate || "professional",
+        personal_info: {
+          name: currentResumeData.personal_info?.name || "",
+          email: currentResumeData.personal_info?.email || "",
+          phone: currentResumeData.personal_info?.phone || "",
+          location: currentResumeData.personal_info?.location || "",
+          linkedin: currentResumeData.personal_info?.linkedin || "",
+          github: currentResumeData.personal_info?.github || "",
+          website: currentResumeData.personal_info?.website || ""
+        },
+        summary: currentResumeData.summary || "",
+        skills: Array.isArray(currentResumeData.skills) ? currentResumeData.skills.filter(s => s && s.trim()) : [],
+        experience: Array.isArray(currentResumeData.experience) ? currentResumeData.experience.map(exp => ({
+          company: exp?.company || "",
+          position: exp?.position || "",
+          start_date: exp?.start_date || "",
+          end_date: exp?.end_date || "",
+          description: exp?.description || "",
+          achievements: Array.isArray(exp?.achievements) ? exp.achievements.filter(a => a && a.trim()) : []
+        })) : [],
+        education: Array.isArray(currentResumeData.education) ? currentResumeData.education.map(edu => ({
+          institution: edu?.institution || "",
+          degree: edu?.degree || "",
+          field: edu?.field || "",
+          start_date: edu?.start_date || "",
+          end_date: edu?.end_date || "",
+          gpa: edu?.gpa || ""
+        })) : [],
+        projects: Array.isArray(currentResumeData.projects) ? currentResumeData.projects.map(proj => ({
+          name: proj?.name || "",
+          description: proj?.description || "",
+          technologies: Array.isArray(proj?.technologies) ? proj.technologies.filter(t => t && t.trim()) : [],
+          url: proj?.url || ""
+        })) : [],
+        certifications: Array.isArray(currentResumeData.certifications) ? currentResumeData.certifications.map(cert => ({
+          name: cert?.name || "",
+          issuer: cert?.issuer || "",
+          date: cert?.date || "",
+          url: cert?.url || ""
+        })) : [],
+        hobbies: Array.isArray(currentResumeData.hobbies) ? currentResumeData.hobbies.filter(h => h && h.trim()) : []
       }
+    };
+    
+    console.log("Final export payload:", JSON.stringify(exportData, null, 2));
+    console.log("Payload statistics:", {
+      template: exportData.data.template,
+      hasPersonalInfo: !!exportData.data.personal_info.name,
+      skillsCount: exportData.data.skills.length,
+      experienceCount: exportData.data.experience.length,
+      educationCount: exportData.data.education.length,
+      projectsCount: exportData.data.projects.length,
+      certificationsCount: exportData.data.certifications.length,
+      hobbiesCount: exportData.data.hobbies.length
     });
+    
+    // Try main endpoint first - send data with template included
+    exportDocx(exportData);
   };
 
   const handleExportDocxLegacy = () => {
@@ -590,13 +784,155 @@ const ResumeBuilder = () => {
     }
 
     setIsExporting(true);
-    // Use legacy endpoint - send data with template included
-    exportDocxLegacy({
+    // Prepare data with all required fields and template for legacy endpoint
+    // Ensure all nested objects have all required fields with proper defaults
+    const exportData = {
       data: {
-        ...currentResumeData,
-        template: selectedTemplate
+        template: selectedTemplate || "professional",
+        personal_info: {
+          name: currentResumeData.personal_info?.name || "",
+          email: currentResumeData.personal_info?.email || "",
+          phone: currentResumeData.personal_info?.phone || "",
+          location: currentResumeData.personal_info?.location || "",
+          linkedin: currentResumeData.personal_info?.linkedin || "",
+          github: currentResumeData.personal_info?.github || "",
+          website: currentResumeData.personal_info?.website || ""
+        },
+        summary: currentResumeData.summary || "",
+        skills: Array.isArray(currentResumeData.skills) ? currentResumeData.skills.filter(s => s && s.trim()) : [],
+        experience: Array.isArray(currentResumeData.experience) ? currentResumeData.experience.map(exp => ({
+          company: exp?.company || "",
+          position: exp?.position || "",
+          start_date: exp?.start_date || "",
+          end_date: exp?.end_date || "",
+          description: exp?.description || "",
+          achievements: Array.isArray(exp?.achievements) ? exp.achievements.filter(a => a && a.trim()) : []
+        })) : [],
+        education: Array.isArray(currentResumeData.education) ? currentResumeData.education.map(edu => ({
+          institution: edu?.institution || "",
+          degree: edu?.degree || "",
+          field: edu?.field || "",
+          start_date: edu?.start_date || "",
+          end_date: edu?.end_date || "",
+          gpa: edu?.gpa || ""
+        })) : [],
+        projects: Array.isArray(currentResumeData.projects) ? currentResumeData.projects.map(proj => ({
+          name: proj?.name || "",
+          description: proj?.description || "",
+          technologies: Array.isArray(proj?.technologies) ? proj.technologies.filter(t => t && t.trim()) : [],
+          url: proj?.url || ""
+        })) : [],
+        certifications: Array.isArray(currentResumeData.certifications) ? currentResumeData.certifications.map(cert => ({
+          name: cert?.name || "",
+          issuer: cert?.issuer || "",
+          date: cert?.date || "",
+          url: cert?.url || ""
+        })) : [],
+        hobbies: Array.isArray(currentResumeData.hobbies) ? currentResumeData.hobbies.filter(h => h && h.trim()) : []
       }
-    });
+    };
+    
+    console.log("Legacy export payload:", JSON.stringify(exportData, null, 2));
+    
+    // Use legacy endpoint - send data with template included
+    exportDocxLegacy(exportData);
+  };
+
+  const handleDownloadPreview = async () => {
+    if (!currentResumeData.personal_info.name) {
+      toast.error("Please fill in your resume data first");
+      return;
+    }
+
+    if (!resumePreviewRef.current) {
+      toast.error("Preview not available");
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+      toast.info("Generating PDF from preview...");
+
+      // Find the resume container in the preview
+      const previewContainer = resumePreviewRef.current;
+      const scaledContainer = previewContainer.querySelector('.scale-75');
+      const resumeElement = scaledContainer?.querySelector('.resume-container') as HTMLElement || previewContainer;
+
+      if (!resumeElement) {
+        throw new Error("Resume template not found");
+      }
+
+      // Create a temporary container with full-size preview for better quality
+      // Make it invisible so it doesn't show during capture
+      const tempContainer = document.createElement('div');
+      tempContainer.style.position = 'fixed';
+      tempContainer.style.top = '-9999px';
+      tempContainer.style.left = '-9999px';
+      tempContainer.style.width = '816px'; // A4 width in pixels at 96 DPI
+      tempContainer.style.backgroundColor = 'white';
+      tempContainer.style.padding = '40px';
+      tempContainer.style.opacity = '0';
+      tempContainer.style.pointerEvents = 'none';
+      tempContainer.style.zIndex = '-1';
+      document.body.appendChild(tempContainer);
+
+      // Clone the resume element and reset transforms
+      const clonedResume = resumeElement.cloneNode(true) as HTMLElement;
+      clonedResume.style.transform = 'none';
+      clonedResume.style.scale = '1';
+      clonedResume.style.width = '100%';
+      tempContainer.appendChild(clonedResume);
+
+      // Wait for styles to apply
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Capture as canvas with high quality
+      const canvas = await html2canvas(clonedResume, {
+        scale: 2, // Higher resolution for better quality
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: tempContainer.scrollWidth,
+        windowHeight: tempContainer.scrollHeight,
+      });
+
+      // Clean up temporary container
+      document.body.removeChild(tempContainer);
+
+      // Calculate PDF dimensions (A4)
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      // Create PDF
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Add first page
+      pdf.addImage(canvas.toDataURL('image/png', 1.0), 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Add additional pages if content exceeds one page
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(canvas.toDataURL('image/png', 1.0), 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      // Download PDF
+      const fileName = `resume_preview_${selectedTemplate || 'professional'}_${Date.now()}.pdf`;
+      pdf.save(fileName);
+      
+      toast.success("Preview downloaded successfully!");
+      setIsExporting(false);
+    } catch (error) {
+      console.error("Error downloading preview:", error);
+      toast.error("Failed to download preview: " + (error as Error).message);
+      setIsExporting(false);
+    }
   };
 
   const addSkill = (skill: string) => {
@@ -1840,7 +2176,7 @@ const ResumeBuilder = () => {
                     </div>
                   </div>
                 </div>
-                <div className="space-y-6">
+                <div key={formStep} className="space-y-6" style={{ transition: 'none' }}>
                   {formStep === 0 && (<>
                   {/* Personal Information */}
                   <div className="space-y-4">
@@ -2510,30 +2846,17 @@ const ResumeBuilder = () => {
                           {(isGenerateLoading || isGenerateLegacyLoading) ? "Generating..." : "Generate Resume"}
                         </Button>
                         <Button 
-                          variant="outline"
-                          onClick={handleExportPdf}
-                          disabled={isPdfExportLoading || isPdfLegacyLoading || !currentResumeData.personal_info.name}
-                          className="flex items-center gap-2 text-sm w-full sm:w-auto"
+                          variant="default"
+                          onClick={handleDownloadPreview}
+                          disabled={isExporting || !currentResumeData.personal_info.name}
+                          className="flex items-center gap-2 text-sm w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
                         >
-                          {(isPdfExportLoading || isPdfLegacyLoading) ? (
+                          {isExporting ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
                             <Download className="h-4 w-4" />
                           )}
-                          Export PDF
-                        </Button>
-                        <Button 
-                          variant="outline"
-                          onClick={handleExportDocx}
-                          disabled={isDocxExportLoading || isDocxLegacyLoading || !currentResumeData.personal_info.name}
-                          className="flex items-center gap-2 text-sm w-full sm:w-auto"
-                        >
-                          {(isDocxExportLoading || isDocxLegacyLoading) ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Download className="h-4 w-4" />
-                          )}
-                          Export DOCX
+                          {isExporting ? "Downloading..." : "Download Preview"}
                         </Button>
                       </div>
                     </div>
@@ -2576,7 +2899,7 @@ const ResumeBuilder = () => {
                 <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-dashed border-gray-300 rounded-xl p-4 shadow-inner">
                   <div className="aspect-[3/4] bg-white border rounded-lg shadow-lg overflow-hidden">
                     {currentResumeData.personal_info.name ? (
-                      <div className="h-full overflow-y-auto">
+                      <div className="h-full overflow-y-auto" ref={resumePreviewRef}>
                         <div className="scale-75 origin-top-left w-[133%] h-[133%]">
                           <ResumeTemplate 
                             data={currentResumeData} 
@@ -2617,6 +2940,26 @@ const ResumeBuilder = () => {
           </div>
         </div>
       </div>
+
+      {/* Generating Resume Loading Overlay */}
+      {(isGenerating || isGenerateLoading || isGenerateLegacyLoading) && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-8 flex flex-col items-center gap-6 min-w-[350px] max-w-[500px] mx-4">
+            <Loader2 className="h-16 w-16 animate-spin text-primary" />
+            <div className="text-center space-y-2">
+              <h3 className="text-2xl font-semibold text-gray-800">Generating Your Personalized Resume</h3>
+              <p className="text-sm text-gray-600">
+                AI is analyzing your job description and tailoring your resume to match the requirements...
+              </p>
+              <div className="flex items-center justify-center gap-2 mt-4">
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI Generated Resume Preview Modal */}
       {showGeneratedPreview && generatedResume && (

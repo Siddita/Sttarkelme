@@ -635,9 +635,7 @@ const Mentorship = () => {
                 <TabsTrigger value="goals">My Goals</TabsTrigger>
                 <TabsTrigger value="sessions">Sessions</TabsTrigger>
                 <TabsTrigger value="skills">Skills</TabsTrigger>
-                {!profile?.is_mentor && (
-                  <TabsTrigger value="reviews">Reviews</TabsTrigger>
-                )}
+                <TabsTrigger value="profile">My Profile</TabsTrigger>
               </TabsList>
 
               {/* Discover Mentors Tab */}
@@ -1195,55 +1193,233 @@ const Mentorship = () => {
                 </div>
               </TabsContent>
 
-              {/* Reviews Tab (Mentee view) */}
-              {!profile?.is_mentor && (
-                <TabsContent value="reviews" className="space-y-6">
-                  <motion.div 
-                    className="text-center mb-6"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6 }}
-                  >
-                    <h2 className="text-3xl font-bold mb-2">
-                      Mentor <span className="bg-gradient-primary bg-clip-text text-transparent">Reviews</span>
-                    </h2>
-                    <p className="text-muted-foreground">See remarks and approval status from your mentor</p>
-                  </motion.div>
+              {/* My Profile Tab */}
+              <TabsContent value="profile" className="space-y-6">
+                <motion.div 
+                  className="text-center mb-8"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6 }}
+                >
+                  <h2 className="text-3xl font-bold mb-2">
+                    My <span className="bg-gradient-primary bg-clip-text text-transparent">Profile</span>
+                  </h2>
+                  <p className="text-muted-foreground">View and manage your mentorship profile</p>
+                </motion.div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {goals?.map((goal: any) => (
-                      <Card key={goal.id} className="p-6 bg-gradient-card border-primary/10">
-                        <div className="flex items-start justify-between mb-3">
+                {profileLoading ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <Card className="p-6 bg-gradient-card border-primary/10 animate-pulse lg:col-span-2">
+                      <div className="flex items-center space-x-4 mb-6">
+                        <div className="w-20 h-20 bg-gray-300 rounded-full"></div>
+                        <div className="flex-1">
+                          <div className="h-6 bg-gray-300 rounded mb-2"></div>
+                          <div className="h-4 bg-gray-300 rounded w-2/3"></div>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="h-4 bg-gray-300 rounded"></div>
+                        <div className="h-4 bg-gray-300 rounded w-5/6"></div>
+                        <div className="h-4 bg-gray-300 rounded w-4/6"></div>
+                      </div>
+                    </Card>
+                    <Card className="p-6 bg-gradient-card border-primary/10 animate-pulse">
+                      <div className="h-4 bg-gray-300 rounded mb-4"></div>
+                      <div className="space-y-3">
+                        <div className="h-3 bg-gray-300 rounded"></div>
+                        <div className="h-3 bg-gray-300 rounded"></div>
+                        <div className="h-3 bg-gray-300 rounded"></div>
+                      </div>
+                    </Card>
+                  </div>
+                ) : profile ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Main Profile Card */}
+                    <Card className="p-6 md:p-8 bg-gradient-card border-primary/10 hover:border-primary/30 transition-all duration-300 hover:shadow-glow-accent lg:col-span-2">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-6 mb-6">
+                        <div className="relative">
+                          {profile.avatar_url ? (
+                            <img
+                              src={profile.avatar_url}
+                              alt={profile.full_name || "Profile"}
+                              className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover ring-4 ring-primary/20"
+                            />
+                          ) : (
+                            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center ring-4 ring-primary/20">
+                              <User className="h-10 w-10 md:h-12 md:w-12 text-white" />
+                            </div>
+                          )}
+                          <div className="absolute bottom-0 right-0 w-6 h-6 bg-green-500 rounded-full border-2 border-white"></div>
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-2xl md:text-3xl font-bold mb-2 text-[#2D3253]">
+                            {profile.full_name || "User"}
+                          </h3>
+                          <p className="text-lg text-muted-foreground mb-2">
+                            {profile.headline || "No headline set"}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-3">
+                            {profile.is_mentor && (
+                              <Badge variant="default" className="bg-blue-600">
+                                <GraduationCap className="h-3 w-3 mr-1" />
+                                Mentor
+                              </Badge>
+                            )}
+                            {profile.is_mentee && (
+                              <Badge variant="secondary">
+                                <Target className="h-3 w-3 mr-1" />
+                                Mentee
+                              </Badge>
+                            )}
+                            {profile.years_experience && (
+                              <Badge variant="outline">
+                                <Briefcase className="h-3 w-3 mr-1" />
+                                {profile.years_experience} {profile.years_experience === 1 ? 'year' : 'years'} experience
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bio Section */}
+                      {profile.bio && (
+                        <div className="mb-6">
+                          <h4 className="text-lg font-semibold mb-3 text-[#2D3253] flex items-center">
+                            <MessageCircle className="h-5 w-5 mr-2 text-primary" />
+                            About
+                          </h4>
+                          <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                            {profile.bio}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Profile Details */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {profile.timezone && (
                           <div className="flex items-center space-x-2">
-                            <Target className="h-5 w-5 text-primary" />
+                            <MapPin className="h-4 w-4 text-primary" />
                             <div>
-                              <h3 className="font-semibold text-lg">{getSkillName(goal.skill_id)}</h3>
-                              <p className="text-xs text-muted-foreground">Goal Reviews</p>
+                              <p className="text-xs text-muted-foreground">Timezone</p>
+                              <p className="text-sm font-medium">{profile.timezone}</p>
                             </div>
                           </div>
-                          {goalReviews[goal.id]?.approved ? (
-                            <Badge variant="default" className="bg-green-600">Completed</Badge>
-                          ) : (
-                            <Badge variant="secondary">Pending</Badge>
-                          )}
-                        </div>
+                        )}
+                        {profile.languages && profile.languages.length > 0 && (
+                          <div className="flex items-center space-x-2">
+                            <MessageSquare className="h-4 w-4 text-primary" />
+                            <div>
+                              <p className="text-xs text-muted-foreground">Languages</p>
+                              <p className="text-sm font-medium">{profile.languages.join(", ")}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
 
-                        <div className="text-sm bg-white/80 rounded-lg p-3 border border-primary/10 min-h-[72px]">
-                          {goalReviews[goal.id]?.remarks ? (
-                            <p className="text-[#2D3253] whitespace-pre-wrap">{goalReviews[goal.id].remarks}</p>
-                          ) : (
-                            <p className="text-muted-foreground">No remarks yet.</p>
-                          )}
+                    {/* Statistics Card */}
+                    <Card className="p-6 bg-gradient-card border-primary/10 hover:border-primary/30 transition-all duration-300">
+                      <h4 className="text-lg font-semibold mb-4 text-[#2D3253]">Statistics</h4>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg">
+                          <div className="flex items-center space-x-2">
+                            <Target className="h-5 w-5 text-primary" />
+                            <span className="text-sm font-medium">Goals</span>
+                          </div>
+                          <Badge variant="secondary" className="text-lg font-bold">
+                            {goals?.length || 0}
+                          </Badge>
                         </div>
+                        <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg">
+                          <div className="flex items-center space-x-2">
+                            <Video className="h-5 w-5 text-primary" />
+                            <span className="text-sm font-medium">Sessions</span>
+                          </div>
+                          <Badge variant="secondary" className="text-lg font-bold">
+                            {sessions?.length || 0}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg">
+                          <div className="flex items-center space-x-2">
+                            <BookOpen className="h-5 w-5 text-primary" />
+                            <span className="text-sm font-medium">Skills</span>
+                          </div>
+                          <Badge variant="secondary" className="text-lg font-bold">
+                            {skills?.length || 0}
+                          </Badge>
+                        </div>
+                        {profile.is_mentor && (
+                          <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <div className="flex items-center space-x-2">
+                              <Star className="h-5 w-5 text-blue-600" />
+                              <span className="text-sm font-medium text-blue-900 dark:text-blue-100">Mentor Status</span>
+                            </div>
+                            <Badge variant="default" className="bg-blue-600">
+                              Active
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
 
-                        <div className="mt-3 text-xs text-muted-foreground">
-                          {goal.target_date ? `Target: ${new Date(goal.target_date).toLocaleDateString()}` : 'No target date'}
-                        </div>
-                      </Card>
-                    ))}
+                    {/* Quick Actions */}
+                    <Card className="p-6 bg-gradient-card border-primary/10 hover:border-primary/30 transition-all duration-300 lg:col-span-full">
+                      <h4 className="text-lg font-semibold mb-4 text-[#2D3253]">Quick Actions</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => {
+                            setShowGoalDialog(true);
+                            setActiveTab("goals");
+                          }}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add Goal
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => setActiveTab("discover")}
+                        >
+                          <Users className="mr-2 h-4 w-4" />
+                          Find Mentor
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => {
+                            setShowSkillDialog(true);
+                            setActiveTab("skills");
+                          }}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add Skill
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => setActiveTab("sessions")}
+                        >
+                          <Calendar className="mr-2 h-4 w-4" />
+                          View Sessions
+                        </Button>
+                      </div>
+                    </Card>
                   </div>
-                </TabsContent>
-              )}
+                ) : (
+                  <Card className="p-12 text-center">
+                    <User className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">Profile Not Found</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Unable to load your profile. Please try refreshing the page.
+                    </p>
+                    <Button onClick={() => window.location.reload()}>
+                      Refresh Page
+                    </Button>
+                  </Card>
+                )}
+              </TabsContent>
 
               {/* Skills Tab */}
               <TabsContent value="skills" className="space-y-6">

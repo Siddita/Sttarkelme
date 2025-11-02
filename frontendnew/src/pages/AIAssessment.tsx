@@ -1368,60 +1368,6 @@ const AIAssessment = () => {
                         Start Your Personalized Assessment
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
-                      <p className="text-sm text-muted-foreground mb-6">
-                        Get a guided, step-by-step assessment experience
-                      </p>
-                      
-                      <div className="border-t border-gray-200 pt-6">
-                        <p className="text-sm font-medium text-gray-600 mb-4">Or upload directly for quick analysis:</p>
-                      </div>
-                    </div>
-
-                    <div className="border-2 border-dashed border-primary/20 rounded-lg p-8 text-center hover:border-primary/40 transition-colors">
-                      {uploadError && (
-                        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-                          {uploadError}
-                        </div>
-                      )}
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="relative">
-                          <input
-                            type="file"
-                            accept=".pdf,.doc,.docx"
-                            onChange={handleFileUpload}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                            id="resume-assessment-upload"
-                            disabled={isUploading}
-                          />
-                          <label
-                            htmlFor="resume-assessment-upload"
-                            className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors cursor-pointer"
-                          >
-                            {isUploading ? (
-                              <>
-                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                Analyzing Resume...
-                              </>
-                            ) : (
-                              <>
-                                <Upload className="w-4 h-4" />
-                                Upload Resume
-                              </>
-                            )}
-                          </label>
-                        </div>
-                        
-                        {uploadedFile && !isUploading && (
-                          <div className="flex items-center gap-2 text-green-600">
-                            <CheckCircle className="w-5 h-5" />
-                            <span className="text-sm font-medium">{uploadedFile.name}</span>
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="mt-4 text-xs text-muted-foreground">
-                        Supported formats: PDF, DOC, DOCX (Max 10MB)
-                      </div>
                     </div>
                     
                   </Card>

@@ -545,6 +545,43 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {object} notes
  * @property {integer} id
  * @property {integer} mentee_id
+ * @property {string} status
+ */
+/**
+ * @typedef {object} GoalStatusDecisionIn
+ * @property {boolean} approve
+ * @property {object} comment
+ */
+/**
+ * @typedef {object} GoalStatusRequestIn
+ * @property {string} requested_status
+ * @property {object} notes
+ */
+/**
+ * @typedef {object} GoalStatusRequestOut
+ * @property {integer} id
+ * @property {integer} goal_id
+ * @property {integer} mentee_id
+ * @property {string} requested_status
+ * @property {object} notes
+ * @property {string} state
+ * @property {object} decided_by
+ * @property {object} decided_comment
+ * @property {object} decided_at
+ */
+/**
+ * @typedef {object} MentorScoreIn
+ * @property {integer} score
+ * @property {object} notes
+ */
+/**
+ * @typedef {object} MentorScoreOut
+ * @property {integer} id
+ * @property {integer} session_id
+ * @property {integer} mentor_id
+ * @property {integer} mentee_id
+ * @property {integer} score
+ * @property {object} notes
  */
 /**
  * @typedef {object} MentorSkillIn
@@ -585,6 +622,14 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {object} years_experience
  */
 /**
+ * @typedef {object} RatingsSummaryOut
+ * @property {integer} target_id
+ * @property {string} kind
+ * @property {number} average
+ * @property {integer} count
+ * @property {object} distribution
+ */
+/**
  * @typedef {object} ReviewIn
  * @property {integer} rating
  * @property {object} text
@@ -604,6 +649,15 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {object} agenda
  * @property {integer} id
  * @property {integer} mentee_id
+ * @property {string} status
+ */
+/**
+ * @typedef {object} SessionStatusUpdateIn
+ * @property {string} status
+ */
+/**
+ * @typedef {object} SessionStatusUpdateOut
+ * @property {integer} id
  * @property {string} status
  */
 /**
@@ -854,7 +908,18 @@ export const getAnalysisApiV1Resumes_ResumeId_AnalysisGet = (options) => {
   });
 };
 
-// Removed admin list-all resumes endpoint from client to avoid exposing global listing in UI
+/**
+ * @description Hook for /resumes/api/v1/resumes/admin/all [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<ResumeRead[]>}
+ */
+export const adminListAllApiV1ResumesAdminAllGet = (options) => {
+  const queryKey = ['admin_list_all_api_v1_resumes_admin_all_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/resumes/api/v1/resumes/admin/all'),
+    ...options,
+  });
+};
 
 /**
  * @description Hook for /resumes/ [GET]
@@ -886,8 +951,8 @@ export const resumeHealthCheckHealthGet = (options) => {
  * @description Hook for /resumes/healthz [GET]
  * @returns {import('@tanstack/react-query').QueryResult<HealthZModel>}
  */
-export const healthzHealthzGet = (options) => {
-  const queryKey = ['healthz_healthz_get'];
+export const resumesHealthzGet = (options) => {
+  const queryKey = ['resumes_healthz_get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/resumes/healthz'),
@@ -1154,8 +1219,8 @@ export const refreshTokenRefreshPost = (options) => {
  * @description Hook for /auth/me [GET]
  * @returns {import('@tanstack/react-query').QueryResult<UserOut>}
  */
-export const meMeGet = (options) => {
-  const queryKey = ['me_me_get'];
+export const authMeGet = (options) => {
+  const queryKey = ['auth_me_get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/auth/me'),
@@ -1687,8 +1752,45 @@ export const deleteGoalMeMenteeGoals_GoalId_Delete = (options) => {
 };
 
 /**
+ * @description Hook for /mentorship/me/mentee/goals/{goal_id}/request-status [POST]
+ * @param {GoalStatusRequestIn} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<GoalStatusRequestOut, unknown, GoalStatusRequestIn>}
+ */
+export const requestGoalStatusChangeMeMenteeGoals_GoalId_RequestStatusPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/mentorship/me/mentee/goals/{goal_id}/request-status', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /mentorship/goals/status-requests/pending [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<GoalStatusRequestOut[]>}
+ */
+export const listPendingGoalStatusRequestsGoalsStatusRequestsPendingGet = (options) => {
+  const queryKey = ['list_pending_goal_status_requests_goals_status_requests_pending_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/mentorship/goals/status-requests/pending'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /mentorship/goals/{goal_id}/status-requests/{request_id}/decision [POST]
+ * @param {GoalStatusDecisionIn} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<GoalStatusRequestOut, unknown, GoalStatusDecisionIn>}
+ */
+export const decideGoalStatusRequestGoals_GoalId_StatusRequests_RequestId_DecisionPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/mentorship/goals/{goal_id}/status-requests/{request_id}/decision', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
  * @description Hook for /mentorship/mentors/search [GET]
- * @returns {import('@tanstack/react-query').QueryResult<ProfileOut[]>}
+ * @returns {import('@tanstack/react-query').QueryResult<object>}
  */
 export const mentorSearchMentorsSearchGet = (options) => {
   const queryKey = ['mentor_search_mentors_search_get'];
@@ -1751,12 +1853,12 @@ export const bookSessionSessionsPost = (options) => {
 
 /**
  * @description Hook for /mentorship/sessions/{session_id} [PATCH]
- * @param {void} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, void>}
+ * @param {SessionStatusUpdateIn} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<SessionStatusUpdateOut, unknown, SessionStatusUpdateIn>}
  */
 export const updateSessionSessions_SessionId_Patch = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('patch', '/mentorship/sessions/{session_id}', data),
+    mutationFn: (data) => apiClient('patch', '/mentorship/sessions/{session_id}', data, 'application/json'),
     ...options,
   });
 };
@@ -1769,6 +1871,44 @@ export const updateSessionSessions_SessionId_Patch = (options) => {
 export const createReviewSessions_SessionId_ReviewPost = (options) => {
   return useMutation({
     mutationFn: (data) => apiClient('post', '/mentorship/sessions/{session_id}/review', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /mentorship/sessions/{session_id}/mentor-score [POST]
+ * @param {MentorScoreIn} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<MentorScoreOut, unknown, MentorScoreIn>}
+ */
+export const mentorScoreSessions_SessionId_MentorScorePost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/mentorship/sessions/{session_id}/mentor-score', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /mentorship/mentors/{mentor_id}/ratings [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<RatingsSummaryOut>}
+ */
+export const mentorRatingsMentors_MentorId_RatingsGet = (options) => {
+  const queryKey = ['mentor_ratings_mentors__mentor_id__ratings_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/mentorship/mentors/{mentor_id}/ratings'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /mentorship/mentees/{mentee_id}/scores [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<RatingsSummaryOut>}
+ */
+export const menteeScoresMentees_MenteeId_ScoresGet = (options) => {
+  const queryKey = ['mentee_scores_mentees__mentee_id__scores_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/mentorship/mentees/{mentee_id}/scores'),
     ...options,
   });
 };
@@ -1790,8 +1930,8 @@ export const mentorshipRoot_Get = (options) => {
  * @description Hook for /mentorship/health [GET]
  * @returns {import('@tanstack/react-query').QueryResult<HealthModel>}
  */
-export const mentorshipHealthCheckHealthGet = (options) => {
-  const queryKey = ['mentorship_health_check_health_get'];
+export const healthCheckHealthGet = (options) => {
+  const queryKey = ['health_check_health_get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/mentorship/health'),
@@ -1803,8 +1943,8 @@ export const mentorshipHealthCheckHealthGet = (options) => {
  * @description Hook for /mentorship/healthz [GET]
  * @returns {import('@tanstack/react-query').QueryResult<HealthZModel>}
  */
-export const mentorshipHealthzHealthzGet = (options) => {
-  const queryKey = ['mentorship_healthz_healthz_get'];
+export const mentorshipHealthzGet = (options) => {
+  const queryKey = ['mentorship_healthz_get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/mentorship/healthz'),
@@ -1925,8 +2065,8 @@ export const exportDocxLegacyApiExportDocx_Post = (options) => {
  * @description Hook for /resume_builder/ [GET]
  * @returns {import('@tanstack/react-query').QueryResult<RootModel>}
  */
-export const root_Get = (options) => {
-  const queryKey = ['root__get'];
+export const resumebuilderRoot_Get = (options) => {
+  const queryKey = ['resumebuilder_root__get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/resume_builder/'),
