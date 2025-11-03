@@ -137,6 +137,87 @@ const ResumeBuilder = () => {
   // Multi-step form navigation
   const [formStep, setFormStep] = useState<number>(0);
   const maxFormStep = 7;
+  
+  // Section refs for scroll navigation
+  const sectionRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
+
+  // Section definitions with completion check functions
+  const sections = [
+    {
+      id: 0,
+      title: 'Personal Info & Summary',
+      step: 0,
+      isComplete: () => {
+        const info = currentResumeData.personal_info;
+        return !!(info.name && info.email && currentResumeData.summary);
+      }
+    },
+    {
+      id: 1,
+      title: 'Work Experience',
+      step: 1,
+      isComplete: () => {
+        return currentResumeData.experience.length > 0 && 
+               currentResumeData.experience.some(exp => exp.company && exp.position);
+      }
+    },
+    {
+      id: 2,
+      title: 'Education',
+      step: 2,
+      isComplete: () => {
+        return currentResumeData.education.length > 0 && 
+               currentResumeData.education.some(edu => edu.institution && edu.degree);
+      }
+    },
+    {
+      id: 3,
+      title: 'Projects',
+      step: 3,
+      isComplete: () => {
+        return currentResumeData.projects.length > 0 && 
+               currentResumeData.projects.some(proj => proj.name);
+      }
+    },
+    {
+      id: 4,
+      title: 'Certifications',
+      step: 4,
+      isComplete: () => {
+        return currentResumeData.certifications.length > 0 && 
+               currentResumeData.certifications.some(cert => cert.name);
+      }
+    },
+    {
+      id: 5,
+      title: 'Hobbies',
+      step: 5,
+      isComplete: () => {
+        return currentResumeData.hobbies.length > 0;
+      }
+    },
+    {
+      id: 6,
+      title: 'Job Description',
+      step: 6,
+      isComplete: () => {
+        return !!jobDescription?.trim();
+      }
+    }
+  ];
+
+  // Scroll to section and set active step
+  const scrollToSection = (step: number) => {
+    setFormStep(step);
+    // Small delay to ensure DOM updates before scrolling
+    setTimeout(() => {
+      const sectionElement = sectionRefs.current[step];
+      if (sectionElement) {
+        sectionElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
+  
 
 
 
@@ -2138,7 +2219,7 @@ const ResumeBuilder = () => {
             <div className="grid lg:grid-cols-2 gap-6 lg:gap-8">
               {/* Form */}
               <Card className="p-6 border-primary/10 shadow-lg">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8 gap-4">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 gap-4">
                   <div className="flex-1">
                     <h3 className="font-bold text-xl lg:text-2xl text-gray-800">Resume Information</h3>
                     {isParsingComplete && (
@@ -2176,10 +2257,39 @@ const ResumeBuilder = () => {
                     </div>
                   </div>
                 </div>
+                
+                {/* Section Navigation */}
+                <div className="mb-6 pb-4 border-b border-primary/20">
+                  <nav className="flex flex-wrap gap-2">
+                    {sections.map((section) => {
+                      const isComplete = section.isComplete();
+                      const isActive = formStep === section.step;
+                      return (
+                        <button
+                          key={section.id}
+                          onClick={() => scrollToSection(section.step)}
+                          className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
+                            isActive
+                              ? 'bg-primary text-primary-foreground shadow-sm'
+                              : 'bg-gray-100 hover:bg-primary/10 text-gray-700 hover:text-primary border border-transparent hover:border-primary/20'
+                          }`}
+                        >
+                          <span>{section.title}</span>
+                          {isComplete && (
+                            <CheckCircle2 className={`h-4 w-4 flex-shrink-0 ${
+                              isActive ? 'text-primary-foreground' : 'text-green-600'
+                            }`} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </nav>
+                </div>
+                
                 <div key={formStep} className="space-y-6" style={{ transition: 'none' }}>
                   {formStep === 0 && (<>
                   {/* Personal Information */}
-                  <div className="space-y-4">
+                  <div ref={(el) => sectionRefs.current[0] = el} className="space-y-4 scroll-mt-8">
                     <h4 className="font-semibold text-lg text-gray-700 border-b border-primary/20 pb-2">Personal Information</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className={`transition-all duration-500 ${isParsingComplete && currentResumeData.personal_info.name ? 'bg-green-50 border border-green-200 rounded-lg p-2' : ''}`}>
@@ -2320,7 +2430,7 @@ const ResumeBuilder = () => {
 
                   {formStep === 1 && (<>
                   {/* Experience */}
-                  <div className="space-y-3">
+                  <div ref={(el) => sectionRefs.current[1] = el} className="space-y-3 scroll-mt-8">
                     <div className="flex items-center justify-between">
                       <h4 className="font-semibold text-lg text-gray-700 border-b border-primary/20 pb-2">Work Experience</h4>
                       <Button
@@ -2414,7 +2524,7 @@ const ResumeBuilder = () => {
 
                   {formStep === 2 && (<>
                   {/* Education */}
-                  <div className="space-y-3">
+                  <div ref={(el) => sectionRefs.current[2] = el} className="space-y-3 scroll-mt-8">
                     <div className="flex items-center justify-between">
                       <h4 className="font-semibold text-lg text-gray-700 border-b border-primary/20 pb-2">Education</h4>
                       <Button
@@ -2547,7 +2657,7 @@ const ResumeBuilder = () => {
 
                   {formStep === 3 && (<>
                   {/* Projects */}
-                  <div className="space-y-3">
+                  <div ref={(el) => sectionRefs.current[3] = el} className="space-y-3 scroll-mt-8">
                     <div className="flex items-center justify-between">
                       <h4 className="font-semibold text-lg text-gray-700 border-b border-primary/20 pb-2">Projects</h4>
                       <Button
@@ -2652,7 +2762,7 @@ const ResumeBuilder = () => {
 
                   {formStep === 4 && (<>
                   {/* Certifications */}
-                  <div className="space-y-3">
+                  <div ref={(el) => sectionRefs.current[4] = el} className="space-y-3 scroll-mt-8">
                     <div className="flex items-center justify-between">
                       <h4 className="font-semibold text-lg text-gray-700 border-b border-primary/20 pb-2">Certifications</h4>
                       <Button
@@ -2755,7 +2865,7 @@ const ResumeBuilder = () => {
 
                   {formStep === 5 && (<>
                   {/* Hobbies */}
-                  <div className="space-y-3">
+                  <div ref={(el) => sectionRefs.current[5] = el} className="space-y-3 scroll-mt-8">
                     <h4 className="font-semibold text-lg text-gray-700 border-b border-primary/20 pb-2">Hobbies & Interests</h4>
                     <div className="flex flex-wrap gap-1 lg:gap-2 mb-2">
                       {currentResumeData.hobbies.map((hobby, index) => (
@@ -2815,7 +2925,7 @@ const ResumeBuilder = () => {
 
                   {formStep === 6 && (<>
                   {/* Job Description for AI Generation */}
-                  <div className="space-y-3 lg:space-y-4">
+                  <div ref={(el) => sectionRefs.current[6] = el} className="space-y-3 lg:space-y-4 scroll-mt-8">
                     <h4 className="font-semibold text-base lg:text-lg border-b pb-2">Job Description</h4>
                     <VoiceInput
                       fieldName="jobDescription"

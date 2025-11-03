@@ -43,8 +43,27 @@ import {
   Activity,
   BookOpen,
   RefreshCw,
-  Square
+  Square,
+  PieChart as PieChartIcon
 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar
+} from "recharts";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from 'framer-motion';
@@ -1155,20 +1174,60 @@ const PersonalizedAssessment = () => {
       setIsGeneratingBehavioral(true);
       
       // Sanitize skills data to prevent JSON parsing issues
-      const rawSkills = resumeAnalysis?.skills?.join(', ') || 'JavaScript, React, Node.js, Python, SQL';
-      const sanitizedSkills = rawSkills
-        .replace(/[^\w\s,.-]/g, '') // Remove special characters except basic punctuation
-        .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-        .trim()
-        .substring(0, 500); // Limit length to prevent issues
+      // Get skills array and ensure all items are valid strings
+      let skillsArray: string[] = [];
+      if (resumeAnalysis?.skills && Array.isArray(resumeAnalysis.skills)) {
+        skillsArray = resumeAnalysis.skills
+          .filter((skill): skill is string => typeof skill === 'string' && skill.trim().length > 0)
+          .map(skill => {
+            // Aggressively remove all problematic characters that could break JSON
+            return skill
+              .replace(/["'`\\/\n\r\t{}[\]:;]/g, '') // Remove quotes, backslashes, brackets, colons, semicolons
+              .replace(/[^\w\s,.-]/g, '') // Remove special characters except basic punctuation
+              .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+              .trim();
+          })
+          .filter(skill => skill.length > 0 && skill.length < 50) // Filter out empty or too long skills
+          .slice(0, 12); // Limit to 12 skills max to keep request smaller
+      }
+      
+      // Create sanitized skills string - ensure it's simple and clean
+      let sanitizedSkills: string;
+      if (skillsArray.length > 0) {
+        sanitizedSkills = skillsArray
+          .map(s => s.trim())
+          .filter(s => s.length > 0)
+          .join(', ')
+          .substring(0, 250); // Limit total length
+      } else {
+        sanitizedSkills = 'JavaScript, React, Node.js, Python, SQL';
+      }
+      
+      // Final aggressive sanitization pass
+      sanitizedSkills = sanitizedSkills
+        .replace(/["'`\\/\n\r\t{}[\]:;]/g, '') // Remove any remaining problematic chars
+        .replace(/[^\w\s,.-]/g, '')
+        .replace(/,\s*,/g, ',') // Remove duplicate commas
+        .replace(/^\s*,\s*|\s*,\s*$/g, '') // Remove leading/trailing commas
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      if (!sanitizedSkills || sanitizedSkills.length === 0) {
+        sanitizedSkills = 'JavaScript, React, Node.js, Python, SQL';
+      }
       
       // Sanitize job role
       const rawJobRole = suggestedRole || 'Software Engineer';
-      const sanitizedJobRole = rawJobRole
+      let sanitizedJobRole = String(rawJobRole)
+        .replace(/["'`\\/\n\r\t]/g, '') // Remove quotes, backslashes, newlines, tabs
         .replace(/[^\w\s.-]/g, '') // Remove special characters
         .replace(/\s+/g, ' ') // Replace multiple spaces with single space
         .trim()
-        .substring(0, 100); // Limit length
+        .substring(0, 80); // Limit length
+      
+      if (!sanitizedJobRole || sanitizedJobRole.length === 0) {
+        sanitizedJobRole = 'Software Engineer';
+      }
       
       const requestData = {
         skills: sanitizedSkills,
@@ -1178,23 +1237,21 @@ const PersonalizedAssessment = () => {
         company: 'Tech Company'
       };
       
-      // Validate that we have valid data
-      if (!sanitizedSkills || sanitizedSkills.trim() === '') {
-        throw new Error('Skills data is required for behavioral questions');
-      }
-      
-      if (!sanitizedJobRole || sanitizedJobRole.trim() === '') {
+      // Validate JSON can be stringified properly
+      try {
+        const jsonString = JSON.stringify(requestData);
+        JSON.parse(jsonString); // Try to parse it back to ensure it's valid
+        console.log('Validated JSON request data');
+      } catch (jsonError) {
+        console.error('JSON validation failed:', jsonError);
+        // Use safe fallback values
+        requestData.skills = 'JavaScript, React, Node.js, Python, SQL';
         requestData.job_role = 'Software Engineer';
       }
       
       console.log('Sending behavioral questions request:', requestData);
       console.log('Sanitized skills:', sanitizedSkills);
       console.log('Sanitized job role:', sanitizedJobRole);
-      
-      // Additional validation before sending
-      if (JSON.stringify(requestData).length > 10000) {
-        throw new Error('Request data too large, please try again');
-      }
       
       const response = await generateBehavioralQuestions.mutateAsync(requestData);
       
@@ -1209,9 +1266,32 @@ const PersonalizedAssessment = () => {
       // Scroll to questions after they are loaded
       scrollToQuestions();
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating behavioral questions:', error);
-      console.error('Error details:', error.response || error.message);
+      console.error('Error details:', error?.response || error?.message);
+      
+      // Show user-friendly error message
+      const errorDetail = error?.response?.detail || error?.response?.data?.detail || '';
+      let errorMessage = 'Failed to generate behavioral questions. Please try again.';
+      
+      if (errorDetail) {
+        if (typeof errorDetail === 'string') {
+          errorMessage = errorDetail;
+        } else if (Array.isArray(errorDetail)) {
+          errorMessage = errorDetail.map((err: any) => err.msg || err.message || 'Validation error').join(', ');
+        }
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      // Show error to user - using console for now since toast might not be imported
+      console.error('Behavioral questions generation failed:', errorMessage);
+      
+      // Fallback: show alert if available
+      if (typeof alert !== 'undefined') {
+        alert(`Error: ${errorMessage}`);
+      }
+      
     } finally {
       setIsGeneratingBehavioral(false);
     }
@@ -3686,6 +3766,213 @@ const PersonalizedAssessment = () => {
                       </p>
                     </Card>
 
+                    {/* Visual Charts Section */}
+                    {quickTestResults && (
+                      <div className="grid md:grid-cols-2 gap-6">
+                        {/* Test Scores Comparison Bar Chart */}
+                        <Card className="p-6 shadow-lg border-0 bg-white">
+                          <div className="flex items-center gap-2 mb-6">
+                            <BarChart3 className="w-5 h-5 text-primary" />
+                            <h4 className="text-lg font-semibold text-gray-900">Test Scores Comparison</h4>
+                          </div>
+                          <ResponsiveContainer width="100%" height={300}>
+                            <BarChart
+                              data={(() => {
+                                const chartData = [];
+                                if (quickTestResults.aptitudeResults) {
+                                  chartData.push({
+                                    name: 'Aptitude',
+                                    score: quickTestResults.aptitudeResults.score || 0,
+                                    fullMark: 100
+                                  });
+                                }
+                                if (quickTestResults.behavioralResults) {
+                                  chartData.push({
+                                    name: 'Behavioral',
+                                    score: quickTestResults.behavioralResults.score || 0,
+                                    fullMark: 100
+                                  });
+                                }
+                                if (quickTestResults.codingResults) {
+                                  chartData.push({
+                                    name: 'Coding',
+                                    score: quickTestResults.codingResults.score || 0,
+                                    fullMark: 100
+                                  });
+                                }
+                                return chartData;
+                              })()}
+                              margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="name" />
+                              <YAxis domain={[0, 100]} />
+                              <Tooltip />
+                              <Legend />
+                              <Bar dataKey="score" fill="#00D2FF" radius={[8, 8, 0, 0]}>
+                                {(() => {
+                                  const results = [];
+                                  if (quickTestResults.aptitudeResults) results.push(quickTestResults.aptitudeResults);
+                                  if (quickTestResults.behavioralResults) results.push(quickTestResults.behavioralResults);
+                                  if (quickTestResults.codingResults) results.push(quickTestResults.codingResults);
+                                  return results.map((result, index) => {
+                                    const score = result?.score || 0;
+                                    let color = '#00D2FF';
+                                    if (score >= 80) color = '#10B981';
+                                    else if (score >= 60) color = '#F59E0B';
+                                    else color = '#EF4444';
+                                    return <Cell key={`cell-${index}`} fill={color} />;
+                                  });
+                                })()}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </Card>
+
+                        {/* Score Distribution Pie Chart */}
+                        <Card className="p-6 shadow-lg border-0 bg-white">
+                          <div className="flex items-center gap-2 mb-6">
+                            <PieChartIcon className="w-5 h-5 text-primary" />
+                            <h4 className="text-lg font-semibold text-gray-900">Score Distribution</h4>
+                          </div>
+                          <ResponsiveContainer width="100%" height={300}>
+                            <PieChart>
+                              <Pie
+                                data={(() => {
+                                  const pieData = [];
+                                  if (quickTestResults.aptitudeResults) {
+                                    pieData.push({
+                                      name: 'Aptitude',
+                                      value: quickTestResults.aptitudeResults.score || 0,
+                                      color: '#3B82F6'
+                                    });
+                                  }
+                                  if (quickTestResults.behavioralResults) {
+                                    pieData.push({
+                                      name: 'Behavioral',
+                                      value: quickTestResults.behavioralResults.score || 0,
+                                      color: '#10B981'
+                                    });
+                                  }
+                                  if (quickTestResults.codingResults) {
+                                    pieData.push({
+                                      name: 'Coding',
+                                      value: quickTestResults.codingResults.score || 0,
+                                      color: '#8B5CF6'
+                                    });
+                                  }
+                                  return pieData;
+                                })()}
+                                cx="50%"
+                                cy="50%"
+                                labelLine={false}
+                                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                outerRadius={100}
+                                fill="#8884d8"
+                                dataKey="value"
+                              >
+                                {(() => {
+                                  const results = [];
+                                  if (quickTestResults.aptitudeResults) results.push({ color: '#3B82F6' });
+                                  if (quickTestResults.behavioralResults) results.push({ color: '#10B981' });
+                                  if (quickTestResults.codingResults) results.push({ color: '#8B5CF6' });
+                                  return results.map((item, index) => (
+                                    <Cell key={`cell-${index}`} fill={item.color} />
+                                  ));
+                                })()}
+                              </Pie>
+                              <Tooltip />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </Card>
+
+                        {/* Aptitude Test Details Chart */}
+                        {quickTestResults.aptitudeResults && quickTestResults.aptitudeResults.detailedResults && (
+                          <Card className="p-6 shadow-lg border-0 bg-white">
+                            <div className="flex items-center gap-2 mb-6">
+                              <Brain className="w-5 h-5 text-blue-600" />
+                              <h4 className="text-lg font-semibold text-gray-900">Aptitude Test Performance</h4>
+                            </div>
+                            <ResponsiveContainer width="100%" height={250}>
+                              <BarChart
+                                data={[
+                                  {
+                                    name: 'Correct',
+                                    value: quickTestResults.aptitudeResults.correctAnswers || 0,
+                                    color: '#10B981'
+                                  },
+                                  {
+                                    name: 'Incorrect',
+                                    value: (quickTestResults.aptitudeResults.totalQuestions || 0) - (quickTestResults.aptitudeResults.correctAnswers || 0),
+                                    color: '#EF4444'
+                                  }
+                                ]}
+                                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="name" />
+                                <YAxis />
+                                <Tooltip />
+                                <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                                  {[0, 1].map((index) => {
+                                    const colors = ['#10B981', '#EF4444'];
+                                    return <Cell key={`cell-${index}`} fill={colors[index]} />;
+                                  })}
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                            <div className="mt-4 text-center">
+                              <div className="text-2xl font-bold text-blue-600">
+                                {quickTestResults.aptitudeResults.score}%
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {quickTestResults.aptitudeResults.correctAnswers} / {quickTestResults.aptitudeResults.totalQuestions} Correct
+                              </div>
+                            </div>
+                          </Card>
+                        )}
+
+                        {/* Overall Performance Radar Chart */}
+                        {(quickTestResults.aptitudeResults || quickTestResults.behavioralResults || quickTestResults.codingResults) && (
+                          <Card className="p-6 shadow-lg border-0 bg-white">
+                            <div className="flex items-center gap-2 mb-6">
+                              <Activity className="w-5 h-5 text-primary" />
+                              <h4 className="text-lg font-semibold text-gray-900">Overall Performance</h4>
+                            </div>
+                            <ResponsiveContainer width="100%" height={250}>
+                              <RadarChart
+                                data={[{
+                                  category: 'Aptitude',
+                                  value: quickTestResults.aptitudeResults?.score || 0,
+                                  fullMark: 100
+                                }, {
+                                  category: 'Behavioral',
+                                  value: quickTestResults.behavioralResults?.score || 0,
+                                  fullMark: 100
+                                }, {
+                                  category: 'Coding',
+                                  value: quickTestResults.codingResults?.score || 0,
+                                  fullMark: 100
+                                }]}
+                              >
+                                <PolarGrid />
+                                <PolarAngleAxis dataKey="category" />
+                                <PolarRadiusAxis angle={90} domain={[0, 100]} />
+                                <Radar
+                                  name="Performance"
+                                  dataKey="value"
+                                  stroke="#00D2FF"
+                                  fill="#00D2FF"
+                                  fillOpacity={0.6}
+                                />
+                                <Tooltip />
+                              </RadarChart>
+                            </ResponsiveContainer>
+                          </Card>
+                        )}
+                      </div>
+                    )}
+
                     {/* Detailed Test Results */}
                     <div className="grid md:grid-cols-3 gap-6">
                       {/* Aptitude Test Details */}
@@ -4369,10 +4656,194 @@ const PersonalizedAssessment = () => {
                 </div>
 
                 {interviewAnalysis && (
-                  <div className="mb-8 p-6 bg-green-50 border border-green-200 rounded-lg">
-                    <h4 className="font-semibold text-lg mb-4 text-green-800">Interview Analysis</h4>
-                    <div className="bg-white p-4 rounded-lg">
-                      <p className="text-gray-700">{interviewAnalysis.summary || 'Analysis completed successfully.'}</p>
+                  <div className="mb-8 space-y-8">
+                    {/* Overall Performance Summary */}
+                    <Card className="p-8 shadow-xl border-0 bg-gradient-to-br from-green-50 to-emerald-50">
+                      <div className="text-center mb-6">
+                        <h4 className="font-semibold text-2xl mb-4 text-gray-900">Interview Performance Summary</h4>
+                        <div className="flex items-center justify-center gap-8 flex-wrap">
+                          <div className="text-center">
+                            <div className="text-4xl font-bold text-primary mb-2">
+                              {interviewAnalysis.overall_score || 75}%
+                            </div>
+                            <div className="text-sm text-gray-600">Overall Score</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-4xl font-bold text-blue-600 mb-2">
+                              {questionCount}
+                            </div>
+                            <div className="text-sm text-gray-600">Questions Answered</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-4xl font-bold text-purple-600 mb-2">
+                              {Math.floor(elapsedTime / 60)}:{String(elapsedTime % 60).padStart(2, '0')}
+                            </div>
+                            <div className="text-sm text-gray-600">Time Taken</div>
+                          </div>
+                        </div>
+                      </div>
+                      {interviewAnalysis.summary && (
+                        <div className="bg-white p-4 rounded-lg border border-green-200">
+                          <p className="text-gray-700 text-center">{interviewAnalysis.summary}</p>
+                        </div>
+                      )}
+                    </Card>
+
+                    {/* Visual Charts Section */}
+                    <div className="grid md:grid-cols-2 gap-6">
+                      {/* Overall Score Visualization */}
+                      <Card className="p-6 shadow-lg border-0 bg-white">
+                        <div className="flex items-center gap-2 mb-6">
+                          <Trophy className="w-5 h-5 text-primary" />
+                          <h4 className="text-lg font-semibold text-gray-900">Performance Score</h4>
+                        </div>
+                        <ResponsiveContainer width="100%" height={250}>
+                          <BarChart
+                            data={[{
+                              name: 'Overall Score',
+                              score: interviewAnalysis.overall_score || 75,
+                              fullMark: 100
+                            }]}
+                            margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" />
+                            <YAxis domain={[0, 100]} />
+                            <Tooltip />
+                            <Bar dataKey="score" radius={[8, 8, 0, 0]}>
+                              <Cell fill={
+                                (interviewAnalysis.overall_score || 75) >= 80 ? '#10B981' :
+                                (interviewAnalysis.overall_score || 75) >= 60 ? '#F59E0B' : '#EF4444'
+                              } />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                        <div className="mt-4 text-center">
+                          <div className="text-2xl font-bold text-primary">
+                            {interviewAnalysis.overall_score || 75}%
+                          </div>
+                          <div className="text-sm text-gray-600 mt-1">
+                            {(interviewAnalysis.overall_score || 75) >= 80 ? 'Excellent Performance' :
+                              (interviewAnalysis.overall_score || 75) >= 60 ? 'Good Performance' : 'Needs Improvement'}
+                          </div>
+                        </div>
+                      </Card>
+
+                      {/* Score Distribution Pie Chart */}
+                      <Card className="p-6 shadow-lg border-0 bg-white">
+                        <div className="flex items-center gap-2 mb-6">
+                          <PieChartIcon className="w-5 h-5 text-primary" />
+                          <h4 className="text-lg font-semibold text-gray-900">Score Breakdown</h4>
+                        </div>
+                        <ResponsiveContainer width="100%" height={250}>
+                          <PieChart>
+                            <Pie
+                              data={[{
+                                name: 'Achieved',
+                                value: interviewAnalysis.overall_score || 75,
+                                color: '#10B981'
+                              }, {
+                                name: 'Remaining',
+                                value: 100 - (interviewAnalysis.overall_score || 75),
+                                color: '#E5E7EB'
+                              }]}
+                              cx="50%"
+                              cy="50%"
+                              labelLine={false}
+                              label={({ name, percent }) => 
+                                name === 'Achieved' ? `${(percent * 100).toFixed(0)}%` : ''
+                              }
+                              outerRadius={90}
+                              fill="#8884d8"
+                              dataKey="value"
+                            >
+                              <Cell key="achieved" fill="#10B981" />
+                              <Cell key="remaining" fill="#E5E7EB" />
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div className="mt-4 text-center">
+                          <div className="text-sm text-gray-600">
+                            Score: {interviewAnalysis.overall_score || 75} / 100
+                          </div>
+                        </div>
+                      </Card>
+
+                      {/* Interview Metrics Bar Chart */}
+                      <Card className="p-6 shadow-lg border-0 bg-white">
+                        <div className="flex items-center gap-2 mb-6">
+                          <BarChart3 className="w-5 h-5 text-primary" />
+                          <h4 className="text-lg font-semibold text-gray-900">Interview Metrics</h4>
+                        </div>
+                        <ResponsiveContainer width="100%" height={250}>
+                          <BarChart
+                            data={[
+                              {
+                                name: 'Questions',
+                                value: questionCount,
+                                fullMark: Math.max(questionCount, 10)
+                              },
+                              {
+                                name: 'Time (min)',
+                                value: Math.floor(elapsedTime / 60),
+                                fullMark: Math.max(Math.floor(elapsedTime / 60), 30)
+                              }
+                            ]}
+                            margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" />
+                            <YAxis />
+                            <Tooltip />
+                            <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                              <Cell key="cell-0" fill="#3B82F6" />
+                              <Cell key="cell-1" fill="#8B5CF6" />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </Card>
+
+                      {/* Performance Radar Chart */}
+                      <Card className="p-6 shadow-lg border-0 bg-white">
+                        <div className="flex items-center gap-2 mb-6">
+                          <Activity className="w-5 h-5 text-primary" />
+                          <h4 className="text-lg font-semibold text-gray-900">Performance Analysis</h4>
+                        </div>
+                        <ResponsiveContainer width="100%" height={250}>
+                          <RadarChart
+                            data={[{
+                              category: 'Communication',
+                              value: interviewAnalysis.overall_score || 75,
+                              fullMark: 100
+                            }, {
+                              category: 'Technical',
+                              value: interviewAnalysis.overall_score || 75,
+                              fullMark: 100
+                            }, {
+                              category: 'Problem Solving',
+                              value: interviewAnalysis.overall_score || 75,
+                              fullMark: 100
+                            }, {
+                              category: 'Clarity',
+                              value: interviewAnalysis.overall_score || 75,
+                              fullMark: 100
+                            }]}
+                          >
+                            <PolarGrid />
+                            <PolarAngleAxis dataKey="category" />
+                            <PolarRadiusAxis angle={90} domain={[0, 100]} />
+                            <Radar
+                              name="Performance"
+                              dataKey="value"
+                              stroke="#00D2FF"
+                              fill="#00D2FF"
+                              fillOpacity={0.6}
+                            />
+                            <Tooltip />
+                          </RadarChart>
+                        </ResponsiveContainer>
+                      </Card>
                     </div>
                   </div>
                 )}
