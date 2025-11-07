@@ -41,22 +41,9 @@ import {
   getResumeApiV1Resumes_ResumeId_Get,
   getAnalysisApiV1Resumes_ResumeId_AnalysisGet,
   deleteResumeApiV1Resumes_ResumeId_Delete,
-  // Job API imports
   listJobsApiV1JobsGet,
-  createJobApiV1JobsPost,
   getJobApiV1Jobs_JobId_Get,
-  updateJobApiV1Jobs_JobId_Put,
-  deleteJobApiV1Jobs_JobId_Delete,
-  restoreJobApiV1Jobs_JobId_RestorePost,
-  listJobAuditsApiV1Jobs_JobId_AuditsGet,
-  hardDeleteJobApiV1Jobs_JobId_HardDeleteDelete,
-  jobsStatsApiV1JobsStatsGet,
-  // Company API imports
-  listCompaniesApiV1CompaniesGet,
-  createCompanyApiV1CompaniesPost,
-  getCompanyApiV1Companies_CompanyId_Get,
-  updateCompanyApiV1Companies_CompanyId_Put,
-  deleteCompanyApiV1Companies_CompanyId_Delete
+  listCompaniesApiV1CompaniesGet
 } from "@/hooks/useApis";
 
 
@@ -75,6 +62,7 @@ const JobListing = () => {
   const [showResumeAnalysis, setShowResumeAnalysis] = useState(false);
   const [useResumeMatching, setUseResumeMatching] = useState(false);
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
+  const [recommendedJobs, setRecommendedJobs] = useState<any[]>([]);
   
   // Voice input states
   const [isRecording, setIsRecording] = useState(false);
@@ -101,6 +89,26 @@ const JobListing = () => {
     enabled: !!selectedResumeId,
     resume_id: selectedResumeId
   });
+  
+  // Job listing query - using new API endpoints
+  const { data: jobsData, isLoading: isLoadingJobsList, refetch: refetchJobs } = listJobsApiV1JobsGet();
+  const { data: companiesData } = listCompaniesApiV1CompaniesGet();
+  const { mutate: deleteResume } = deleteResumeApiV1Resumes_ResumeId_Delete();
+  
+  // isLoadingJobs is now derived from isLoadingJobsList
+  const isLoadingJobs = isLoadingJobsList;
+
+  // Extract the actual analysis data - handle both nested and direct structures
+  const analysisData = resumeAnalysis?.analysis || (resumeAnalysis?.status === 'COMPLETE' ? resumeAnalysis : null);
+  const isAnalysisComplete = resumeAnalysis?.status === 'COMPLETE';
+  const isAnalysisPending = resumeAnalysis?.status === 'PENDING' || resumeAnalysis?.status === 'IN_PROGRESS';
+  const isAnalysisFailed = resumeAnalysis?.status === 'FAILED';
+
+  // Function to refresh jobs from the new API
+  const handleRefreshJobs = () => {
+    console.log('🔄 Refreshing jobs from API...');
+    refetchJobs();
+  };
 
   // Update loading state when analysis completes
   useEffect(() => {
@@ -109,13 +117,40 @@ const JobListing = () => {
     }
   }, [isAnalysisLoading, resumeAnalysis, analysisError]);
 
-
-  // Extract the actual analysis data - handle both nested and direct structures
-  const analysisData = resumeAnalysis?.analysis || (resumeAnalysis?.status === 'COMPLETE' ? resumeAnalysis : null);
-  const isAnalysisComplete = resumeAnalysis?.status === 'COMPLETE';
-  const isAnalysisPending = resumeAnalysis?.status === 'PENDING' || resumeAnalysis?.status === 'IN_PROGRESS';
-  const isAnalysisFailed = resumeAnalysis?.status === 'FAILED';
-  const { mutate: deleteResume } = deleteResumeApiV1Resumes_ResumeId_Delete();
+  // Update recommended jobs when jobs data is loaded
+  useEffect(() => {
+    if (jobsData) {
+      console.log('✅ Jobs data received:', jobsData);
+      const jobs = Array.isArray(jobsData) ? jobsData : jobsData?.jobs || [];
+      console.log('📊 Number of jobs:', jobs.length);
+      
+      // If we have resume analysis, filter jobs by skills
+      if (resumeAnalysis && resumeAnalysis.status === 'COMPLETE' && analysisData?.skills) {
+        const skills = Array.isArray(analysisData.skills) 
+          ? analysisData.skills 
+          : typeof analysisData.skills === 'string'
+          ? analysisData.skills.split(',').map(s => s.trim())
+          : [];
+        
+        // Filter jobs that match the skills
+        const filteredJobs = jobs.filter((job: any) => {
+          const jobSkills = job.skills || [];
+          return jobSkills.some((skill: string) => 
+            skills.some((resumeSkill: string) => 
+              skill.toLowerCase().includes(resumeSkill.toLowerCase()) || 
+              resumeSkill.toLowerCase().includes(skill.toLowerCase())
+            )
+          );
+        });
+        
+        setRecommendedJobs(filteredJobs);
+        setUseResumeMatching(true);
+      } else {
+        // If no resume analysis, show all jobs
+        setRecommendedJobs(jobs);
+      }
+    }
+  }, [jobsData, resumeAnalysis, analysisData]);
   
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -481,12 +516,14 @@ const JobListing = () => {
 
   // Function to filter jobs based on resume analysis
   const getResumeBasedJobs = () => {
-    if (!analysisData?.skills || !jobs) return jobs || [];
-    
-    return (jobs || []).map(job => ({
-      ...job,
-      matchScore: getJobMatchScore(job)
-    })).sort((a, b) => b.matchScore - a.matchScore);
+    // Return recommended jobs from the microservice
+    if (recommendedJobs && recommendedJobs.length > 0) {
+      return recommendedJobs.map(job => ({
+        ...job,
+        matchScore: getJobMatchScore(job)
+      })).sort((a, b) => b.matchScore - a.matchScore);
+    }
+    return [];
   };
 
   const categories = [
@@ -578,8 +615,7 @@ const JobListing = () => {
     "Enterprise (5000+)"
   ];
 
-  // Real job data from API
-  const { data: jobs, isLoading: jobsLoading, error: jobsError } = listJobsApiV1JobsGet();
+  // Jobs data removed - now using resume-based skill extraction only
 
   return (
     <div className="min-h-screen bg-[#031527]">
@@ -1028,21 +1064,40 @@ const JobListing = () => {
             </div>
           </div>
 
-          {/* Job Listings */}
+          {/* Job Listings - using microservice job recommendations */}
           <div className="max-w-6xl mx-auto px-3 sm:px-6">
-            {jobsLoading && (
-              <div className="text-center py-8">
-                <div className="text-lg text-gray-600">Loading jobs...</div>
-              </div>
-            )}
-          {jobsError && (
+
+          {(isLoadingJobs || isLoadingJobsList) && (
             <div className="text-center py-8">
-              <div className="text-lg text-red-600">Error loading jobs: {jobsError.message}</div>
+              <div className="flex items-center justify-center gap-3">
+                <RefreshCw className="animate-spin text-gray-600" />
+                <div className="text-lg text-gray-600">Loading job recommendations based on your skills...</div>
+              </div>
+            </div>
+          )}
+
+          {!isLoadingJobs && !isLoadingJobsList && recommendedJobs.length === 0 && (
+            <div className="text-center py-8">
+              <div className="text-lg text-gray-600 mb-4">
+                {selectedResumeId ? 'No job recommendations found.' : 'Upload a resume to get personalized job recommendations'}
+              </div>
+              <div className="flex gap-4 justify-center items-center">
+                <Button onClick={handleRefreshJobs} className="mt-2 bg-blue-600 hover:bg-blue-700">
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Refresh Jobs
+                </Button>
+                {selectedResumeId && (
+                  <Button onClick={handleRefreshJobs} variant="outline" className="mt-2">
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Retry Job Recommendations
+                  </Button>
+                )}
+              </div>
             </div>
           )}
 
           <div className="grid gap-4 sm:gap-6 my-6">
-            {(useResumeMatching ? getResumeBasedJobs() : (jobs || []))
+            {getResumeBasedJobs()
               .filter(job => selectedCategory === "All" || job.category === selectedCategory)
               .filter(job => selectedJobType === "All" || job.employment_type === selectedJobType)
               .filter(job => selectedLocation === "All" || job.location === selectedLocation)

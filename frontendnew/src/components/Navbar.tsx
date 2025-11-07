@@ -34,7 +34,7 @@ const Navbar = () => {
     },
     { name: "Blogs/News", path: "/blogs" },
     { name: "Mentorship", path: "/mentorship" },
-    { name: "Try Placemate", path: "https://zettanix.in/auth/login", external: true },
+    { name: "Try Placemate", path: "https://place-pro-theta.vercel.app/", external: true },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -48,13 +48,18 @@ const Navbar = () => {
       <div className="max-w-full h-16 mx-auto sm:px-4 lg:px-6">
         <div className="flex justify-between items-center h-16 px-2 sm:px-6 lg:px-8">
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2">
+          <a 
+            href="https://place-pro-theta.vercel.app/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center space-x-2"
+          >
             <img
               src="/logos/sttarkel_logo.png"
               alt="Company Logo"
               className="h-8 sm:h-10 md:h-12 w-auto"
             />
-          </Link>
+          </a>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-6">

@@ -44,7 +44,8 @@ import { TextHoverEffect } from "@/components/ui/text-hover-effect";
 import { 
   uploadResumeApiV1ResumesPost,
   getAnalysisApiV1Resumes_ResumeId_AnalysisGet,
-  listJobsApiV1JobsGet,
+  recommendJobsRecommendPost,
+  searchJobsSearchPost,
   generateQuestionsGenerateAptitudePost,
   evaluateAnswersEvaluateAptitudePost,
   generateWritingPromptGenerateWritingPromptPost,
@@ -95,10 +96,8 @@ const AIAssessment = () => {
 
   // API hooks
   const uploadResume = uploadResumeApiV1ResumesPost();
-  const { data: jobsData, isLoading: jobsLoading, error: jobsError, refetch: refetchJobs } = listJobsApiV1JobsGet({
-    enabled: true, // Ensure jobs API is always called
-    retry: 3
-  });
+  const { mutate: recommendJobs } = recommendJobsRecommendPost();
+  const { mutate: searchJobs } = searchJobsSearchPost();
   const { data: analysisData, isLoading: analysisLoading, error: analysisError, refetch: refetchAnalysis } = getAnalysisApiV1Resumes_ResumeId_AnalysisGet({
     resume_id: resumeId,
     enabled: !!resumeId,
@@ -118,9 +117,6 @@ const AIAssessment = () => {
   // Debug API calls
   useEffect(() => {
     console.log('🔍 API Status:', {
-      jobsLoading,
-      jobsData: jobsData?.length || 0,
-      jobsError,
       analysisLoading,
       analysisData: !!analysisData,
       analysisError,
@@ -145,7 +141,7 @@ const AIAssessment = () => {
         allFields: Object.keys(analysisData)
       });
     }
-  }, [jobsLoading, jobsData, jobsError, analysisLoading, analysisData, analysisError, resumeId]);
+  }, [analysisLoading, analysisData, analysisError, resumeId]);
 
   // Scroll to top when component mounts or tab changes
   useEffect(() => {
@@ -215,6 +211,26 @@ const AIAssessment = () => {
         
         setExtractedSkills(skills);
         console.log('🎯 Skills extracted successfully:', skills);
+        
+        // Fetch job recommendations based on extracted skills
+        if (skills && skills.length > 0) {
+          console.log('🎯 Fetching job recommendations for skills:', skills);
+          recommendJobs(
+            { skills: Array.isArray(skills) ? skills : [skills] },
+            {
+              onSuccess: (data: any) => {
+                console.log('✅ Job recommendations received:', data);
+                const jobs = Array.isArray(data) ? data : data?.jobs || [];
+                setRecommendedJobs(jobs);
+                // Store in localStorage for other pages
+                localStorage.setItem('recommendedJobs', JSON.stringify(jobs));
+              },
+              onError: (error: any) => {
+                console.error('❌ Error fetching job recommendations:', error);
+              }
+            }
+          );
+        }
         
         // Generate job description from analysis
         if (analysisData.summary) {
@@ -299,14 +315,9 @@ const AIAssessment = () => {
     return Math.min(baseMatch + bonus, 100);
   };
 
-  // Function to get resume-based jobs (same as JobListing)
+  // Function to get resume-based jobs (jobs API removed)
   const getResumeBasedJobs = () => {
-    if (!analysisData?.skills) return jobsData || [];
-    
-    return (jobsData || []).map(job => ({
-      ...job,
-      matchScore: getJobMatchScore(job)
-    })).sort((a, b) => b.matchScore - a.matchScore);
+    return []; // Jobs API removed, only using resume-based skill extraction
   };
 
   // Assessment functions
@@ -404,21 +415,7 @@ const AIAssessment = () => {
     setActiveTab('assessment');
   };
 
-  // Handle jobs data for recommendations
-  useEffect(() => {
-    if (jobsData) {
-      console.log('💼 Jobs data available:', jobsData.length, 'jobs');
-      console.log('💼 Analysis data status:', analysisData?.status);
-      console.log('💼 Analysis skills:', analysisData?.skills);
-      
-      // Use the same logic as JobListing
-      const resumeBasedJobs = getResumeBasedJobs();
-      console.log('💼 Resume-based jobs:', resumeBasedJobs.length);
-      
-      // Take top 5 jobs
-      setRecommendedJobs(resumeBasedJobs.slice(0, 5));
-    }
-  }, [jobsData, analysisData]);
+  // Jobs API removed - no longer fetching job recommendations
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

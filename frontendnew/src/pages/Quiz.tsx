@@ -103,7 +103,7 @@ const Quiz: React.FC = () => {
       color: 'text-green-600 bg-green-100 border-green-200'
     },
     behavioral: {
-      title: "Behavioral Assessment",
+      title: "Scenario-Based Assessment",
       description: "Evaluate your soft skills and behavioral patterns",
       icon: Users,
       difficulty: 'medium' as const,

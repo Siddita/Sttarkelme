@@ -6,9 +6,10 @@ import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Menu as MenuIcon, X, ChevronDown, User, LogOut, ChevronDown as ChevronDownIcon } from "lucide-react"; // hamburger + close icons
+import { Menu as MenuIcon, X, ChevronDown, User, LogOut, ChevronDown as ChevronDownIcon, LogIn, LayoutDashboard } from "lucide-react"; // hamburger + close icons
 import { useAuth } from "@/contexts/AuthContext";
 // import { Menu, X, ChevronDown } from "lucide-react";
+import Dashboard from './../../../../../ainode-main/app/page';
 
 const transition = {
   type: "spring",
@@ -96,6 +97,23 @@ export const Menu = ({
   const [servicesMobileOpen, setServicesMobileOpen] = useState(false);
   const { isAuthenticated, user, logout } = useAuth();
   
+  
+// ✅ ADD THIS useEffect — it closes the dropdown when clicking outside
+  useEffect(() => {
+  function handleClickOutside(e) {
+    if (
+      profileOpen &&
+      !e.target.closest('[data-profile-dropdown]') &&
+      !e.target.closest('[data-profile-button]')
+    ) {
+      setProfileOpen(false);
+    }
+  }
+
+  document.addEventListener("mousedown", handleClickOutside);
+  return () => document.removeEventListener("mousedown", handleClickOutside);
+}, [profileOpen]);
+
   // Debug profile dropdown state
   useEffect(() => {
     console.log('Profile dropdown state changed:', profileOpen);
@@ -144,13 +162,18 @@ export const Menu = ({
     >
       <div className="flex justify-between items-center h-16 px-4 sm:px-6 lg:px-8">
         {/* Logo */}
-        <Link to="/" className="flex items-center space-x-2">
+        <a 
+          href="https://place-pro-theta.vercel.app/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="flex items-center space-x-2"
+        >
           <img
             src="/logos/AIspire_logo5.jpg"
             alt="Company Logo"
             className="h-8 sm:h-10 md:h-12 w-auto"
           />
-        </Link>
+        </a>
 
         {/* Desktop Menu */}
         <div className="hidden md:flex items-center space-x-6">{children}</div>
@@ -160,6 +183,7 @@ export const Menu = ({
           {isAuthenticated ? (
             <div className="relative">
               <button
+                data-profile-button
                 onClick={() => {
                   console.log('Profile button clicked, current state:', profileOpen);
                   setProfileOpen(!profileOpen);
@@ -185,9 +209,22 @@ export const Menu = ({
                     {/* User Info */}
                     <div className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-white/20">
                       <div className="font-medium">{user?.name || 'User'}</div>
-                      <div className="text-gray-500 dark:text-gray-400">{user?.email}</div>
+                      <div className="text-gray-500 dark:text-gray-400 truncate max-w-[180px]"><p className="text-xs">{user?.email} </p></div>
                     </div>
                     
+                    {/* Dashboard Button */}
+                    <button
+                      onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      window.location.href = '/overview'; // Or use navigate('/overview') if using React Router
+                      }}
+                      className="w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-900/20 hover:text-gray-800 dark:hover:text-gray-400 flex items-center transition-colors duration-200"
+                    >
+                      <LayoutDashboard className="h-4 w-4 mr-3" />
+                      <span className="font-medium">Dashboard</span>
+                    </button>
+
                     {/* Logout Button */}
                     <button
                       onClick={(e) => {
@@ -201,6 +238,7 @@ export const Menu = ({
                       <LogOut className="h-4 w-4 mr-3" />
                       <span className="font-medium">Logout</span>
                     </button>
+
                   </div>
                 </div>
               )}
@@ -278,6 +316,19 @@ export const Menu = ({
                   <User className="h-4 w-4" />
                   <span>Welcome, {getFirstName()}</span>
                 </div>
+                
+                <button
+                  onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.location.href = '/overview'; // Or use navigate('/overview') if using React Router
+                  }}
+                  className="inline-flex items-center justify-center px-5 py-2 border border-gray-600 border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-2xl font-medium transition-colors cursor-pointer hover:scale-105 anim duration-800"
+                >
+                  <LayoutDashboard className="h-4 w-4 mr-3" />
+                  <span className="font-medium">Dashboard</span>
+                </button>
+                
                 <button
                   onClick={(e) => {
                     e.preventDefault();
@@ -537,9 +588,13 @@ export function Navbar({ className }: { className?: string }) {
         <Link to="/mentorship">
           <MenuItem setActive={setActive} active={null} item="Mentorship" isActive={isMenuItemActive("/mentorship")} />
         </Link>
-        <Link to= "https://zettanix.in/auth/login">
-        <MenuItem setActive={setActive} active={null} item="Try Placemate" />
-        </Link>
+        <a 
+          href="https://place-pro-theta.vercel.app/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+        >
+          <MenuItem setActive={setActive} active={null} item="Try Placemate" />
+        </a>
 
       </Menu>
     </div>

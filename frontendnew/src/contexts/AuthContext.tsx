@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authMeGet } from '@/hooks/useApis';
+import { authMeMeGet } from '@/hooks/useApis';
 
 interface User {
   id: string;
@@ -30,7 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch user info when authenticated - completely disabled to prevent automatic calls
-  const { data: userInfo, refetch: refetchUserInfo } = authMeGet({
+  const { data: userInfo, refetch: refetchUserInfo } = authMeMeGet({
     enabled: false,
     retry: false,
     refetchOnWindowFocus: false,

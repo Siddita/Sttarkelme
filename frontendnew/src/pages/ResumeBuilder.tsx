@@ -33,7 +33,7 @@ import {
   X,
   RefreshCw
 } from "lucide-react";
-import { useState, useRef, useEffect, useLayoutEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, memo, useCallback } from "react";
 import { motion } from 'framer-motion';
 import Footer from "@/components/Footer";
 import { Navbar } from "@/components/ui/navbar-menu";
@@ -53,6 +53,116 @@ import {
   exportPdfLegacyApiExportPdf_Post,
   exportDocxLegacyApiExportDocx_Post
 } from "@/hooks/useApis";
+
+// Voice Input Component - defined outside to prevent recreation on each render
+const VoiceInput = ({ 
+  fieldName, 
+  placeholder, 
+  type = "input", 
+  rows = 4, 
+  value, 
+  onChange,
+  isActive,
+  isRecording,
+  isProcessing,
+  transcript,
+  startVoiceRecording,
+  stopVoiceRecording,
+  applyTranscript
+}: { 
+  fieldName: string; 
+  placeholder: string; 
+  type?: "input" | "textarea";
+  rows?: number;
+  value: string;
+  onChange: (value: string) => void;
+  isActive: boolean;
+  isRecording: boolean;
+  isProcessing: boolean;
+  transcript: string;
+  startVoiceRecording: (fieldName: string) => void;
+  stopVoiceRecording: () => void;
+  applyTranscript: (fieldName: string) => void;
+}) => {
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  
+  // Direct onChange handler
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    onChange(e.target.value);
+  };
+
+  return (
+    <div className="relative">
+      {type === "textarea" ? (
+        <Textarea 
+          value={value}
+          onChange={handleChange}
+          placeholder={placeholder}
+          rows={rows}
+          className="pr-10 lg:pr-12 text-sm"
+          ref={inputRef as any}
+        />
+      ) : (
+        <Input 
+          value={value}
+          onChange={handleChange}
+          placeholder={placeholder}
+          className="pr-10 lg:pr-12 text-sm"
+          ref={inputRef as any}
+        />
+      )}
+      
+      <div className="absolute right-1 lg:right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1 pointer-events-none">
+        {isActive && isRecording ? (
+          <div className="flex items-center gap-1">
+            <div className="w-1.5 h-1.5 lg:w-2 lg:h-2 bg-red-500 rounded-full animate-pulse"></div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={stopVoiceRecording}
+              className="h-6 w-6 lg:h-8 lg:w-8 p-0 pointer-events-auto"
+              title="Stop recording"
+            >
+              <Square className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
+            </Button>
+          </div>
+        ) : isProcessing ? (
+          <div className="flex items-center gap-1">
+            <Loader2 className="h-2.5 w-2.5 lg:h-3 lg:w-3 animate-spin text-blue-500" />
+            <span className="text-xs text-blue-600 hidden sm:inline">Processing...</span>
+          </div>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => startVoiceRecording(fieldName)}
+            className="h-6 w-6 lg:h-8 lg:w-8 p-0 pointer-events-auto"
+            title="Start voice recording"
+            disabled={isProcessing}
+          >
+            <Mic className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
+          </Button>
+        )}
+      </div>
+      
+      {isActive && transcript && (
+        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs lg:text-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <span className="text-blue-700 flex-1 break-words">Voice: {transcript}</span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => applyTranscript(fieldName)}
+              className="h-5 lg:h-6 px-2 text-xs w-full sm:w-auto"
+            >
+              Apply
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const ResumeBuilder = () => {
   const [activeStep, setActiveStep] = useState(1);
@@ -1364,114 +1474,6 @@ const ResumeBuilder = () => {
     toast.success("Voice input applied successfully!");
   };
 
-  // Voice Input Component
-  const VoiceInput = ({ 
-    fieldName, 
-    placeholder, 
-    type = "input", 
-    rows = 4, 
-    value, 
-    onChange 
-  }: { 
-    fieldName: string; 
-    placeholder: string; 
-    type?: "input" | "textarea";
-    rows?: number;
-    value: string;
-    onChange: (value: string) => void;
-  }) => {
-    const isActive = activeField === fieldName;
-    const isProcessing = isTranscribing;
-    const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
-
-    // Keep initial focus in the Job Description field without resetting caret on each keystroke
-    useEffect(() => {
-      if (fieldName === 'jobDescription' && inputRef.current) {
-        if (document.activeElement !== inputRef.current) {
-          inputRef.current.focus();
-          try {
-            const len = (value ?? '').length;
-            // @ts-ignore set caret to end if supported
-            inputRef.current.setSelectionRange?.(len, len);
-          } catch {}
-        }
-      }
-      // only when this VoiceInput is for jobDescription toggles in
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fieldName]);
-    
-    return (
-      <div className="relative">
-        {type === "textarea" ? (
-          <Textarea 
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            rows={rows}
-            className="pr-10 lg:pr-12 text-sm"
-            ref={inputRef as any}
-          />
-        ) : (
-          <Input 
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            className="pr-10 lg:pr-12 text-sm"
-            ref={inputRef as any}
-          />
-        )}
-        
-        <div className="absolute right-1 lg:right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1 pointer-events-none">
-          {isActive && isRecording ? (
-            <div className="flex items-center gap-1">
-              <div className="w-1.5 h-1.5 lg:w-2 lg:h-2 bg-red-500 rounded-full animate-pulse"></div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={stopVoiceRecording}
-                className="h-6 w-6 lg:h-8 lg:w-8 p-0 pointer-events-auto"
-                title="Stop recording"
-              >
-                <Square className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
-              </Button>
-            </div>
-          ) : isProcessing ? (
-            <div className="flex items-center gap-1">
-              <Loader2 className="h-2.5 w-2.5 lg:h-3 lg:w-3 animate-spin text-blue-500" />
-              <span className="text-xs text-blue-600 hidden sm:inline">Processing...</span>
-            </div>
-          ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => startVoiceRecording(fieldName)}
-              className="h-6 w-6 lg:h-8 lg:w-8 p-0 pointer-events-auto"
-              title="Start voice recording"
-              disabled={isProcessing}
-            >
-              <Mic className="h-2.5 w-2.5 lg:h-3 lg:w-3" />
-            </Button>
-          )}
-        </div>
-        
-        {isActive && transcript && (
-          <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs lg:text-sm">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-              <span className="text-blue-700 flex-1 break-words">Voice: {transcript}</span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => applyTranscript(fieldName)}
-                className="h-5 lg:h-6 px-2 text-xs w-full sm:w-auto"
-              >
-                Apply
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
 
   // Resume Templates with different structures and styles
   const resumeTemplates = {
@@ -2302,6 +2304,13 @@ const ResumeBuilder = () => {
                             ...prev,
                             personal_info: { ...prev.personal_info, name: value }
                           }))}
+                          isActive={activeField === "personal_info.name"}
+                          isRecording={isRecording}
+                          isProcessing={isTranscribing}
+                          transcript={transcript}
+                          startVoiceRecording={startVoiceRecording}
+                          stopVoiceRecording={stopVoiceRecording}
+                          applyTranscript={applyTranscript}
                         />
                     </div>
                     <div className={`transition-all duration-500 ${isParsingComplete && currentResumeData.personal_info.email ? 'bg-green-50 border border-green-200 rounded-lg p-2' : ''}`}>
@@ -2314,6 +2323,13 @@ const ResumeBuilder = () => {
                             ...prev,
                             personal_info: { ...prev.personal_info, email: value }
                           }))}
+                          isActive={activeField === "personal_info.email"}
+                          isRecording={isRecording}
+                          isProcessing={isTranscribing}
+                          transcript={transcript}
+                          startVoiceRecording={startVoiceRecording}
+                          stopVoiceRecording={stopVoiceRecording}
+                          applyTranscript={applyTranscript}
                         />
                     </div>
                     <div className={`transition-all duration-500 ${isParsingComplete && currentResumeData.personal_info.phone ? 'bg-green-50 border border-green-200 rounded-lg p-2' : ''}`}>
@@ -2326,6 +2342,13 @@ const ResumeBuilder = () => {
                             ...prev,
                             personal_info: { ...prev.personal_info, phone: value }
                           }))}
+                          isActive={activeField === "personal_info.phone"}
+                          isRecording={isRecording}
+                          isProcessing={isTranscribing}
+                          transcript={transcript}
+                          startVoiceRecording={startVoiceRecording}
+                          stopVoiceRecording={stopVoiceRecording}
+                          applyTranscript={applyTranscript}
                         />
                     </div>
                     <div className={`transition-all duration-500 ${isParsingComplete && currentResumeData.personal_info.location ? 'bg-green-50 border border-green-200 rounded-lg p-2' : ''}`}>
@@ -2338,6 +2361,13 @@ const ResumeBuilder = () => {
                             ...prev,
                             personal_info: { ...prev.personal_info, location: value }
                           }))}
+                          isActive={activeField === "personal_info.location"}
+                          isRecording={isRecording}
+                          isProcessing={isTranscribing}
+                          transcript={transcript}
+                          startVoiceRecording={startVoiceRecording}
+                          stopVoiceRecording={stopVoiceRecording}
+                          applyTranscript={applyTranscript}
                         />
                     </div>
                   </div>
@@ -2352,6 +2382,13 @@ const ResumeBuilder = () => {
                           ...prev,
                           personal_info: { ...prev.personal_info, linkedin: value }
                         }))}
+                        isActive={activeField === "personal_info.linkedin"}
+                        isRecording={isRecording}
+                        isProcessing={isTranscribing}
+                        transcript={transcript}
+                        startVoiceRecording={startVoiceRecording}
+                        stopVoiceRecording={stopVoiceRecording}
+                        applyTranscript={applyTranscript}
                       />
                     </div>
                     <div>
@@ -2364,6 +2401,13 @@ const ResumeBuilder = () => {
                           ...prev,
                           personal_info: { ...prev.personal_info, github: value }
                         }))}
+                        isActive={activeField === "personal_info.github"}
+                        isRecording={isRecording}
+                        isProcessing={isTranscribing}
+                        transcript={transcript}
+                        startVoiceRecording={startVoiceRecording}
+                        stopVoiceRecording={stopVoiceRecording}
+                        applyTranscript={applyTranscript}
                       />
                     </div>
                   </div>
@@ -2382,6 +2426,13 @@ const ResumeBuilder = () => {
                         ...prev,
                         summary: value
                       }))}
+                      isActive={activeField === "summary"}
+                      isRecording={isRecording}
+                      isProcessing={isTranscribing}
+                      transcript={transcript}
+                      startVoiceRecording={startVoiceRecording}
+                      stopVoiceRecording={stopVoiceRecording}
+                      applyTranscript={applyTranscript}
                     />
                   </div>
 
@@ -2465,6 +2516,13 @@ const ResumeBuilder = () => {
                               placeholder="Company Name"
                               value={exp.company}
                               onChange={(value) => updateExperience(index, 'company', value)}
+                              isActive={activeField === `experience.${index}.company`}
+                              isRecording={isRecording}
+                              isProcessing={isTranscribing}
+                              transcript={transcript}
+                              startVoiceRecording={startVoiceRecording}
+                              stopVoiceRecording={stopVoiceRecording}
+                              applyTranscript={applyTranscript}
                             />
                           </div>
                           <div>
@@ -2474,6 +2532,13 @@ const ResumeBuilder = () => {
                               placeholder="Job Title"
                               value={exp.position}
                               onChange={(value) => updateExperience(index, 'position', value)}
+                              isActive={activeField === `experience.${index}.position`}
+                              isRecording={isRecording}
+                              isProcessing={isTranscribing}
+                              transcript={transcript}
+                              startVoiceRecording={startVoiceRecording}
+                              stopVoiceRecording={stopVoiceRecording}
+                              applyTranscript={applyTranscript}
                             />
                           </div>
                           <div>
@@ -2483,6 +2548,13 @@ const ResumeBuilder = () => {
                               placeholder="YYYY-MM"
                               value={exp.start_date}
                               onChange={(value) => updateExperience(index, 'start_date', value)}
+                              isActive={activeField === `experience.${index}.start_date`}
+                              isRecording={isRecording}
+                              isProcessing={isTranscribing}
+                              transcript={transcript}
+                              startVoiceRecording={startVoiceRecording}
+                              stopVoiceRecording={stopVoiceRecording}
+                              applyTranscript={applyTranscript}
                             />
                           </div>
                           <div>
@@ -2492,6 +2564,13 @@ const ResumeBuilder = () => {
                               placeholder="YYYY-MM or Present"
                               value={exp.end_date}
                               onChange={(value) => updateExperience(index, 'end_date', value)}
+                              isActive={activeField === `experience.${index}.end_date`}
+                              isRecording={isRecording}
+                              isProcessing={isTranscribing}
+                              transcript={transcript}
+                              startVoiceRecording={startVoiceRecording}
+                              stopVoiceRecording={stopVoiceRecording}
+                              applyTranscript={applyTranscript}
                             />
                           </div>
                         </div>
@@ -2504,6 +2583,13 @@ const ResumeBuilder = () => {
                             rows={2}
                             value={exp.description}
                             onChange={(value) => updateExperience(index, 'description', value)}
+                            isActive={activeField === `experience.${index}.description`}
+                            isRecording={isRecording}
+                            isProcessing={isTranscribing}
+                            transcript={transcript}
+                            startVoiceRecording={startVoiceRecording}
+                            stopVoiceRecording={stopVoiceRecording}
+                            applyTranscript={applyTranscript}
                           />
                         </div>
                         <div>
@@ -2515,6 +2601,13 @@ const ResumeBuilder = () => {
                             rows={3}
                             value={exp.achievements.join('\n')}
                             onChange={(value) => updateExperience(index, 'achievements', value.split('\n').filter(a => a.trim()))}
+                            isActive={activeField === `experience.${index}.achievements`}
+                            isRecording={isRecording}
+                            isProcessing={isTranscribing}
+                            transcript={transcript}
+                            startVoiceRecording={startVoiceRecording}
+                            stopVoiceRecording={stopVoiceRecording}
+                            applyTranscript={applyTranscript}
                           />
                         </div>
                       </div>
@@ -2577,6 +2670,13 @@ const ResumeBuilder = () => {
                                   i === index ? { ...ed, institution: value } : ed
                                 )
                               }))}
+                              isActive={activeField === `education.${index}.institution`}
+                              isRecording={isRecording}
+                              isProcessing={isTranscribing}
+                              transcript={transcript}
+                              startVoiceRecording={startVoiceRecording}
+                              stopVoiceRecording={stopVoiceRecording}
+                              applyTranscript={applyTranscript}
                             />
                           </div>
                           <div>
@@ -2591,6 +2691,13 @@ const ResumeBuilder = () => {
                                   i === index ? { ...ed, degree: value } : ed
                                 )
                               }))}
+                              isActive={activeField === `education.${index}.degree`}
+                              isRecording={isRecording}
+                              isProcessing={isTranscribing}
+                              transcript={transcript}
+                              startVoiceRecording={startVoiceRecording}
+                              stopVoiceRecording={stopVoiceRecording}
+                              applyTranscript={applyTranscript}
                             />
                           </div>
                           <div>
@@ -2605,6 +2712,13 @@ const ResumeBuilder = () => {
                                   i === index ? { ...ed, field: value } : ed
                                 )
                               }))}
+                              isActive={activeField === `education.${index}.field`}
+                              isRecording={isRecording}
+                              isProcessing={isTranscribing}
+                              transcript={transcript}
+                              startVoiceRecording={startVoiceRecording}
+                              stopVoiceRecording={stopVoiceRecording}
+                              applyTranscript={applyTranscript}
                             />
                           </div>
                           <div>
@@ -2619,6 +2733,13 @@ const ResumeBuilder = () => {
                                   i === index ? { ...ed, gpa: value } : ed
                                 )
                               }))}
+                              isActive={activeField === `education.${index}.gpa`}
+                              isRecording={isRecording}
+                              isProcessing={isTranscribing}
+                              transcript={transcript}
+                              startVoiceRecording={startVoiceRecording}
+                              stopVoiceRecording={stopVoiceRecording}
+                              applyTranscript={applyTranscript}
                             />
                           </div>
                           <div>
@@ -2633,6 +2754,13 @@ const ResumeBuilder = () => {
                                   i === index ? { ...ed, start_date: value } : ed
                                 )
                               }))}
+                              isActive={activeField === `education.${index}.start_date`}
+                              isRecording={isRecording}
+                              isProcessing={isTranscribing}
+                              transcript={transcript}
+                              startVoiceRecording={startVoiceRecording}
+                              stopVoiceRecording={stopVoiceRecording}
+                              applyTranscript={applyTranscript}
                             />
                           </div>
                           <div>
@@ -2647,6 +2775,13 @@ const ResumeBuilder = () => {
                                   i === index ? { ...ed, end_date: value } : ed
                                 )
                               }))}
+                              isActive={activeField === `education.${index}.end_date`}
+                              isRecording={isRecording}
+                              isProcessing={isTranscribing}
+                              transcript={transcript}
+                              startVoiceRecording={startVoiceRecording}
+                              stopVoiceRecording={stopVoiceRecording}
+                              applyTranscript={applyTranscript}
                             />
                           </div>
                         </div>
@@ -2708,6 +2843,13 @@ const ResumeBuilder = () => {
                                   i === index ? { ...proj, name: value } : proj
                                 )
                               }))}
+                              isActive={activeField === `projects.${index}.name`}
+                              isRecording={isRecording}
+                              isProcessing={isTranscribing}
+                              transcript={transcript}
+                              startVoiceRecording={startVoiceRecording}
+                              stopVoiceRecording={stopVoiceRecording}
+                              applyTranscript={applyTranscript}
                             />
                           </div>
                           <div>
@@ -2722,6 +2864,13 @@ const ResumeBuilder = () => {
                                   i === index ? { ...proj, url: value } : proj
                                 )
                               }))}
+                              isActive={activeField === `projects.${index}.url`}
+                              isRecording={isRecording}
+                              isProcessing={isTranscribing}
+                              transcript={transcript}
+                              startVoiceRecording={startVoiceRecording}
+                              stopVoiceRecording={stopVoiceRecording}
+                              applyTranscript={applyTranscript}
                             />
                           </div>
                         </div>
@@ -2739,6 +2888,13 @@ const ResumeBuilder = () => {
                                 i === index ? { ...proj, description: value } : proj
                               )
                             }))}
+                            isActive={activeField === `projects.${index}.description`}
+                            isRecording={isRecording}
+                            isProcessing={isTranscribing}
+                            transcript={transcript}
+                            startVoiceRecording={startVoiceRecording}
+                            stopVoiceRecording={stopVoiceRecording}
+                            applyTranscript={applyTranscript}
                           />
                         </div>
                         <div>
@@ -2753,6 +2909,13 @@ const ResumeBuilder = () => {
                                 i === index ? { ...proj, technologies: value.split(',').map(t => t.trim()).filter(t => t) } : proj
                               )
                             }))}
+                            isActive={activeField === `projects.${index}.technologies`}
+                            isRecording={isRecording}
+                            isProcessing={isTranscribing}
+                            transcript={transcript}
+                            startVoiceRecording={startVoiceRecording}
+                            stopVoiceRecording={stopVoiceRecording}
+                            applyTranscript={applyTranscript}
                           />
                         </div>
                       </div>
@@ -2813,6 +2976,13 @@ const ResumeBuilder = () => {
                                   i === index ? { ...c, name: value } : c
                                 )
                               }))}
+                              isActive={activeField === `certifications.${index}.name`}
+                              isRecording={isRecording}
+                              isProcessing={isTranscribing}
+                              transcript={transcript}
+                              startVoiceRecording={startVoiceRecording}
+                              stopVoiceRecording={stopVoiceRecording}
+                              applyTranscript={applyTranscript}
                             />
                           </div>
                           <div>
@@ -2827,6 +2997,13 @@ const ResumeBuilder = () => {
                                   i === index ? { ...c, issuer: value } : c
                                 )
                               }))}
+                              isActive={activeField === `certifications.${index}.issuer`}
+                              isRecording={isRecording}
+                              isProcessing={isTranscribing}
+                              transcript={transcript}
+                              startVoiceRecording={startVoiceRecording}
+                              stopVoiceRecording={stopVoiceRecording}
+                              applyTranscript={applyTranscript}
                             />
                           </div>
                           <div>
@@ -2841,6 +3018,13 @@ const ResumeBuilder = () => {
                                   i === index ? { ...c, date: value } : c
                                 )
                               }))}
+                              isActive={activeField === `certifications.${index}.date`}
+                              isRecording={isRecording}
+                              isProcessing={isTranscribing}
+                              transcript={transcript}
+                              startVoiceRecording={startVoiceRecording}
+                              stopVoiceRecording={stopVoiceRecording}
+                              applyTranscript={applyTranscript}
                             />
                           </div>
                           <div>
@@ -2855,6 +3039,13 @@ const ResumeBuilder = () => {
                                   i === index ? { ...c, url: value } : c
                                 )
                               }))}
+                              isActive={activeField === `certifications.${index}.url`}
+                              isRecording={isRecording}
+                              isProcessing={isTranscribing}
+                              transcript={transcript}
+                              startVoiceRecording={startVoiceRecording}
+                              stopVoiceRecording={stopVoiceRecording}
+                              applyTranscript={applyTranscript}
                             />
                           </div>
                         </div>
@@ -2934,6 +3125,13 @@ const ResumeBuilder = () => {
                       rows={3}
                       value={jobDescription}
                       onChange={(value) => setJobDescription(value)}
+                      isActive={activeField === "jobDescription"}
+                      isRecording={isRecording}
+                      isProcessing={isTranscribing}
+                      transcript={transcript}
+                      startVoiceRecording={startVoiceRecording}
+                      stopVoiceRecording={stopVoiceRecording}
+                      applyTranscript={applyTranscript}
                     />
                     {!jobDescription?.trim() && (
                       <div className="text-xs text-amber-600">Please enter a job description to enable Ai Generate your perfect Resume.</div>

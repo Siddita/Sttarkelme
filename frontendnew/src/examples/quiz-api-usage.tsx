@@ -243,9 +243,9 @@ const QuizAPIUsage: React.FC = () => {
           </div>
         </Card>
 
-        {/* Behavioral Assessment */}
+        {/* Scenario-Based Assessment */}
         <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Behavioral Assessment</h3>
+          <h3 className="text-lg font-semibold mb-4">Scenario-Based Assessment</h3>
           <div className="space-y-3">
             <Button 
               onClick={handleGenerateBehavioral}

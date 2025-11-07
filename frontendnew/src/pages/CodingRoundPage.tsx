@@ -412,7 +412,7 @@ export default function CodingRoundPage() {
                           </div>
                           <div className="flex items-center gap-1">
                             <Target className="w-3 h-3" />
-                            {template.questions.length} questions
+                            {template.questions?.length || 0} questions
                           </div>
                         </div>
                       </Card>

@@ -9,7 +9,6 @@ import {
   Users, 
   CheckCircle,
   ArrowRight,
-  Sparkles,
   Star,
   Target,
   Zap,
@@ -73,7 +72,8 @@ import { TextHoverEffect } from "@/components/ui/text-hover-effect";
 import { 
   uploadResumeApiV1ResumesPost,
   getAnalysisApiV1Resumes_ResumeId_AnalysisGet,
-  listJobsApiV1JobsGet,
+  recommendJobsRecommendPost,
+  searchJobsSearchPost,
   analyzePerformanceGapsAnalyzePerformanceGapsPost,
   generateSkillBasedRecommendationsGenerateSkillBasedRecommendationsPost,
   downloadReportDownloadReportPost,
@@ -256,10 +256,8 @@ const PersonalizedAssessment = () => {
 
   // API hooks
   const uploadResume = uploadResumeApiV1ResumesPost();
-  const { data: jobsData, isLoading: jobsLoading, error: jobsError, refetch: refetchJobs } = listJobsApiV1JobsGet({
-    enabled: true,
-    retry: 3
-  });
+  const { mutate: recommendJobs } = recommendJobsRecommendPost();
+  const { mutate: searchJobs } = searchJobsSearchPost();
 
   // Analysis hook - only enabled when we have a resumeId and are in analysis step
   const { data: analysisData, isLoading: analysisLoading, error: analysisError } = getAnalysisApiV1Resumes_ResumeId_AnalysisGet({
@@ -928,6 +926,26 @@ const PersonalizedAssessment = () => {
           localStorage.setItem('resumeAnalysis', JSON.stringify(resumeAnalysisData));
           
           setExtractedSkills(skills);
+          
+          // Fetch job recommendations based on extracted skills
+          if (skills && skills.length > 0) {
+            console.log('🎯 Fetching job recommendations for skills:', skills);
+            recommendJobs(
+              { skills: Array.isArray(skills) ? skills : [skills] },
+              {
+                onSuccess: (data: any) => {
+                  console.log('✅ Job recommendations received:', data);
+                  const jobs = Array.isArray(data) ? data : data?.jobs || [];
+                  setRecommendedJobs(jobs);
+                  // Store in localStorage for other pages
+                  localStorage.setItem('recommendedJobs', JSON.stringify(jobs));
+                },
+                onError: (error: any) => {
+                  console.error('❌ Error fetching job recommendations:', error);
+                }
+              }
+            );
+          }
           
           // Generate job role suggestions using the new Resume Microservice
           if (extractedText) {
@@ -2506,20 +2524,30 @@ const PersonalizedAssessment = () => {
                 </Button>
                 <div className="flex-1" />
               </div>
-              
-              <div className="inline-flex items-center space-x-2 bg-card/50 backdrop-blur-sm rounded-full px-4 py-2 mb-8 border border-primary/20 animate-fade-in">
-                <Sparkles className="h-4 w-4 text-primary animate-pulse" />
-                <span className="text-sm font-medium">Personalized Assessment</span>
-              </div>
 
-              <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-normal mb-6 leading-tight animate-fade-in text-[#2D3253]">
+              <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-normal mb-2 leading-tight animate-fade-in text-[#2D3253]">
                 <span className="bg-gradient-primary bg-clip-text text-transparent">Personalized Assessment</span>
               </h1>
             </div>
 
+            {/* Start Assessment Button - Only show on welcome step */}
+            {currentStep === 'welcome' && (
+              <div className="text-center mb-6">
+                <Button 
+                  size="lg" 
+                  onClick={startAssessment}
+                  className="px-8 py-3 text-lg rounded-2xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 cursor-pointer"
+                  type="button"
+                >
+                  Start Your Assessment
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
             {/* Progress Indicator */}
             {currentStep !== 'welcome' && (
-              <div className="flex justify-center mb-8">
+              <div className="flex justify-center mb-8 -mt-2">
                 <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 shadow-lg border border-gray-200 max-w-full">
                   <div className="flex items-center justify-center flex-wrap gap-2">
                     {(() => {
@@ -2704,7 +2732,7 @@ const PersonalizedAssessment = () => {
                             </div>
                             <div className="flex items-center gap-2 text-sm text-gray-600">
                               <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                              <span>Behavioral Assessment</span>
+                              <span>Scenario-Based Assessment</span>
                             </div>
                             <div className="flex items-center gap-2 text-sm text-gray-600">
                               <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
@@ -2744,18 +2772,6 @@ const PersonalizedAssessment = () => {
                     </div>
                   </div>
                 </section>
-
-                <div className="text-center">
-                  <Button 
-                    size="lg" 
-                    onClick={startAssessment}
-                    className="px-8 py-3 text-lg rounded-2xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 cursor-pointer"
-                    type="button"
-                  >
-                    Start Your Assessment
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </div>
               </Card>
             )}
 
@@ -2961,42 +2977,7 @@ const PersonalizedAssessment = () => {
                       </div>
                     )}
 
-                    {/* Available Jobs */}
-                    {jobsData && jobsData.length > 0 && (
-                      <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200">
-                        <div className="mb-6">
-                          <h4 className="text-xl font-semibold text-gray-900">Available Job Listings</h4>
-                        </div>
-                        <div className="space-y-4">
-                          {jobsData.slice(0, 3).map((job: any, index: number) => {
-                            console.log('Job data:', job);
-                            return (
-                            <div key={index} className="border border-gray-200 rounded-xl p-6 hover:shadow-md transition-all duration-300 bg-gradient-to-br from-gray-50 to-white">
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <h4 className="text-xl font-semibold text-gray-900 mb-2">{job.title || 'Job Title'}</h4>
-                                  <p className="text-gray-600 mb-3 font-medium">
-                                    {typeof job.company === 'string' ? job.company : 
-                                     typeof job.company === 'object' && job.company?.name ? job.company.name : 
-                                     'Company Name'}
-                                  </p>
-                                  <p className="text-sm text-gray-600 leading-relaxed">
-                                    {typeof job.description === 'string' ? job.description : 
-                                     'Job description not available'}
-                                  </p>
-                                </div>
-                                <div className="ml-4">
-                                  <Button size="sm" variant="outline" className="text-primary border-primary hover:bg-primary hover:text-white">
-                                    View Details
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
+                    {/* Jobs section removed - now using resume-based skill extraction only */}
                   </div>
                 )}
 
@@ -3022,7 +3003,7 @@ const PersonalizedAssessment = () => {
                             <span className="font-medium text-gray-700">Aptitude Test</span>
                           </div>
                           <div className="p-3 bg-green-50 rounded-xl">
-                            <span className="font-medium text-gray-700">Behavioral Assessment</span>
+                            <span className="font-medium text-gray-700">Scenario-Based Assessment</span>
                           </div>
                           <div className="p-3 bg-green-50 rounded-xl">
                             <span className="font-medium text-gray-700">Coding Challenge</span>
@@ -3251,7 +3232,7 @@ const PersonalizedAssessment = () => {
             {currentStep === 'behavioral' && !behavioralQuestions.length && (
               <Card className="p-8 max-w-4xl mx-auto">
                 <div className="text-center mb-8">
-                  <h3 className="text-2xl font-bold mb-4">Behavioral Assessment</h3>
+                  <h3 className="text-2xl font-bold mb-4">Scenario-Based Assessment</h3>
                   <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
                     Assess your behavioral competencies, leadership skills, and workplace personality traits.
                   </p>
@@ -3301,7 +3282,7 @@ const PersonalizedAssessment = () => {
             {currentStep === 'behavioral' && behavioralQuestions.length > 0 && behavioralQuestions[currentBehavioralQuestion] && (
               <Card className="p-8 max-w-4xl mx-auto">
                 <div className="text-center mb-8">
-                  <h3 className="text-2xl font-bold mb-4">Behavioral Assessment</h3>
+                  <h3 className="text-2xl font-bold mb-4">Scenario-Based Assessment</h3>
                   <div className="flex justify-center items-center gap-4 mb-6">
                     <p className="text-muted-foreground">
                       Question {currentBehavioralQuestion + 1} of {behavioralQuestions.length}
@@ -5425,9 +5406,11 @@ Generated on ${new Date().toLocaleString()}
 
       {/* Footer Section */}
       <div
-        className="-mt-16 relative z-10 min-h-screen max-w-screen-2xl mx-auto px-2 sm:px-6 lg:px-8 border border-blue-300 rounded-tl-[70px] rounded-tr-[70px] overflow-hidden bg-[#FFFFFF] animate-fade-in"
+        className="-mt-16 relative z-10 min-h-screen max-w-screen-2xl mx-auto px-2 sm:px-6 lg:px-8 border border-blue-300 rounded-tl-[50px] rounded-tr-[50px] lg:rounded-tl-[70px] lg:rounded-tr-[70px] overflow-hidden bg-[#FFFFFF] animate-fade-in"
       >
+        {/* Footer */}
         <Footer />
+
         <div className="px-4 sm:px-6 lg:px-8 text-center">
           <div className="h-[16rem] flex items-center justify-center tracking-widest">
             <TextHoverEffect text=" AInode " />
@@ -5439,3 +5422,4 @@ Generated on ${new Date().toLocaleString()}
 };
 
 export default PersonalizedAssessment;
+

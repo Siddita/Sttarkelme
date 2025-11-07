@@ -21,7 +21,7 @@ import { Link } from "react-router-dom";
 import { Navbar } from "@/components/ui/navbar-menu";
 import Footer from "@/components/Footer";
 import { TextHoverEffect } from "@/components/ui/text-hover-effect";
-import { mentorshipMeGet, myGoalsMeMenteeGoalsGet, updateMeMePatch } from "@/hooks/useApis";
+import { mentorshipMeMeGet, myGoalsMeMenteeGoalsGet, updateMeMePatch } from "@/hooks/useApis";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -37,7 +37,7 @@ const BecomeMentor = () => {
   const [goalReviews, setGoalReviews] = useState<Record<number, { remarks: string; approved: boolean }>>({});
 
   // Read profile to detect mentor role and fetch mentee goals (placeholder: using current user's goals until API is available)
-  const { data: profile } = mentorshipMeGet();
+  const { data: profile } = mentorshipMeMeGet();
   const { data: menteeGoals } = myGoalsMeMenteeGoalsGet({ enabled: !!profile });
 
   // Mutation for updating profile to become a mentor

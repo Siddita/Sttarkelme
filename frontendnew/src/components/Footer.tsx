@@ -23,23 +23,20 @@ import {
 
 const Footer = () => {
   const informationLinks = [
-    { name: "About", path: "/about" },
-    { name: "Blogs", path: "/blogs" },
-    { name: "Services", path: "/services" },
+    { name: "Home", path: "/" },
+    { name: "About Us", path: "/about" },
+    { name: "Blogs/News", path: "/blogs" },
+    { name: "Mentorship", path: "/mentorship" },
   ];
 
   const serviceLinks = [
     { name: "AI Assessment", path: "/services/ai-assessment" },
-    { name: "Interview", path: "/interview" },
-    { name: "Analytics", path: "/analytics" },
-    { name: "Companies", path: "/companies" },
     { name: "Resume Builder", path: "/services/resume-builder" },
     { name: "Job Listing", path: "/services/jobs" },
-    { name: "Become Mentor", path: "/become-mentor" },
   ];
 
   return (
-    <footer className="bg-white rounded-3xl sm:mt-8 lg:mt-9 mb-8">
+    <footer className="bg-white rounded-[2rem] sm:mt-8 lg:mt-9 mb-8 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
           {/* Logo and Contact */}
