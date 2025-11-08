@@ -1,0 +1,7 @@
+.outlined-text {
+  color: transparent;
+  -webkit-text-stroke: 1.2px rgb(174, 174, 174); /* Adjust stroke width and color */
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+}

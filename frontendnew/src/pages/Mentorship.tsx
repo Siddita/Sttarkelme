@@ -1,0 +1,2170 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Navbar } from "@/components/ui/navbar-menu";
+import Footer from "@/components/Footer";
+import { TextHoverEffect } from "@/components/ui/text-hover-effect";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Users, 
+  Target, 
+  TrendingUp, 
+  BookOpen, 
+  MessageCircle, 
+  Calendar,
+  Star,
+  Award,
+  GraduationCap,
+  Briefcase,
+  ArrowRight,
+  Sparkles,
+  Search,
+  Filter,
+  MapPin,
+  Clock,
+  Plus,
+  CheckCircle,
+  Zap,
+  User,
+  Settings,
+  Bookmark,
+  MessageSquare,
+  Video,
+  Phone,
+  Trash2
+} from "lucide-react";
+
+// Import mentorship API hooks
+import {
+  mentorshipMeMeGet,
+  updateMeMePatch,
+  listSkillsSkillsGet,
+  createSkillSkillsPost,
+  myGoalsMeMenteeGoalsGet,
+  addGoalMeMenteeGoalsPost,
+  deleteGoalMeMenteeGoals_GoalId_Delete,
+  listAvailabilityMentors_MentorId_AvailabilityGet,
+  listSessionsSessionsGet,
+  bookSessionSessionsPost,
+  updateSessionSessions_SessionId_Patch,
+  createReviewSessions_SessionId_ReviewPost,
+  createAvailabilityMeMentorAvailabilityPost,
+  mentorRatingsMentors_MentorId_RatingsGet
+} from "@/hooks/useApis";
+
+const Mentorship = () => {
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState("discover");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedSkill, setSelectedSkill] = useState("");
+  
+  // Animated word rotation for heading
+  const words = ["Works", "Guides", "Empowers"];
+  const [currentWordIndex, setCurrentWordIndex] = useState(0);
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentWordIndex((prevIndex) => (prevIndex + 1) % words.length);
+    }, 2500); // Change word every 2.5 seconds
+    
+    return () => clearInterval(interval);
+  }, [words.length]);
+  const [minExperience, setMinExperience] = useState("");
+  const [timezone, setTimezone] = useState("");
+  const [showGoalDialog, setShowGoalDialog] = useState(false);
+  const [showSkillDialog, setShowSkillDialog] = useState(false);
+  const [showAvailabilityDialog, setShowAvailabilityDialog] = useState(false);
+  const [showBookSessionDialog, setShowBookSessionDialog] = useState(false);
+  const [selectedMentorForBooking, setSelectedMentorForBooking] = useState<number | null>(null);
+  const [newGoal, setNewGoal] = useState({ 
+    skill_id: null, // Will be set when skills are loaded
+    priority: 3, // Default priority
+    target_date: "", 
+    notes: "" 
+  });
+  const [newSkill, setNewSkill] = useState({ name: "", description: "" });
+  const [newAvailability, setNewAvailability] = useState({ 
+    day_of_week: "", 
+    start_time: "", 
+    end_time: "", 
+    timezone: "IST" 
+  });
+  const [sessionAgenda, setSessionAgenda] = useState("Mentorship session - Career guidance and skill development");
+  // Mentor review state for goals (UI only for now)
+  const [goalReviews, setGoalReviews] = useState<Record<number, { remarks: string; approved: boolean }>>({});
+  // Store mentor ratings and availability
+  const [mentorRatings, setMentorRatings] = useState<Record<number, any>>({});
+  const [mentorAvailability, setMentorAvailability] = useState<Record<number, any[]>>({});
+
+  // Check if user is authenticated first
+  const token = localStorage.getItem('accessToken');
+  const isAuthenticated = !!token;
+  
+  // Authentication state management
+
+  // API hooks with error handling - only run when authenticated
+  const { data: profile, isLoading: profileLoading, error: profileError } = mentorshipMeMeGet({
+    enabled: isAuthenticated,
+    retry: false,
+    onError: (error) => {
+      // Silently handle auth errors
+      if (error.response?.status !== 401) {
+        console.error("Profile error:", error);
+      }
+    }
+  });
+  
+  const { data: skills, isLoading: skillsLoading, error: skillsError } = listSkillsSkillsGet({
+    enabled: isAuthenticated,
+    retry: false,
+    onError: (error) => {
+      if (error.response?.status !== 401) {
+        console.error("Skills error:", error);
+      }
+    }
+  });
+  
+  // Set default skill when skills are loaded
+  useEffect(() => {
+    if (skills && skills.length > 0 && !newGoal.skill_id) {
+      setNewGoal(prev => ({ ...prev, skill_id: skills[0].id }));
+    }
+  }, [skills, newGoal.skill_id]);
+
+  // Refs for animations
+  const mentorAnimationRef = useRef<HTMLDivElement>(null);
+  const goalsAnimationRef = useRef<HTMLDivElement>(null);
+  const completionAnimationRef = useRef<HTMLDivElement>(null);
+  const calendarAnimationRef = useRef<HTMLDivElement>(null);
+  const chooseMentorsAnimationRef = useRef<HTMLDivElement>(null);
+  
+  // Refs for floating hero illustrations
+  const heroFloat1Ref = useRef<HTMLDivElement>(null);
+  const heroFloat2Ref = useRef<HTMLDivElement>(null);
+  const heroFloat3Ref = useRef<HTMLDivElement>(null);
+  const heroFloat4Ref = useRef<HTMLDivElement>(null);
+  const heroFloat5Ref = useRef<HTMLDivElement>(null);
+  const heroFloat6Ref = useRef<HTMLDivElement>(null);
+
+  // Load dotlottie web component script and create animation elements
+  useEffect(() => {
+    // Function to check and create animations
+    const checkAndCreateAnimations = () => {
+      if (customElements.get('dotlottie-wc')) {
+        if (mentorAnimationRef.current && !mentorAnimationRef.current.querySelector('dotlottie-wc')) {
+          const mentorElement = document.createElement('dotlottie-wc');
+          mentorElement.setAttribute('src', 'https://lottie.host/2e2bb7fd-1839-4bd5-8fa6-3f9f83780e94/atYgltYnlc.lottie');
+          mentorElement.setAttribute('style', 'width: 100%; height: 100%; max-width: 100px; max-height: 100px');
+          mentorElement.setAttribute('autoplay', '');
+          mentorElement.setAttribute('loop', '');
+          mentorAnimationRef.current.appendChild(mentorElement);
+        }
+
+        if (goalsAnimationRef.current && !goalsAnimationRef.current.querySelector('dotlottie-wc')) {
+          const goalsElement = document.createElement('dotlottie-wc');
+          goalsElement.setAttribute('src', 'https://lottie.host/26da08be-274b-4b8b-a9f3-7737436288e4/tq1clLuWYl.lottie');
+          goalsElement.setAttribute('style', 'width: 100%; height: 100%; max-width: 120px; max-height: 120px');
+          goalsElement.setAttribute('autoplay', '');
+          goalsElement.setAttribute('loop', '');
+          goalsAnimationRef.current.appendChild(goalsElement);
+        }
+
+        if (completionAnimationRef.current && !completionAnimationRef.current.querySelector('dotlottie-wc')) {
+          const completionElement = document.createElement('dotlottie-wc');
+          completionElement.setAttribute('src', 'https://lottie.host/72191217-6650-497c-9f39-2f816247b020/PtSjEAuKwG.lottie');
+          completionElement.setAttribute('style', 'width: 100%; height: 100%; max-width: 120px; max-height: 120px');
+          completionElement.setAttribute('autoplay', '');
+          completionElement.setAttribute('loop', '');
+          completionAnimationRef.current.appendChild(completionElement);
+        }
+
+        if (calendarAnimationRef.current && !calendarAnimationRef.current.querySelector('dotlottie-wc')) {
+          const calendarElement = document.createElement('dotlottie-wc');
+          calendarElement.setAttribute('src', 'https://lottie.host/09b22c1b-f854-471d-931e-5d4ded38a797/BnYN92ZYQn.lottie');
+          calendarElement.setAttribute('style', 'width: 100%; height: 100%; max-width: 120px; max-height: 120px');
+          calendarElement.setAttribute('autoplay', '');
+          calendarElement.setAttribute('loop', '');
+          calendarAnimationRef.current.appendChild(calendarElement);
+        }
+
+        if (chooseMentorsAnimationRef.current && !chooseMentorsAnimationRef.current.querySelector('dotlottie-wc')) {
+          const chooseMentorsElement = document.createElement('dotlottie-wc');
+          chooseMentorsElement.setAttribute('src', 'https://lottie.host/83ca2a3d-7405-4d82-b8bc-2c29ada4b27d/VPIXr5qiq3.lottie');
+          chooseMentorsElement.setAttribute('style', 'width: 100%; height: 100%; max-width: 120px; max-height: 120px');
+          chooseMentorsElement.setAttribute('autoplay', '');
+          chooseMentorsElement.setAttribute('loop', '');
+          chooseMentorsAnimationRef.current.appendChild(chooseMentorsElement);
+        }
+
+        // Create floating hero illustrations
+        if (heroFloat1Ref.current && !heroFloat1Ref.current.querySelector('dotlottie-wc')) {
+          const float1Element = document.createElement('dotlottie-wc');
+          float1Element.setAttribute('src', 'https://lottie.host/83ca2a3d-7405-4d82-b8bc-2c29ada4b27d/VPIXr5qiq3.lottie');
+          float1Element.setAttribute('style', 'width: 100%; height: 100%; max-width: 80px; max-height: 80px');
+          float1Element.setAttribute('autoplay', '');
+          float1Element.setAttribute('loop', '');
+          heroFloat1Ref.current.appendChild(float1Element);
+        }
+
+        if (heroFloat2Ref.current && !heroFloat2Ref.current.querySelector('dotlottie-wc')) {
+          const float2Element = document.createElement('dotlottie-wc');
+          float2Element.setAttribute('src', 'https://lottie.host/26da08be-274b-4b8b-a9f3-7737436288e4/tq1clLuWYl.lottie');
+          float2Element.setAttribute('style', 'width: 100%; height: 100%; max-width: 80px; max-height: 80px');
+          float2Element.setAttribute('autoplay', '');
+          float2Element.setAttribute('loop', '');
+          heroFloat2Ref.current.appendChild(float2Element);
+        }
+
+        if (heroFloat3Ref.current && !heroFloat3Ref.current.querySelector('dotlottie-wc')) {
+          const float3Element = document.createElement('dotlottie-wc');
+          float3Element.setAttribute('src', 'https://lottie.host/09b22c1b-f854-471d-931e-5d4ded38a797/BnYN92ZYQn.lottie');
+          float3Element.setAttribute('style', 'width: 100%; height: 100%; max-width: 80px; max-height: 80px');
+          float3Element.setAttribute('autoplay', '');
+          float3Element.setAttribute('loop', '');
+          heroFloat3Ref.current.appendChild(float3Element);
+        }
+
+        if (heroFloat4Ref.current && !heroFloat4Ref.current.querySelector('dotlottie-wc')) {
+          const float4Element = document.createElement('dotlottie-wc');
+          float4Element.setAttribute('src', 'https://lottie.host/2e2bb7fd-1839-4bd5-8fa6-3f9f83780e94/atYgltYnlc.lottie');
+          float4Element.setAttribute('style', 'width: 100%; height: 100%; max-width: 80px; max-height: 80px');
+          float4Element.setAttribute('autoplay', '');
+          float4Element.setAttribute('loop', '');
+          heroFloat4Ref.current.appendChild(float4Element);
+        }
+
+        if (heroFloat5Ref.current && !heroFloat5Ref.current.querySelector('dotlottie-wc')) {
+          const float5Element = document.createElement('dotlottie-wc');
+          float5Element.setAttribute('src', 'https://lottie.host/72191217-6650-497c-9f39-2f816247b020/PtSjEAuKwG.lottie');
+          float5Element.setAttribute('style', 'width: 100%; height: 100%; max-width: 80px; max-height: 80px');
+          float5Element.setAttribute('autoplay', '');
+          float5Element.setAttribute('loop', '');
+          heroFloat5Ref.current.appendChild(float5Element);
+        }
+
+        if (heroFloat6Ref.current && !heroFloat6Ref.current.querySelector('dotlottie-wc')) {
+          const float6Element = document.createElement('dotlottie-wc');
+          float6Element.setAttribute('src', 'https://lottie.host/83ca2a3d-7405-4d82-b8bc-2c29ada4b27d/VPIXr5qiq3.lottie');
+          float6Element.setAttribute('style', 'width: 100%; height: 100%; max-width: 80px; max-height: 80px');
+          float6Element.setAttribute('autoplay', '');
+          float6Element.setAttribute('loop', '');
+          heroFloat6Ref.current.appendChild(float6Element);
+        }
+      }
+    };
+
+    // Load the dotlottie script
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/@lottiefiles/dotlottie-wc@0.8.5/dist/dotlottie-wc.js';
+    script.type = 'module';
+    script.async = true;
+    
+    // When script loads, trigger animation creation
+    script.onload = () => {
+      // Use setTimeout to ensure DOM is ready
+      setTimeout(() => {
+        checkAndCreateAnimations();
+      }, 100);
+    };
+    
+    document.head.appendChild(script);
+
+    // Check immediately and also set up interval to check periodically
+    checkAndCreateAnimations();
+    const interval = setInterval(checkAndCreateAnimations, 100);
+
+    return () => {
+      clearInterval(interval);
+      // Cleanup: remove script on unmount
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
+  }, []);
+  
+  
+  const { data: goals, isLoading: goalsLoading, error: goalsError } = myGoalsMeMenteeGoalsGet({
+    enabled: isAuthenticated,
+    retry: false,
+    onError: (error) => {
+      if (error.response?.status !== 401) {
+        console.error("Goals error:", error);
+      }
+    },
+    onSuccess: (data) => {
+      console.log("Goals loaded successfully:", data);
+      console.log("Goals count:", data?.length || 0);
+    }
+  });
+  
+  // Build query parameters for mentor search
+  const mentorSearchParams = new URLSearchParams();
+  if (selectedSkill && selectedSkill !== "all") {
+    mentorSearchParams.append('skill', selectedSkill);
+  }
+  if (minExperience && minExperience !== "any") {
+    mentorSearchParams.append('min_exp', minExperience);
+  }
+  if (timezone && timezone !== "any") {
+    mentorSearchParams.append('tz', timezone);
+  }
+  const queryString = mentorSearchParams.toString();
+  const mentorSearchUrl = queryString ? `/mentorship/mentors/search?${queryString}` : '/mentorship/mentors/search';
+
+  const { data: mentors, isLoading: mentorsLoading, error: mentorsError } = useQuery({
+    queryKey: ['mentor_search_mentors_search_get', selectedSkill, minExperience, timezone],
+    enabled: isAuthenticated && activeTab === "discover",
+    queryFn: async () => {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zettanix.in';
+      const url = `${API_BASE_URL}${mentorSearchUrl}`;
+      const token = localStorage.getItem('accessToken');
+      const options = {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      };
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        const error: any = new Error(`API request failed with status ${response.status}`);
+        try {
+          error.response = await response.json();
+        } catch (e) {
+          error.response = await response.text();
+        }
+        throw error;
+      }
+      return response.json();
+    },
+    retry: false,
+  });
+
+  // Handle mentor search errors
+  useEffect(() => {
+    if (mentorsError) {
+      const error = mentorsError as any;
+      console.error("Mentors search error:", error);
+      console.error("Error status:", error.response?.status);
+      console.error("Error details:", error.response);
+    }
+  }, [mentorsError]);
+
+  // Mentor search state management
+
+  // Mentor search functionality
+
+  
+  const { data: sessions, isLoading: sessionsLoading, error: sessionsError } = listSessionsSessionsGet({
+    enabled: isAuthenticated,
+    role: "mentee", // Required parameter for sessions API
+    retry: false,
+    onError: (error) => {
+      if (error.response?.status !== 401) {
+        console.error("Sessions error:", error);
+      }
+    },
+    onSuccess: (data) => {
+      console.log("Sessions loaded successfully:", data);
+      console.log("Sessions count:", data?.length || 0);
+    }
+  });
+
+  // Mutations
+  const updateProfileMutation = updateMeMePatch();
+  const addGoalMutation = addGoalMeMenteeGoalsPost({
+    onSuccess: async () => {
+      // Multiple approaches to ensure cache refresh
+      await queryClient.invalidateQueries({ queryKey: ['my_goals_me_mentee_goals_get'] });
+      await queryClient.refetchQueries({ queryKey: ['my_goals_me_mentee_goals_get'] });
+      
+      // Also try invalidating all goals-related queries
+      await queryClient.invalidateQueries({ 
+        predicate: (query) => query.queryKey.includes('goals') 
+      });
+      
+      toast.success("Goal created successfully!");
+    },
+    onError: (error) => {
+      console.error("Failed to add goal:", error);
+      toast.error("Failed to create goal. Please try again.");
+    }
+  });
+  const bookSessionMutation = bookSessionSessionsPost();
+  const createAvailabilityMutation = createAvailabilityMeMentorAvailabilityPost();
+  
+  // Additional mutations for complete functionality
+  const createSkillMutation = createSkillSkillsPost({
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['list_skills_skills_get'] });
+      toast.success("Skill created successfully!");
+    },
+    onError: (error) => {
+      console.error("Failed to create skill:", error);
+      toast.error("Failed to create skill. Please try again.");
+    }
+  });
+  
+  
+  const deleteGoalMutation = deleteGoalMeMenteeGoals_GoalId_Delete({
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my_goals_me_mentee_goals_get'] });
+      toast.success("Goal deleted successfully!");
+    },
+    onError: (error) => {
+      console.error("Failed to delete goal:", error);
+      toast.error("Failed to delete goal. Please try again.");
+    }
+  });
+  
+  const updateSessionMutation = updateSessionSessions_SessionId_Patch({
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['list_sessions_sessions_get'] });
+      toast.success("Session updated successfully!");
+    },
+    onError: (error) => {
+      console.error("Failed to update session:", error);
+      toast.error("Failed to update session. Please try again.");
+    }
+  });
+  
+  const createReviewMutation = createReviewSessions_SessionId_ReviewPost({
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['list_sessions_sessions_get'] });
+      toast.success("Review submitted successfully!");
+    },
+    onError: (error) => {
+      console.error("Failed to create review:", error);
+      toast.error("Failed to submit review. Please try again.");
+    }
+  });
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.6,
+        ease: "easeOut" as const
+      }
+    }
+  };
+
+  const handleAddGoal = async () => {
+    try {
+      console.log("Creating goal with data:", newGoal);
+      console.log("Available skills:", skills);
+      
+      const result = await addGoalMutation.mutateAsync(newGoal);
+      console.log("Goal creation result:", result);
+      
+      // Reset form and close dialog
+      setNewGoal({ 
+        skill_id: skills && skills.length > 0 ? skills[0].id : null, 
+        priority: 3, 
+        target_date: "", 
+        notes: "" 
+      });
+      setShowGoalDialog(false);
+    } catch (error) {
+      // Error handling is now done in the mutation's onError callback
+      console.error("Goal creation failed:", error);
+      console.error("Error details:", error.response);
+    }
+  };
+
+
+  const handleCreateSkill = async () => {
+    try {
+      await createSkillMutation.mutateAsync(newSkill);
+      
+      // Invalidate and refetch skills list
+      await queryClient.invalidateQueries({ queryKey: ['list_skills_skills_get'] });
+      
+      setNewSkill({ name: "", description: "" });
+      setShowSkillDialog(false);
+    } catch (error) {
+      console.error("Failed to create skill:", error);
+    }
+  };
+
+  const handleDeleteGoal = async (goalId: number) => {
+    try {
+      await deleteGoalMutation.mutateAsync({ goal_id: goalId });
+    } catch (error) {
+      console.error("Failed to delete goal:", error);
+    }
+  };
+
+
+  const handleUpdateSession = async (sessionId: number, sessionData: any) => {
+    try {
+      await updateSessionMutation.mutateAsync({ session_id: sessionId, ...sessionData });
+    } catch (error) {
+      console.error("Failed to update session:", error);
+    }
+  };
+
+  const handleCreateReview = async (sessionId: number, reviewData: any) => {
+    try {
+      await createReviewMutation.mutateAsync({ session_id: sessionId, ...reviewData });
+    } catch (error) {
+      console.error("Failed to create review:", error);
+    }
+  };
+
+  const handleCreateAvailability = async () => {
+    try {
+      await createAvailabilityMutation.mutateAsync(newAvailability);
+      
+      // Invalidate and refetch sessions to show the new availability immediately
+      await queryClient.invalidateQueries({ queryKey: ['sessions_get'] });
+      
+      setNewAvailability({ day_of_week: "", start_time: "", end_time: "", timezone: "IST" });
+      setShowAvailabilityDialog(false);
+    } catch (error) {
+      console.error("Failed to create availability:", error);
+    }
+  };
+
+  const handleBookSession = async (mentorId: number, agenda?: string) => {
+    try {
+      // Check authentication first
+      if (!isAuthenticated) {
+        toast.error("Please log in to book a session.");
+        return;
+      }
+
+      // Validate mentor ID
+      if (!mentorId || mentorId === 0) {
+        toast.error("Invalid mentor ID. Please try again.");
+        return;
+      }
+      
+      console.log("Booking session for mentor ID:", mentorId);
+      
+      // Calculate start and end times (1 hour session)
+      // Try booking for next week to give mentor more time to set up availability
+      const nextWeek = new Date();
+      nextWeek.setDate(nextWeek.getDate() + 7); // Next week
+      nextWeek.setHours(14, 0, 0, 0); // 2:00 PM
+      
+      const startTime = nextWeek;
+      const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Add 1 hour
+      
+      // Format dates with timezone (IST as per API example)
+      const formatDateWithTimezone = (date: Date) => {
+        const offset = date.getTimezoneOffset();
+        const localTime = new Date(date.getTime() - (offset * 60 * 1000));
+        return localTime.toISOString().replace('Z', '+05:30'); // IST timezone
+      };
+      
+      const sessionData = {
+        mentor_id: mentorId,
+        starts_at: formatDateWithTimezone(startTime),
+        ends_at: formatDateWithTimezone(endTime),
+        agenda: agenda || sessionAgenda || "Mentorship session"
+      };
+      
+      console.log("Session data being sent:", sessionData);
+      console.log("Authentication token present:", !!localStorage.getItem('accessToken'));
+      
+      const result = await bookSessionMutation.mutateAsync(sessionData);
+      
+      // Invalidate and refetch sessions to show the new session immediately
+      await queryClient.invalidateQueries({ queryKey: ['sessions_get'] });
+      
+      // Close dialog and reset
+      setShowBookSessionDialog(false);
+      setSelectedMentorForBooking(null);
+      setSessionAgenda("Mentorship session - Career guidance and skill development");
+      
+      // Show success message
+      toast.success(`Session request sent for ${startTime.toLocaleDateString()} at ${startTime.toLocaleTimeString()}! The mentor will review and confirm your request.`);
+      
+    } catch (error: any) {
+      console.error("Failed to book session:", error);
+      console.error("Error response:", error.response);
+      console.error("Error status:", error.response?.status);
+      console.error("Error data:", error.response?.data);
+      
+      // Show user-friendly error message with actionable guidance
+      let errorMessage = "Failed to send session request. Please try again.";
+      
+      if (error.response?.data?.detail) {
+        const detail = error.response.data.detail;
+        if (detail.includes("No availability")) {
+          errorMessage = "This mentor hasn't set up their availability schedule yet. Please contact them directly to discuss scheduling, or try again later when they've configured their availability.";
+        } else {
+          errorMessage = detail;
+        }
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+      
+      toast.error(errorMessage);
+    }
+  };
+
+  // Helper function to get skill name by ID
+  const getSkillName = (skillId: number) => {
+    const skill = skills?.find((s: any) => s.id === skillId);
+    return skill?.name || `Skill ${skillId}`;
+  };
+
+  // Helper function to get skill details by ID
+  const getSkillDetails = (skillId: number) => {
+    const skill = skills?.find((s: any) => s.id === skillId);
+    return {
+      name: skill?.name || `Skill ${skillId}`,
+      description: skill?.description || 'No description available'
+    };
+  };
+
+  // Helper function to fetch mentor ratings
+  const fetchMentorRating = useCallback(async (mentorId: number) => {
+    if (mentorRatings[mentorId]) return mentorRatings[mentorId];
+    
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zettanix.in';
+      const url = `${API_BASE_URL}/mentorship/mentors/${mentorId}/ratings`;
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setMentorRatings(prev => ({ ...prev, [mentorId]: data }));
+        return data;
+      }
+    } catch (error) {
+      console.error(`Failed to fetch ratings for mentor ${mentorId}:`, error);
+    }
+    return null;
+  }, [mentorRatings]);
+
+  // Helper function to fetch mentor availability
+  const fetchMentorAvailability = useCallback(async (mentorId: number) => {
+    if (mentorAvailability[mentorId]) return mentorAvailability[mentorId];
+    
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zettanix.in';
+      const url = `${API_BASE_URL}/mentorship/mentors/${mentorId}/availability`;
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setMentorAvailability(prev => ({ ...prev, [mentorId]: data }));
+        return data;
+      }
+    } catch (error) {
+      console.error(`Failed to fetch availability for mentor ${mentorId}:`, error);
+    }
+    return [];
+  }, [mentorAvailability]);
+
+  // Helper function to parse mentor bio and extract specialties
+  const parseMentorSpecialties = (bio: string) => {
+    if (!bio) return [];
+    
+    console.log("Parsing bio for specialties:", bio);
+    
+    // Try multiple patterns to find specialties
+    let specialties = [];
+    
+    // Pattern 1: "Specialties:" followed by text
+    let specialtiesMatch = bio.match(/Specialties:\s*(.+?)(?:\n|$)/i);
+    if (specialtiesMatch) {
+      const specialtiesText = specialtiesMatch[1].trim();
+      console.log("Found specialties text (Pattern 1):", specialtiesText);
+      specialties = specialtiesText.split(/[,;|]/).map(skill => skill.trim()).filter(skill => skill.length > 0);
+    }
+    
+    // Pattern 2: "Specialties:" followed by text (case insensitive)
+    if (specialties.length === 0) {
+      specialtiesMatch = bio.match(/Specialties:\s*(.+?)(?:\n|$)/i);
+      if (specialtiesMatch) {
+        const specialtiesText = specialtiesMatch[1].trim();
+        console.log("Found specialties text (Pattern 2):", specialtiesText);
+        specialties = specialtiesText.split(/[,;|]/).map(skill => skill.trim()).filter(skill => skill.length > 0);
+      }
+    }
+    
+    // Pattern 3: Look for skills from API in the bio
+    if (specialties.length === 0 && skills && skills.length > 0) {
+      const foundSkills = skills.filter((skill: any) => 
+        bio.toLowerCase().includes(skill.name?.toLowerCase() || '')
+      ).map((skill: any) => skill.name);
+      if (foundSkills.length > 0) {
+        console.log("Found skills in bio (Pattern 3):", foundSkills);
+        specialties = foundSkills;
+      }
+    }
+    
+    // Pattern 4: If bio contains comma-separated values, treat them as skills
+    if (specialties.length === 0 && bio.includes(',')) {
+      const possibleSkills = bio.split(',').map(skill => skill.trim()).filter(skill => skill.length > 0 && skill.length < 50);
+      if (possibleSkills.length > 0) {
+        console.log("Found comma-separated skills (Pattern 4):", possibleSkills);
+        specialties = possibleSkills.slice(0, 5);
+      }
+    }
+    
+    const result = specialties.slice(0, 5); // Limit to 5 specialties
+    console.log("Final parsed specialties:", result);
+    return result;
+  };
+
+  // Fetch ratings and availability for mentors when they're loaded
+  useEffect(() => {
+    if (mentors && mentors.length > 0 && isAuthenticated) {
+      mentors.forEach((mentor: any) => {
+        const mentorId = mentor.id || mentor.auth_user_id;
+        if (mentorId && !mentorRatings[mentorId]) {
+          fetchMentorRating(mentorId);
+        }
+        if (mentorId && !mentorAvailability[mentorId]) {
+          fetchMentorAvailability(mentorId);
+        }
+      });
+    }
+  }, [mentors, isAuthenticated, mentorRatings, mentorAvailability, fetchMentorRating, fetchMentorAvailability]);
+
+  // Authentication check is now done above with token check
+
+  return (
+    <div className="min-h-screen bg-[#031527]">
+      <Navbar />
+      <div className="relative w-full animate-fade-in">
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, ease: "easeOut" }}
+          viewport={{ once: true }}
+          className="relative z-0 pb-24 lg:min-h-screen max-w-screen-2xl mx-auto pt-16 bg-gradient-to-b from-cyan-100 to-white overflow-hidden"
+        >
+          <div className="relative max-w-7xl mx-auto pt-16 lg:pt-20">
+        
+        {/* Hero Section */}
+        <section className="relative pt-20 mt-10 pb-20 overflow-hidden bg-transparent">
+          {/* Floating Illustrations Background - Scattered Layout */}
+          <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+            {/* Left Top - Number 1 */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              className="absolute left-[5%] top-[8%] w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center"
+              style={{ transform: 'rotate(-12deg)' }}
+            >
+              <div ref={heroFloat1Ref} className="w-full h-full flex items-center justify-center"></div>
+              <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center shadow-md">
+                1
+              </div>
+            </motion.div>
+
+            {/* Left Middle - Number 2 */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8, delay: 0.4 }}
+              className="absolute left-[2%] top-[35%] w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center"
+              style={{ transform: 'rotate(8deg)' }}
+            >
+              <div ref={heroFloat2Ref} className="w-full h-full flex items-center justify-center"></div>
+              <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center shadow-md">
+                2
+              </div>
+            </motion.div>
+
+            {/* Left Lower - Number 3 */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8, delay: 0.6 }}
+              className="absolute left-[4%] top-[65%] w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center"
+              style={{ transform: 'rotate(-15deg)' }}
+            >
+              <div ref={heroFloat3Ref} className="w-full h-full flex items-center justify-center"></div>
+              <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center shadow-md">
+                3
+              </div>
+            </motion.div>
+            
+            {/* Right Top - Number 4 */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8, delay: 0.3 }}
+              className="absolute right-[5%] top-[8%] w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center"
+              style={{ transform: 'rotate(15deg)' }}
+            >
+              <div ref={heroFloat4Ref} className="w-full h-full flex items-center justify-center"></div>
+              <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center shadow-md">
+                4
+              </div>
+            </motion.div>
+
+            {/* Right Middle - Number 5 */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8, delay: 0.5 }}
+              className="absolute right-[2%] top-[35%] w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center"
+              style={{ transform: 'rotate(-10deg)' }}
+            >
+              <div ref={heroFloat5Ref} className="w-full h-full flex items-center justify-center"></div>
+              <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center shadow-md">
+                5
+              </div>
+            </motion.div>
+
+            {/* Right Lower - Number 6 */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8, delay: 0.7 }}
+              className="absolute right-[4%] top-[65%] w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center"
+              style={{ transform: 'rotate(18deg)' }}
+            >
+              <div ref={heroFloat6Ref} className="w-full h-full flex items-center justify-center"></div>
+              <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center shadow-md">
+                6
+              </div>
+            </motion.div>
+          </div>
+
+          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <motion.div 
+              className="text-center max-w-4xl mx-auto relative z-10"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6 }}
+            >
+              <motion.div 
+                className="inline-flex items-center space-x-2 bg-card/50 backdrop-blur-sm rounded-full px-4 py-2 mb-8 border border-primary/20 animate-fade-in"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+              >
+                <Sparkles className="h-4 w-4 text-primary animate-pulse" />
+                <span className="text-sm font-medium">Expert Guidance for Your Career</span>
+              </motion.div>
+              
+              <motion.h1 
+                className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-normal mb-14 leading-tight text-[#2D3253] border-0 outline-none"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
+                style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
+              >
+                <motion.span 
+                  className="bg-gradient-primary bg-clip-text text-transparent"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.8, delay: 0.4 }}
+                >
+                  Mentorship That{" "}
+                </motion.span>
+                <span className="inline-block relative w-[180px] sm:w-[220px] md:w-[280px] lg:w-[320px] text-left">
+                  <AnimatePresence mode="wait">
+                    <motion.span
+                      key={currentWordIndex}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.5 }}
+                      className="inline-block bg-gradient-primary bg-clip-text text-transparent whitespace-nowrap"
+                    >
+                      {words[currentWordIndex]}
+                    </motion.span>
+                  </AnimatePresence>
+                </span>
+              </motion.h1>
+              
+              <motion.div 
+                className="flex flex-col sm:flex-row gap-4 justify-center"
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.7, ease: "easeOut" }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 0.8 }}
+                >
+                  <Button 
+                    variant="default" 
+                    size="lg" 
+                    className="group relative overflow-hidden transition-all duration-200 hover:scale-105 hover:shadow-lg px-8"
+                    onClick={() => {
+                      if (isAuthenticated) {
+                        setActiveTab("discover");
+                        setTimeout(() => {
+                          const tabsSection = document.querySelector('[data-tabs-section]');
+                          tabsSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 100);
+                      }
+                    }}
+                  >
+                    <span className="relative z-10 flex items-center">
+                      Find Your Mentor
+                      <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                    </span>
+                  </Button>
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 0.9 }}
+                >
+                  <Link to="/become-mentor">
+                    <Button 
+                      variant="outline" 
+                      size="lg" 
+                      className="transition-all duration-200 hover:scale-105 hover:shadow-md px-8"
+                    >
+                      Become a Mentor
+                    </Button>
+                  </Link>
+                </motion.div>
+              </motion.div>
+              
+              {/* Scroll Indicator */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.6, delay: 1.2 }}
+                className="flex justify-center mt-12"
+              >
+                <motion.div
+                  animate={{ y: [0, 10, 0] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                  className="flex flex-col items-center cursor-pointer"
+                  onClick={() => {
+                    const tabsSection = document.querySelector('[data-tabs-section]');
+                    tabsSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                >
+                  <span className="text-xs text-muted-foreground mb-2">Scroll to explore</span>
+                  <ArrowRight className="h-5 w-5 text-primary rotate-90" />
+                </motion.div>
+              </motion.div>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Authentication Prompt */}
+        {!isAuthenticated && (
+          <section className="py-12">
+            <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6 }}
+              >
+                <Card className="p-6 bg-gradient-card border-primary/10">
+                  <div className="mb-4">
+                    <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <Users className="h-6 w-6 text-primary" />
+                    </div>
+                    <h2 className="text-2xl font-normal mb-2 text-[#2D3253]">Join Our Community</h2>
+                    <p className="text-xl text-muted-foreground mb-4">
+                      Sign in to get started
+                    </p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <Link to="/login">
+                      <Button size="lg" className="group">
+                        Sign In
+                        <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                      </Button>
+                    </Link>
+                    <Link to="/signup">
+                      <Button variant="outline" size="lg">
+                        Create Account
+                      </Button>
+                    </Link>
+                  </div>
+                </Card>
+              </motion.div>
+            </div>
+          </section>
+        )}
+
+        {/* Main Content Tabs */}
+        {isAuthenticated && (
+          <section className="py-20" data-tabs-section>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-5 mb-8 bg-muted/50">
+                <TabsTrigger 
+                  value="discover"
+                  className="transition-all duration-200 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
+                >
+                  Discover Mentors
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="goals"
+                  className="transition-all duration-200 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
+                >
+                  My Goals
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="sessions"
+                  className="transition-all duration-200 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
+                >
+                  Sessions
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="skills"
+                  className="transition-all duration-200 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
+                >
+                  Skills
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="profile"
+                  className="transition-all duration-200 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
+                >
+                  My Profile
+                </TabsTrigger>
+              </TabsList>
+
+              {/* Discover Mentors Tab */}
+              <TabsContent 
+                value="discover" 
+                className="space-y-6 animate-in fade-in-50 slide-in-from-bottom-4 duration-300"
+              >
+                {/* Search and Filters */}
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                >
+                  <Card className="p-4 md:p-6 bg-gradient-card border-primary/10 hover:border-primary/20 transition-all duration-300">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                      <motion.div 
+                        className="relative"
+                        whileHover={{ scale: 1.02 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+                        <Input
+                          placeholder="Search mentors..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="pl-10 w-full transition-all duration-200 focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        />
+                      </motion.div>
+                      <motion.div
+                        whileHover={{ scale: 1.02 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <Select value={selectedSkill} onValueChange={setSelectedSkill}>
+                          <SelectTrigger className="w-full transition-all duration-200 focus:ring-2 focus:ring-primary/20">
+                            <SelectValue placeholder="Select Skill" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Skills</SelectItem>
+                            {skills?.map((skill: any) => (
+                              <SelectItem key={skill.id} value={skill.name || `skill-${skill.id}`}>
+                                {skill.name || 'Unnamed Skill'}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </motion.div>
+                      <motion.div
+                        whileHover={{ scale: 1.02 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <Select value={minExperience} onValueChange={setMinExperience}>
+                          <SelectTrigger className="w-full transition-all duration-200 focus:ring-2 focus:ring-primary/20">
+                            <SelectValue placeholder="Min Experience" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="any">Any Experience</SelectItem>
+                            <SelectItem value="1">1+ years</SelectItem>
+                            <SelectItem value="3">3+ years</SelectItem>
+                            <SelectItem value="5">5+ years</SelectItem>
+                            <SelectItem value="10">10+ years</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </motion.div>
+                      <motion.div
+                        whileHover={{ scale: 1.02 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <Select value={timezone} onValueChange={setTimezone}>
+                          <SelectTrigger className="w-full transition-all duration-200 focus:ring-2 focus:ring-primary/20">
+                            <SelectValue placeholder="Timezone" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="any">Any Timezone</SelectItem>
+                            <SelectItem value="IST">IST (India)</SelectItem>
+                            <SelectItem value="EST">EST (US East)</SelectItem>
+                            <SelectItem value="PST">PST (US West)</SelectItem>
+                            <SelectItem value="GMT">GMT (UK)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </motion.div>
+                    </div>
+                  </Card>
+                </motion.div>
+
+                {/* Mentors Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                  {mentorsLoading ? (
+                    Array.from({ length: 8 }).map((_, i) => (
+                      <Card key={i} className="p-4 md:p-6 bg-gradient-card border-primary/10 animate-pulse">
+                        <div className="flex items-center space-x-3 mb-4">
+                          <div className="w-10 h-10 bg-gray-300 rounded-full"></div>
+                          <div className="flex-1">
+                            <div className="h-4 bg-gray-300 rounded mb-2"></div>
+                            <div className="h-3 bg-gray-300 rounded w-2/3"></div>
+                          </div>
+                        </div>
+                        <div className="space-y-2 mb-4">
+                          <div className="h-3 bg-gray-300 rounded"></div>
+                          <div className="h-3 bg-gray-300 rounded w-3/4"></div>
+                          <div className="h-3 bg-gray-300 rounded w-1/2"></div>
+                        </div>
+                        <div className="h-8 bg-gray-300 rounded"></div>
+                      </Card>
+                    ))
+                  ) : mentorsError ? (
+                    <div className="col-span-full text-center py-8">
+                      <div className="text-red-500 mb-2">Failed to load mentors</div>
+                      <p className="text-sm text-muted-foreground">
+                        {mentorsError.response?.status === 401 
+                          ? "Please log in to view mentors" 
+                          : "Please try again later"}
+                      </p>
+                    </div>
+                  ) : mentors && mentors.length > 0 ? (
+                    mentors.map((mentor: any, index: number) => {
+                      return (
+                      <motion.div
+                        key={mentor.id || mentor.auth_user_id}
+                        variants={itemVariants}
+                        initial="hidden"
+                        whileInView="visible"
+                        viewport={{ once: true, margin: "-50px" }}
+                        transition={{ delay: index * 0.1 }}
+                        className="h-full"
+                      >
+                        <Card className="group relative p-4 md:p-6 bg-gradient-card border-primary/10 hover:border-primary/30 transition-all duration-300 h-full flex flex-col overflow-hidden hover:shadow-[0_12px_24px_rgba(0,0,0,0.15)] hover:-translate-y-2">
+                          {/* Hover gradient overlay */}
+                          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                          
+                          {/* Badges */}
+                          <div className="absolute top-3 right-3 z-20 flex flex-col gap-1">
+                            {(() => {
+                              const mentorId = mentor.id || mentor.auth_user_id;
+                              const rating = mentorRatings[mentorId]?.average_rating || mentor.rating;
+                              const availability = mentorAvailability[mentorId] || [];
+                              const isAvailable = availability.length > 0 || mentor.is_available;
+                              
+                              return (
+                                <>
+                                  {rating && rating >= 4.5 && (
+                                    <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-2 py-0.5 shadow-md">
+                                      <Star className="h-3 w-3 mr-1 fill-current" />
+                                      Top Rated
+                                    </Badge>
+                                  )}
+                                  {isAvailable && (
+                                    <Badge className="bg-green-500 hover:bg-green-600 text-white text-xs px-2 py-0.5 shadow-md">
+                                      Available Now
+                                    </Badge>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
+                          
+                          <div className="relative z-10">
+                            <div className="flex items-center space-x-3 mb-4">
+                              {/* Avatar with better styling */}
+                              <div className="relative flex-shrink-0">
+                                {mentor.avatar_url ? (
+                                  <img
+                                    src={mentor.avatar_url}
+                                    alt={mentor.full_name || mentor.name}
+                                    className="w-12 h-12 rounded-full object-cover ring-2 ring-primary/20 group-hover:ring-primary/40 transition-all duration-300"
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 bg-gradient-to-br from-primary to-blue-600 rounded-full flex items-center justify-center ring-2 ring-primary/20 group-hover:ring-primary/40 transition-all duration-300 group-hover:scale-110">
+                                    <User className="h-6 w-6 text-white" />
+                                  </div>
+                                )}
+                                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-base truncate group-hover:text-primary transition-colors">
+                                  {mentor.full_name || mentor.name || "Professional Mentor"}
+                                </h3>
+                                <p className="text-sm text-muted-foreground truncate">
+                                  {mentor.headline || mentor.title || "Experienced Professional"}
+                                </p>
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-2 mb-4 flex-1">
+                              <div className="flex items-center space-x-2">
+                                <MapPin className="h-4 w-4 text-primary flex-shrink-0" />
+                                <span className="text-sm truncate">
+                                  {mentor.timezone || mentor.location || "Available Worldwide"}
+                                </span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Briefcase className="h-4 w-4 text-primary flex-shrink-0" />
+                                <span className="text-sm font-medium">
+                                  {mentor.years_experience || mentor.experience || "5+"} years experience
+                                </span>
+                              </div>
+                              <p className="text-sm text-muted-foreground line-clamp-2">
+                                {(() => {
+                                  if (!mentor.bio) {
+                                    return "Experienced professional ready to share knowledge and guide your career journey.";
+                                  }
+                                  
+                                  // Extract motivation from bio if it exists
+                                  const motivationMatch = mentor.bio.match(/Motivation:\s*(.+?)(?:\n|$)/i);
+                                  if (motivationMatch) {
+                                    return motivationMatch[1].trim();
+                                  }
+                                  
+                                  // If no motivation, show a clean version of bio without structured data
+                                  const cleanBio = mentor.bio
+                                    .replace(/Industry:\s*.+?(?:\n|$)/gi, '')
+                                    .replace(/Specialties:\s*.+?(?:\n|$)/gi, '')
+                                    .replace(/Availability:\s*.+?(?:\n|$)/gi, '')
+                                    .replace(/Motivation:\s*.+?(?:\n|$)/gi, '')
+                                    .trim();
+                                  
+                                  return cleanBio || "Experienced professional ready to share knowledge and guide your career journey.";
+                                })()}
+                              </p>
+                            </div>
+                            
+                            {(() => {
+                              // Parse specialties from bio or use existing skills
+                              const parsedSpecialties = parseMentorSpecialties(mentor.bio || '');
+                              const displaySkills = parsedSpecialties.length > 0 ? parsedSpecialties : 
+                                (mentor.skills && mentor.skills.length > 0 ? mentor.skills : []);
+                              
+                              return displaySkills.length > 0 ? (
+                                <div className="flex flex-wrap gap-1 mb-4">
+                                  {displaySkills.slice(0, 3).map((skill: any, skillIndex: number) => (
+                                    <Badge key={skillIndex} variant="secondary" className="text-xs group-hover:bg-primary/10 transition-colors">
+                                      {typeof skill === 'string' ? skill : skill.name || skill.skill_name || 'Expertise'}
+                                    </Badge>
+                                  ))}
+                                  {displaySkills.length > 3 && (
+                                    <Badge variant="outline" className="text-xs">
+                                      +{displaySkills.length - 3} more
+                                    </Badge>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex flex-wrap gap-1 mb-4">
+                                  <Badge variant="secondary" className="text-xs group-hover:bg-primary/10 transition-colors">
+                                    Professional Expertise
+                                  </Badge>
+                                </div>
+                              );
+                            })()}
+                            
+                            <div className="mt-auto space-y-2">
+                              {/* View Profile button that slides in on hover */}
+                              <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                whileHover={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="hidden group-hover:block"
+                              >
+                                <Button 
+                                  variant="outline"
+                                  className="w-full text-xs"
+                                  size="sm"
+                                >
+                                  <User className="mr-2 h-3 w-3" />
+                                  View Profile
+                                </Button>
+                              </motion.div>
+                              
+                              <Button 
+                                className="w-full group/btn transition-all duration-200 hover:scale-[1.02]"
+                                onClick={() => {
+                                  const mentorId = mentor.auth_user_id || mentor.id;
+                                  if (!mentorId) {
+                                    toast.error("Invalid mentor information. Please try again.");
+                                    return;
+                                  }
+                                  setSelectedMentorForBooking(mentorId);
+                                  setShowBookSessionDialog(true);
+                                }}
+                                disabled={bookSessionMutation.isPending}
+                              >
+                                {bookSessionMutation.isPending ? (
+                                  <>
+                                    <MessageSquare className="mr-2 h-4 w-4 animate-pulse" />
+                                    Sending...
+                                  </>
+                                ) : bookSessionMutation.isSuccess ? (
+                                  <>
+                                    <CheckCircle className="mr-2 h-4 w-4" />
+                                    Request Sent!
+                                  </>
+                                ) : (
+                                  <>
+                                    <MessageSquare className="mr-2 h-4 w-4 group-hover/btn:animate-pulse" />
+                                    Request Session
+                                  </>
+                                )}
+                              </Button>
+                              <p className="text-xs text-muted-foreground text-center">
+                                Sends a session request for next week
+                              </p>
+                            </div>
+                          </div>
+                        </Card>
+                      </motion.div>
+                      );
+                    })
+                  ) : (
+                    <div className="col-span-full text-center py-12">
+                      <div className="text-muted-foreground mb-2">No mentors found</div>
+                      <p className="text-sm text-muted-foreground">
+                        Try adjusting your search filters or check back later
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* My Goals Tab */}
+              <TabsContent 
+                value="goals" 
+                className="space-y-6 animate-in fade-in-50 slide-in-from-bottom-4 duration-300"
+              >
+                <motion.div 
+                  className="flex justify-between items-center"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6 }}
+                >
+                  <div>
+                    <h2 className="text-3xl font-normal mb-2 text-[#2D3253]">
+                      My Career <span className="bg-gradient-primary bg-clip-text text-transparent">Goals</span>
+                    </h2>
+                    <p className="text-xl text-muted-foreground">Track and manage your career objectives</p>
+                  </div>
+                  <Dialog open={showGoalDialog} onOpenChange={setShowGoalDialog}>
+                    <DialogTrigger asChild>
+                      <Button 
+                        className="group"
+                        onClick={() => {
+                          console.log("Goal dialog opened, current goal state:", newGoal);
+                          console.log("Available skills:", skills);
+                        }}
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Goal
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Add New Goal</DialogTitle>
+                        <DialogDescription>
+                          Set a new career goal to work towards with your mentor.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="goal-skill">Skill</Label>
+                          <Select value={newGoal.skill_id?.toString() || ""} onValueChange={(value) => {
+                            console.log("Skill selected:", value);
+                            setNewGoal({ ...newGoal, skill_id: parseInt(value) });
+                          }}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a skill" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {skills?.map((skill: any) => (
+                                <SelectItem key={skill.id} value={skill.id.toString()}>
+                                  {skill.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="goal-priority">Priority (1-5)</Label>
+                          <Select value={newGoal.priority?.toString() || "3"} onValueChange={(value) => {
+                            console.log("Priority selected:", value);
+                            setNewGoal({ ...newGoal, priority: parseInt(value) });
+                          }}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select priority" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">1 - Low</SelectItem>
+                              <SelectItem value="2">2 - Below Average</SelectItem>
+                              <SelectItem value="3">3 - Medium</SelectItem>
+                              <SelectItem value="4">4 - High</SelectItem>
+                              <SelectItem value="5">5 - Critical</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="goal-date">Target Date</Label>
+                          <Input
+                            id="goal-date"
+                            type="date"
+                            value={newGoal.target_date}
+                            onChange={(e) => setNewGoal({ ...newGoal, target_date: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="goal-notes">Notes</Label>
+                          <Textarea
+                            id="goal-notes"
+                            value={newGoal.notes}
+                            onChange={(e) => setNewGoal({ ...newGoal, notes: e.target.value })}
+                            placeholder="Additional notes about your goal..."
+                          />
+                        </div>
+                        <Button 
+                          onClick={handleAddGoal} 
+                          className="w-full"
+                          disabled={!newGoal.skill_id || !newGoal.priority || addGoalMutation.isPending || !skills || skills.length === 0}
+                        >
+                          {addGoalMutation.isPending ? "Creating Goal..." : "Add Goal"}
+                        </Button>
+                        <div className="text-xs text-muted-foreground mt-2">
+                          Debug: skill_id={newGoal.skill_id}, priority={newGoal.priority}, skills loaded={skills?.length || 0}
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </motion.div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {goalsLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <Card key={i} className="p-6 bg-gradient-card border-primary/10 animate-pulse">
+                        <div className="h-4 bg-gray-300 rounded mb-4"></div>
+                        <div className="h-3 bg-gray-300 rounded mb-2"></div>
+                        <div className="h-3 bg-gray-300 rounded"></div>
+                      </Card>
+                    ))
+                  ) : (
+                    goals?.map((goal: any) => (
+                      <motion.div
+                        key={goal.id}
+                        variants={itemVariants}
+                        initial="hidden"
+                        animate="visible"
+                      >
+                        <Card className="p-6 bg-gradient-card border-primary/10 hover:border-primary/30 transition-all duration-300 hover:shadow-glow-accent group hover-scale">
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex items-center space-x-2">
+                              <Target className="h-5 w-5 text-primary" />
+                              <div>
+                                <h3 className="font-semibold text-lg">{getSkillName(goal.skill_id)}</h3>
+                                <p className="text-sm text-muted-foreground">Skill Development Goal</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Badge variant="secondary">
+                                Priority {goal.priority}
+                              </Badge>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteGoal(goal.id)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          {/* Skill Preview */}
+                          <div className="mb-4 p-3 bg-primary/5 rounded-lg border border-primary/10">
+                            <div className="flex items-center space-x-2 mb-2">
+                              <TrendingUp className="h-4 w-4 text-primary" />
+                              <span className="text-sm font-medium text-primary">Skill Focus</span>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-foreground">
+                                {getSkillDetails(goal.skill_id).name}
+                              </p>
+                              <p className="text-xs text-muted-foreground line-clamp-2">
+                                {getSkillDetails(goal.skill_id).description}
+                              </p>
+                              {goal.notes && (
+                                <p className="text-xs text-primary/80 italic">
+                                  Goal: {goal.notes}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              {goal.target_date ? `Target: ${new Date(goal.target_date).toLocaleDateString()}` : 'No target date'}
+                            </span>
+                            <div className="flex items-center space-x-1">
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                              <span>Active</span>
+                            </div>
+                          </div>
+
+                        {/* Mentor Review (Approve = Complete) */}
+                        <div className="mt-4 border-t pt-4">
+                          {profile?.is_mentor && (
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <h4 className="font-semibold text-sm text-[#2D3253]">Mentor Review</h4>
+                                {goalReviews[goal.id]?.approved && (
+                                  <Badge variant="default" className="bg-green-600">Completed</Badge>
+                                )}
+                              </div>
+                              <Textarea
+                                placeholder="Write remarks/comments for the mentee..."
+                                value={goalReviews[goal.id]?.remarks || ""}
+                                onChange={(e) => setGoalReviews(prev => ({
+                                  ...prev,
+                                  [goal.id]: { remarks: e.target.value, approved: prev[goal.id]?.approved || false }
+                                }))}
+                                disabled={goalReviews[goal.id]?.approved}
+                              />
+                              <div className="flex items-center justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={goalReviews[goal.id]?.approved}
+                                  onClick={() => setGoalReviews(prev => ({
+                                    ...prev,
+                                    [goal.id]: { remarks: prev[goal.id]?.remarks || "", approved: true }
+                                  }))}
+                                >
+                                  Approve & Close
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        </Card>
+                      </motion.div>
+                    ))
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* Sessions Tab */}
+              <TabsContent 
+                value="sessions" 
+                className="space-y-6 animate-in fade-in-50 slide-in-from-bottom-4 duration-300"
+              >
+                <motion.div 
+                  className="text-center mb-8"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6 }}
+                >
+                  <h2 className="text-3xl font-normal mb-4 text-[#2D3253]">
+                    My <span className="bg-gradient-primary bg-clip-text text-transparent">Sessions</span>
+                  </h2>
+                  <p className="text-xl text-muted-foreground">Manage your mentorship sessions</p>
+                </motion.div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {sessionsLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <Card key={i} className="p-6 bg-gradient-card border-primary/10 animate-pulse">
+                        <div className="h-4 bg-gray-300 rounded mb-4"></div>
+                        <div className="h-3 bg-gray-300 rounded mb-2"></div>
+                        <div className="h-3 bg-gray-300 rounded"></div>
+                      </Card>
+                    ))
+                  ) : sessions && sessions.length > 0 ? (
+                    sessions.map((session: any) => (
+                      <motion.div
+                        key={session.id}
+                        variants={itemVariants}
+                        initial="hidden"
+                        animate="visible"
+                      >
+                        <Card className="p-6 bg-gradient-card border-primary/10 hover:border-primary/30 transition-all duration-300 hover:shadow-glow-accent group hover-scale">
+                          <div className="flex items-center space-x-4 mb-4">
+                            <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center">
+                              <Video className="h-6 w-6 text-primary" />
+                            </div>
+                            <div className="flex-1">
+                              <h3 className="font-semibold text-lg">Mentorship Session</h3>
+                              <p className="text-sm text-muted-foreground">
+                                Session ID: {session.id}
+                              </p>
+                            </div>
+                            <Badge variant={session.status === 'confirmed' ? 'default' : session.status === 'requested' ? 'secondary' : 'destructive'}>
+                              {session.status}
+                            </Badge>
+                          </div>
+                          
+                          <div className="space-y-3 mb-4">
+                            <div className="flex items-center space-x-2">
+                              <Clock className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <p className="text-sm font-medium">Start Time</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {new Date(session.starts_at).toLocaleString()}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <Clock className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <p className="text-sm font-medium">End Time</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {new Date(session.ends_at).toLocaleString()}
+                                </p>
+                              </div>
+                            </div>
+                            {session.agenda && (
+                              <div className="flex items-center space-x-2">
+                                <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                                <div>
+                                  <p className="text-sm font-medium">Agenda</p>
+                                  <p className="text-xs text-muted-foreground">{session.agenda}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="flex space-x-2">
+                            <Button variant="outline" size="sm" className="flex-1" disabled={session.status !== 'confirmed'}>
+                              <Video className="mr-2 h-4 w-4" />
+                              Join
+                            </Button>
+                            <Button variant="outline" size="sm" className="flex-1">
+                              <MessageSquare className="mr-2 h-4 w-4" />
+                              Details
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => handleUpdateSession(session.id, { status: 'updated' })}
+                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            >
+                              <Settings className="mr-2 h-4 w-4" />
+                              Update
+                            </Button>
+                          </div>
+                        </Card>
+                      </motion.div>
+                    ))
+                  ) : (
+                    <motion.div
+                      className="col-span-full text-center py-12"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.6 }}
+                    >
+                      <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Video className="h-8 w-8 text-primary" />
+                      </div>
+                      <h3 className="text-lg font-semibold mb-2">No Sessions Yet</h3>
+                      <p className="text-muted-foreground mb-4">
+                        Start by setting your career goals to find the right mentor for you.
+                      </p>
+                      <Button variant="outline" onClick={() => setActiveTab("goals")}>
+                        Set Your Goals
+                      </Button>
+                    </motion.div>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* My Profile Tab */}
+              <TabsContent 
+                value="profile" 
+                className="space-y-6 animate-in fade-in-50 slide-in-from-bottom-4 duration-300"
+              >
+                <motion.div 
+                  className="text-center mb-8"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6 }}
+                >
+                  <h2 className="text-3xl font-normal mb-2 text-[#2D3253]">
+                    My <span className="bg-gradient-primary bg-clip-text text-transparent">Profile</span>
+                  </h2>
+                  <p className="text-xl text-muted-foreground">View and manage your mentorship profile</p>
+                </motion.div>
+
+                {profileLoading ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <Card className="p-6 bg-gradient-card border-primary/10 animate-pulse lg:col-span-2">
+                      <div className="flex items-center space-x-4 mb-6">
+                        <div className="w-20 h-20 bg-gray-300 rounded-full"></div>
+                        <div className="flex-1">
+                          <div className="h-6 bg-gray-300 rounded mb-2"></div>
+                          <div className="h-4 bg-gray-300 rounded w-2/3"></div>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="h-4 bg-gray-300 rounded"></div>
+                        <div className="h-4 bg-gray-300 rounded w-5/6"></div>
+                        <div className="h-4 bg-gray-300 rounded w-4/6"></div>
+                      </div>
+                    </Card>
+                    <Card className="p-6 bg-gradient-card border-primary/10 animate-pulse">
+                      <div className="h-4 bg-gray-300 rounded mb-4"></div>
+                      <div className="space-y-3">
+                        <div className="h-3 bg-gray-300 rounded"></div>
+                        <div className="h-3 bg-gray-300 rounded"></div>
+                        <div className="h-3 bg-gray-300 rounded"></div>
+                      </div>
+                    </Card>
+                  </div>
+                ) : profile ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Main Profile Card */}
+                    <Card className="p-6 md:p-8 bg-gradient-card border-primary/10 hover:border-primary/30 transition-all duration-300 hover:shadow-glow-accent lg:col-span-2">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-6 mb-6">
+                        <div className="relative">
+                          {profile.avatar_url ? (
+                            <img
+                              src={profile.avatar_url}
+                              alt={profile.full_name || "Profile"}
+                              className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover ring-4 ring-primary/20"
+                            />
+                          ) : (
+                            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center ring-4 ring-primary/20">
+                              <User className="h-10 w-10 md:h-12 md:w-12 text-white" />
+                            </div>
+                          )}
+                          <div className="absolute bottom-0 right-0 w-6 h-6 bg-green-500 rounded-full border-2 border-white"></div>
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-2xl md:text-3xl font-normal mb-2 text-[#2D3253]">
+                            {profile.full_name || "User"}
+                          </h3>
+                          <p className="text-lg text-muted-foreground mb-2">
+                            {profile.headline || "No headline set"}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-3">
+                            {profile.is_mentor && (
+                              <Badge variant="default" className="bg-blue-600">
+                                <GraduationCap className="h-3 w-3 mr-1" />
+                                Mentor
+                              </Badge>
+                            )}
+                            {profile.is_mentee && (
+                              <Badge variant="secondary">
+                                <Target className="h-3 w-3 mr-1" />
+                                Mentee
+                              </Badge>
+                            )}
+                            {profile.years_experience && (
+                              <Badge variant="outline">
+                                <Briefcase className="h-3 w-3 mr-1" />
+                                {profile.years_experience} {profile.years_experience === 1 ? 'year' : 'years'} experience
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bio Section */}
+                      {profile.bio && (
+                        <div className="mb-6">
+                          <h4 className="text-lg font-normal mb-3 text-[#2D3253] flex items-center">
+                            <MessageCircle className="h-5 w-5 mr-2 text-primary" />
+                            About
+                          </h4>
+                          <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                            {profile.bio}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Profile Details */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {profile.timezone && (
+                          <div className="flex items-center space-x-2">
+                            <MapPin className="h-4 w-4 text-primary" />
+                            <div>
+                              <p className="text-xs text-muted-foreground">Timezone</p>
+                              <p className="text-sm font-medium">{profile.timezone}</p>
+                            </div>
+                          </div>
+                        )}
+                        {profile.languages && profile.languages.length > 0 && (
+                          <div className="flex items-center space-x-2">
+                            <MessageSquare className="h-4 w-4 text-primary" />
+                            <div>
+                              <p className="text-xs text-muted-foreground">Languages</p>
+                              <p className="text-sm font-medium">{profile.languages.join(", ")}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+
+                    {/* Statistics Card */}
+                    <Card className="p-6 bg-gradient-card border-primary/10 hover:border-primary/30 transition-all duration-300">
+                      <h4 className="text-lg font-normal mb-4 text-[#2D3253]">Statistics</h4>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg">
+                          <div className="flex items-center space-x-2">
+                            <Target className="h-5 w-5 text-primary" />
+                            <span className="text-sm font-medium">Goals</span>
+                          </div>
+                          <Badge variant="secondary" className="text-lg font-bold">
+                            {goals?.length || 0}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg">
+                          <div className="flex items-center space-x-2">
+                            <Video className="h-5 w-5 text-primary" />
+                            <span className="text-sm font-medium">Sessions</span>
+                          </div>
+                          <Badge variant="secondary" className="text-lg font-bold">
+                            {sessions?.length || 0}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg">
+                          <div className="flex items-center space-x-2">
+                            <BookOpen className="h-5 w-5 text-primary" />
+                            <span className="text-sm font-medium">Skills</span>
+                          </div>
+                          <Badge variant="secondary" className="text-lg font-bold">
+                            {skills?.length || 0}
+                          </Badge>
+                        </div>
+                        {profile.is_mentor && (
+                          <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <div className="flex items-center space-x-2">
+                              <Star className="h-5 w-5 text-blue-600" />
+                              <span className="text-sm font-medium text-blue-900 dark:text-blue-100">Mentor Status</span>
+                            </div>
+                            <Badge variant="default" className="bg-blue-600">
+                              Active
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+
+                    {/* Quick Actions */}
+                    <Card className="p-6 bg-gradient-card border-primary/10 hover:border-primary/30 transition-all duration-300 lg:col-span-full">
+                      <h4 className="text-lg font-normal mb-4 text-[#2D3253]">Quick Actions</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => {
+                            setShowGoalDialog(true);
+                            setActiveTab("goals");
+                          }}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add Goal
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => setActiveTab("discover")}
+                        >
+                          <Users className="mr-2 h-4 w-4" />
+                          Find Mentor
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => {
+                            setShowSkillDialog(true);
+                            setActiveTab("skills");
+                          }}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add Skill
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => setActiveTab("sessions")}
+                        >
+                          <Calendar className="mr-2 h-4 w-4" />
+                          View Sessions
+                        </Button>
+                      </div>
+                    </Card>
+                  </div>
+                ) : (
+                  <Card className="p-12 text-center">
+                    <User className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold mb-2">Profile Not Found</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Unable to load your profile. Please try refreshing the page.
+                    </p>
+                    <Button onClick={() => window.location.reload()}>
+                      Refresh Page
+                    </Button>
+                  </Card>
+                )}
+              </TabsContent>
+
+              {/* Skills Tab */}
+              <TabsContent 
+                value="skills" 
+                className="space-y-6 animate-in fade-in-50 slide-in-from-bottom-4 duration-300"
+              >
+                <motion.div 
+                  className="text-center mb-8"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6 }}
+                >
+                  <h2 className="text-3xl font-normal mb-4 text-[#2D3253]">
+                    <span className="bg-gradient-primary bg-clip-text text-transparent">Skills</span> Management
+                  </h2>
+                  <p className="text-xl text-muted-foreground">Create and manage skills in the system</p>
+                </motion.div>
+
+                <div className="flex justify-end mb-6">
+                  <Button 
+                    onClick={() => setShowSkillDialog(true)}
+                    className="bg-primary hover:bg-primary/90"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create New Skill
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {skillsLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <Card key={i} className="p-6 bg-gradient-card border-primary/10 animate-pulse">
+                        <div className="h-4 bg-gray-300 rounded mb-4"></div>
+                        <div className="h-3 bg-gray-300 rounded mb-2"></div>
+                        <div className="h-3 bg-gray-300 rounded"></div>
+                      </Card>
+                    ))
+                  ) : skills && skills.length > 0 ? (
+                    skills.map((skill: any) => (
+                      <motion.div
+                        key={skill.id}
+                        variants={itemVariants}
+                        initial="hidden"
+                        animate="visible"
+                      >
+                        <Card className="p-6 bg-gradient-card border-primary/10 hover:border-primary/30 transition-all duration-300 hover:shadow-glow-accent group hover-scale">
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex items-center space-x-2">
+                              <BookOpen className="h-5 w-5 text-primary" />
+                              <div>
+                                <h3 className="font-semibold text-lg">{skill.name}</h3>
+                                <p className="text-sm text-muted-foreground">Skill</p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="mb-4">
+                            <p className="text-sm text-muted-foreground line-clamp-3">
+                              {skill.description || 'No description available'}
+                            </p>
+                          </div>
+                          
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              ID: {skill.id}
+                            </span>
+                            <div className="flex items-center space-x-1">
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                              <span>Available</span>
+                            </div>
+                          </div>
+                        </Card>
+                      </motion.div>
+                    ))
+                  ) : (
+                    <motion.div
+                      className="col-span-full text-center py-12"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.6 }}
+                    >
+                      <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">No Skills Found</h3>
+                      <p className="text-muted-foreground mb-4">
+                        Create your first skill to get started
+                      </p>
+                      <Button onClick={() => setShowSkillDialog(true)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Skill
+                      </Button>
+                    </motion.div>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* Create Skill Dialog */}
+              <Dialog open={showSkillDialog} onOpenChange={setShowSkillDialog}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create New Skill</DialogTitle>
+                    <DialogDescription>
+                      Add a new skill to the system that can be used for goals and mentoring.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="skill-name">Skill Name</Label>
+                      <Input
+                        id="skill-name"
+                        placeholder="e.g., React, Python, Leadership"
+                        value={newSkill.name}
+                        onChange={(e) => setNewSkill({ ...newSkill, name: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="skill-description">Description</Label>
+                      <Textarea
+                        id="skill-description"
+                        placeholder="Describe what this skill involves..."
+                        value={newSkill.description}
+                        onChange={(e) => setNewSkill({ ...newSkill, description: e.target.value })}
+                        rows={3}
+                      />
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button 
+                        onClick={handleCreateSkill}
+                        disabled={!newSkill.name || createSkillMutation.isPending}
+                        className="flex-1"
+                      >
+                        {createSkillMutation.isPending ? "Creating..." : "Create Skill"}
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setShowSkillDialog(false)}
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              {/* Book Session Dialog */}
+              <Dialog open={showBookSessionDialog} onOpenChange={setShowBookSessionDialog}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Book Mentorship Session</DialogTitle>
+                    <DialogDescription>
+                      Schedule a session with your mentor. The session will be scheduled for next week.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="session-agenda">Session Agenda</Label>
+                      <Textarea
+                        id="session-agenda"
+                        placeholder="What would you like to discuss in this session?"
+                        value={sessionAgenda}
+                        onChange={(e) => setSessionAgenda(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button 
+                        onClick={() => {
+                          if (selectedMentorForBooking) {
+                            handleBookSession(selectedMentorForBooking, sessionAgenda);
+                          }
+                        }}
+                        disabled={!selectedMentorForBooking || bookSessionMutation.isPending}
+                        className="flex-1"
+                      >
+                        {bookSessionMutation.isPending ? "Booking..." : "Book Session"}
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => {
+                          setShowBookSessionDialog(false);
+                          setSelectedMentorForBooking(null);
+                        }}
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+            </Tabs>
+          </div>
+        </section>
+      )}
+          </div>
+        </motion.section>
+      </div>
+
+      {/* Footer Section */}
+      <div
+        className="-mt-16 relative z-10 min-h-screen max-w-screen-2xl mx-auto px-2 sm:px-6 lg:px-8 border border-blue-300 rounded-tl-[50px] rounded-tr-[50px] lg:rounded-tl-[70px] lg:rounded-tr-[70px] overflow-hidden bg-[#FFFFFF] animate-fade-in"
+      >
+        {/* Footer */}
+        <Footer />
+
+        <div className="px-4 sm:px-6 lg:px-8 text-center">
+          <div className="h-[16rem] flex items-center justify-center tracking-widest">
+            <TextHoverEffect text=" AInode " />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Mentorship;
