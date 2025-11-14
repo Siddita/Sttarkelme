@@ -41,7 +41,7 @@ export interface NewsSource {
 
 // Legacy API service - now deprecated in favor of generated hooks
 // This is kept for backward compatibility but should not be used for new code
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zettanix.in';
+import { API_BASE_URL } from '../config/api';
 
 class ApiService {
   private baseUrl: string;

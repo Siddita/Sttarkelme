@@ -33,6 +33,7 @@ import {
 import { useState, useRef, useEffect } from "react";
 import { motion } from 'framer-motion';
 import Footer from "@/components/Footer";
+import { getApiUrl } from "@/config/api";
 import { Navbar } from "@/components/ui/navbar-menu";
 import { TextHoverEffect } from "@/components/ui/text-hover-effect";
 import './OutlinedText.css';
@@ -281,7 +282,7 @@ const JobListing = () => {
               headers["Authorization"] = `Bearer ${token}`;
             }
 
-            const resp = await fetch("https://zettanix.in/interview/audio/transcribe", {
+            const resp = await fetch(getApiUrl("/interview/audio/transcribe"), {
               method: "POST",
               headers,
               body: form,

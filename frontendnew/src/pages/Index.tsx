@@ -261,7 +261,7 @@ return (
 
                     {/* Video */}
                     <motion.video
-                      src="/demo video/WhatsApp Video 2025-11-05 at 15.55.32_76b9dbc4.mp4"
+                      src={encodeURI("/demo video/WhatsApp Video 2025-11-05 at 15.55.32_76b9dbc4.mp4")}
                       autoPlay
                       muted
                       loop
@@ -272,6 +272,13 @@ return (
                       transition={{ duration: 1, ease: "easeOut", delay: 0.8 }}
                       viewport={{ once: true }}
                       className="w-full h-full object-contain rounded-[1.75rem]"
+                      onError={(e) => {
+                        const video = e.target as HTMLVideoElement;
+                        // Try alternative path if first fails
+                        if (!video.src.includes('fallback')) {
+                          video.src = "/Images/Video.mp4";
+                        }
+                      }}
                     />
                   </div>
                 </div>

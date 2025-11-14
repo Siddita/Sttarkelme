@@ -15,12 +15,12 @@ import QuickTestAnalysis from "./pages/QuickTestAnalysis";
 import Interview from "./pages/Interview";
 import Companies from "./pages/Companies";
 import NotFound from "./pages/NotFound";
-import Blogs from "./pages/Blogs";
 import About from "./pages/About";
 import Services from "./pages/Services";
 import Mentorship from "./pages/Mentorship";
 import BecomeMentor from "./pages/BecomeMentor";
 import AIAssessment from "./pages/AIAssessment";
+import CommunityPublic from "./pages/CommunityPublic";
 import SoftSkillsPage from "./pages/SoftSkillsPage";
 import ResumeBuilder from "./pages/ResumeBuilder";
 import JobListing from "./pages/JobListing";
@@ -110,10 +110,10 @@ const App = () => {
               <Route path="/quick-test-analysis" element={<QuickTestAnalysis />} />
               <Route path="/interview" element={<Interview />} />
               <Route path="/companies" element={<Companies />} />
-              <Route path="/blogs" element={<Blogs />} />
               <Route path="/about" element={<About />} />
               <Route path="/services" element={<Services />} />
               <Route path="/mentorship" element={<Mentorship />} />
+              <Route path="/community-public" element={<CommunityPublic />} />
               <Route path="/become-mentor" element={<BecomeMentor />} />
               <Route path="/services/ai-assessment" element={<AIAssessment />} />
               <Route path="/ai-assessment" element={<AIAssessment />} />

@@ -3,6 +3,20 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { FeatureSteps } from "@/components/animated-slideshow";
+import  Hero  from "@/components/animated-hero"
+import { HoverGrid, HoverItem } from "@/components/hover-card";
+
+
+import {
+  AnimatedCard,
+  CardBody,
+  CardDescription,
+  CardTitle,
+  CardVisual,
+  Visual1,
+} from "@/components/animated-card";
+
 import { 
   FileText, 
   Download, 
@@ -34,6 +48,7 @@ import {
   RefreshCw
 } from "lucide-react";
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, memo, useCallback } from "react";
+import { getApiUrl } from "@/config/api";
 import { motion } from 'framer-motion';
 import Footer from "@/components/Footer";
 import { Navbar } from "@/components/ui/navbar-menu";
@@ -342,6 +357,15 @@ const ResumeBuilder = () => {
           setTimeout(() => {
             setParsedResumeData(data.data);
             setCurrentResumeData(data.data);
+            
+            // Store parsed resume data in localStorage for use in other pages (e.g., CodingRoundPage)
+            try {
+              localStorage.setItem('parsedResumeData', JSON.stringify(data.data));
+              console.log('Resume data stored in localStorage');
+            } catch (error) {
+              console.error('Failed to store resume data in localStorage:', error);
+            }
+            
             setParsingProgress(100);
             setIsParsingComplete(true);
             toast.success("Resume parsed successfully! Data has been populated in the form below.");
@@ -358,9 +382,11 @@ const ResumeBuilder = () => {
         setParsingProgress(0);
       }
     },
-    onError: (error) => {
-      toast.error("Error parsing resume: " + error.message);
+    onError: (error: any) => {
+      console.error("Error parsing resume:", error);
       setParsingProgress(0);
+      const errorMessage = error.response?.detail || error.response?.message || error.message || "Unknown error occurred";
+      toast.error(`Error parsing resume: ${errorMessage}. Please try again or use the alternative parsing method.`);
     }
   });
 
@@ -471,6 +497,15 @@ const ResumeBuilder = () => {
           setTimeout(() => {
             setParsedResumeData(data.data);
             setCurrentResumeData(data.data);
+            
+            // Store parsed resume data in localStorage for use in other pages (e.g., CodingRoundPage)
+            try {
+              localStorage.setItem('parsedResumeData', JSON.stringify(data.data));
+              console.log('Resume data stored in localStorage (Legacy)');
+            } catch (error) {
+              console.error('Failed to store resume data in localStorage:', error);
+            }
+            
             setParsingProgress(100);
             setIsParsingComplete(true);
             toast.success("Resume parsed successfully! (Legacy endpoint) Data has been populated in the form below.");
@@ -1248,7 +1283,7 @@ const ResumeBuilder = () => {
               headers["Authorization"] = `Bearer ${token}`;
             }
 
-            const resp = await fetch("https://zettanix.in/interview/audio/transcribe", {
+            const resp = await fetch(getApiUrl("/interview/audio/transcribe"), {
               method: "POST",
               headers,
               body: form,
@@ -1886,51 +1921,69 @@ const ResumeBuilder = () => {
   };
 
 
-  const features = [
-    {
-      icon: Target,
-      title: "ATS Optimized",
-      description: "Built to pass Applicant Tracking Systems and reach human recruiters"
-    },
-    {
-      icon: Palette,
-      title: "Professional Templates",
-      description: "Choose from 20+ industry-specific templates designed by experts"
-    },
-    {
-      icon: Zap,
-      title: "AI Content Suggestions",
-      description: "Get intelligent suggestions to improve your resume content and impact"
-    },
-    {
-      icon: Shield,
-      title: "Privacy Protected",
-      description: "Your data is secure and never shared with third parties"
-    }
-  ];
+  const features: HoverItem[] = [
+  {
+    icon: Target,
+    title: "ATS Optimized",
+    description:
+      "Built to pass Applicant Tracking Systems and reach human recruiters",
+    mainColor: "#4F46E5",
+    secondaryColor: "#3B82F6",
+  },
+  {
+    icon: Palette,
+    title: "Professional Templates",
+    description:
+      "Choose from 20+ industry-specific templates designed by experts",
+    mainColor: "#4F46E5",
+    secondaryColor: "#3B82F6",
+  },
+  {
+    icon: Zap,
+    title: "AI Content Suggestions",
+    description:
+      "Get intelligent suggestions to improve your resume content and impact",
+    mainColor: "#4F46E5",
+    secondaryColor: "#3B82F6",
+  },
+  {
+    icon: Shield,
+    title: "Privacy Protected",
+    description:
+      "Your data is secure and never shared with third parties",
+    mainColor: "#4F46E5",
+    secondaryColor: "#3B82F6",
+  },
+];
+
 
   const steps = [
-    {
-      number: 1,
-      title: "Choose Template",
-      description: "Select from our professional templates"
-    },
-    {
-      number: 2,
-      title: "Add Information",
-      description: "Fill in your details and experience"
-    },
-    {
-      number: 3,
-      title: "AI Enhancement",
-      description: "Get AI-powered suggestions and improvements"
-    },
-    {
-      number: 4,
-      title: "Download & Share",
-      description: "Export in multiple formats and share"
-    }
-  ];
+  {
+  step: 1,
+  title: "Choose Template",
+  content: "Select from our professional templates",
+  image: "/Images/choose.jpg",
+},
+  {
+    step: 2,
+    title: "Add Information",
+    content: "Fill in your details and experience",
+    image: "/Images/add.jpg",
+  },
+  {
+    step: 3,
+    title: "AI Enhancement",
+    content: "Get AI-powered suggestions and improvements",
+    image: "/Images/ai.jpg",
+  },
+  {
+    step: 4,
+    title: "Download & Share",
+    content: "Export in multiple formats and share",
+    image: "/Images/share.jpg",
+  },
+];
+
 
   const testimonials = [
     {
@@ -1965,43 +2018,27 @@ const ResumeBuilder = () => {
         <section className="relative z-40 lg:min-h-screen max-w-screen-2xl mx-auto flex items-center bg-gradient-to-b from-cyan-100 to-white overflow-hidden pt-8">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
             <div className="text-center mb-12">
-            <div className="inline-flex items-center space-x-2 bg-card/50 backdrop-blur-sm rounded-full px-4 py-2 mb-6 border border-primary/20">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">ATS-Optimized Resumes</span>
-            </div>
-            <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-normal mb-6 leading-tight animate-fade-in text-[#2D3253]">
-              Resume <span className="bg-gradient-primary bg-clip-text text-transparent">Builder</span>
-            </h1>
-            <p className="text-xl text-muted-foreground mb-10 max-w-3xl mx-auto leading-relaxed animate-fade-in">
-              Create professional, ATS-optimized resumes that stand out to hiring managers. Get AI-powered suggestions and industry-specific templates.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" onClick={scrollToTemplates}>
-                Start Building
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="lg" onClick={scrollToTemplates}>
-                View Templates
-              </Button>
-            </div>
+            <div className="block">
+   <Hero onScrollToTemplates={scrollToTemplates} />
+</div>
           </div>
           </div>
         </section>
 
         {/* Features Section */}
-        <section className="relative w-full py-20 bg-gradient-to-b from-white to-cyan-100 overflow-hidden">
-          <div className="text-center pt-14 relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {features.map((feature) => (
-                <Card key={feature.title} className="p-6 text-center border-primary/10">
-                  <feature.icon className="h-12 w-12 mx-auto mb-4 text-primary" />
-                  <h3 className="font-bold text-lg mb-2">{feature.title}</h3>
-                  <p className="text-muted-foreground text-sm">{feature.description}</p>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </section>
+         <section className="relative w-full py-20 bg-gradient-to-b from-white to-cyan-100 overflow-hidden">
+  <div className="text-center pt-14 relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <h2 className="text-xl mb-10 sm:text-4xl md:text-6xl lg:text-4xl font-normal leading-tight text-[#2D3253] z-50">
+      Why Choose{" "}
+      <span className="bg-gradient-to-r from-indigo-500 to-blue-500 bg-clip-text text-transparent">
+        Our Resume Builder
+      </span>
+    </h2>
+
+    {/* New hover grid using the same data */}
+    <HoverGrid items={features} />
+  </div>
+</section>
 
         {/* Templates Section */}
         <section ref={templatesRef} className="relative w-full py-20 bg-gradient-to-b from-cyan-100 to-white overflow-hidden">
@@ -2062,27 +2099,19 @@ const ResumeBuilder = () => {
               ))}
             </div>
           </div>
-        </section>
+        </section><section className="relative w-full py-20 bg-gradient-to-b from-white to-cyan-100 overflow-hidden">
+      <FeatureSteps
+        features={steps}
+        title="How It Works"
+        autoPlayInterval={4000}
+        imageHeight="h-[400px]"
+      />
+    </section>
+
 
         {/* How It Works Section */}
-        <section className="relative w-full py-20 bg-gradient-to-b from-white to-cyan-100 overflow-hidden">
-          <div className="text-center pt-14 relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <h2 className="text-xl mb-6 sm:text-4xl md:text-6xl lg:text-4xl font-normal leading-tight text-[#2D3253] z-50">
-              How It <span className="bg-gradient-primary bg-clip-text text-transparent">Works</span>
-            </h2>
-            <div className="grid md:grid-cols-4 gap-8">
-              {steps.map((step) => (
-                <Card key={step.number} className="p-6 text-center border-primary/10">
-                  <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span className="text-primary font-bold text-xl">{step.number}</span>
-                  </div>
-                  <h3 className="font-bold text-lg mb-2">{step.title}</h3>
-                  <p className="text-muted-foreground text-sm">{step.description}</p>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </section>
+        {/* How It Works Section */}
+
 
         {/* Resume Builder Interface Section */}
         <section ref={buildingRef} className="relative w-full py-20 bg-gradient-to-b from-cyan-100 to-white overflow-hidden">

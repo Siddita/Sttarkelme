@@ -35,8 +35,9 @@ import {
   Settings
 } from "lucide-react";
 import { generateInterviewPdfGenerateInterviewPdfPost, downloadReportDownloadReportPost } from "@/hooks/useApis";
+import { API_BASE_URL } from "@/config/api";
 
-const API_BASE = "https://zettanix.in";
+const API_BASE = API_BASE_URL;
 
 async function apiClient(
   method: "GET" | "POST",

@@ -162,10 +162,8 @@ export const Menu = ({
     >
       <div className="flex justify-between items-center h-16 px-4 sm:px-6 lg:px-8">
         {/* Logo */}
-        <a 
-          href="https://place-pro-theta.vercel.app/" 
-          target="_blank" 
-          rel="noopener noreferrer"
+        <Link 
+          to="/"
           className="flex items-center space-x-2"
         >
           <img
@@ -173,7 +171,7 @@ export const Menu = ({
             alt="Company Logo"
             className="h-8 sm:h-10 md:h-12 w-auto"
           />
-        </a>
+        </Link>
 
         {/* Desktop Menu */}
         <div className="hidden md:flex items-center space-x-6">{children}</div>
@@ -581,12 +579,11 @@ export function Navbar({ className }: { className?: string }) {
           )}
         </div>
 
-        {/* <MenuItem setActive={setActive} active={active} item="Blogs/News" /> */}
-        <Link to="/blogs">
-        <MenuItem setActive={setActive} active={null} item="Blogs/News" isActive={isMenuItemActive("/blogs")} />
-        </Link>
         <Link to="/mentorship">
           <MenuItem setActive={setActive} active={null} item="Mentorship" isActive={isMenuItemActive("/mentorship")} />
+        </Link>
+        <Link to="/community-public">
+          <MenuItem setActive={setActive} active={null} item="Community" isActive={isMenuItemActive("/community-public")} />
         </Link>
         <a 
           href="https://place-pro-theta.vercel.app/" 

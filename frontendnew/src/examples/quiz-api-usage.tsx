@@ -5,8 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { 
   useGenerateAptitudeQuestions,
   useEvaluateAptitudeAnswers,
-  useGenerateCodingChallenge,
-  useEvaluateCodeSolution,
+  useGenerateCodingQuestion,
+  useCodingHealthCheck,
   useGenerateMCQQuestions,
   useGenerateBehavioralQuestions,
   useEvaluateBehavioralAnswers,
@@ -24,8 +24,9 @@ const QuizAPIUsage: React.FC = () => {
   // Initialize all quiz hooks
   const generateAptitude = useGenerateAptitudeQuestions();
   const evaluateAptitude = useEvaluateAptitudeAnswers();
-  const generateCoding = useGenerateCodingChallenge();
-  const evaluateCoding = useEvaluateCodeSolution();
+  const generateCoding = useGenerateCodingQuestion();
+  // Note: Coding service doesn't have an evaluation endpoint
+  const codingHealthCheck = useCodingHealthCheck();
   const generateMCQ = useGenerateMCQQuestions();
   const generateBehavioral = useGenerateBehavioralQuestions();
   const evaluateBehavioral = useEvaluateBehavioralAnswers();
@@ -60,31 +61,32 @@ const QuizAPIUsage: React.FC = () => {
     }
   };
 
-  // Example: Generate Coding Challenge
+  // Example: Generate Coding Question
   const handleGenerateCoding = async () => {
     try {
       const result = await generateCoding.mutateAsync({
-        difficulty: 'medium',
-        language: 'python'
+        Education: 'Bachelor\'s in Computer Science',
+        Years_of_Experience: 2,
+        Project_Count: 5,
+        Domain: 'Software Development',
+        Skills: ['Python', 'JavaScript'],
+        Certifications: 'None',
+        Skill_Level: 'intermediate'
       });
-      console.log('Coding challenge generated:', result);
+      console.log('Coding question generated:', result);
     } catch (error) {
-      console.error('Failed to generate coding challenge:', error);
+      console.error('Failed to generate coding question:', error);
     }
   };
 
-  // Example: Evaluate Code Solution
+  // Example: Coding Health Check (Note: Evaluation endpoint not available)
   const handleEvaluateCoding = async () => {
     try {
-      const result = await evaluateCoding.mutateAsync({
-        code: 'def solution(arr):\n    return sum(arr)',
-        language: 'python',
-        challenge_id: 'challenge_123',
-        time_taken: 600 // 10 minutes
-      });
-      console.log('Code solution evaluated:', result);
+      const result = codingHealthCheck.data;
+      console.log('Coding service health check:', result);
+      alert('Coding service evaluation endpoint is not available. Only health check is available.');
     } catch (error) {
-      console.error('Failed to evaluate code solution:', error);
+      console.error('Failed to check coding service health:', error);
     }
   };
 
@@ -220,11 +222,11 @@ const QuizAPIUsage: React.FC = () => {
             </Button>
             <Button 
               onClick={handleEvaluateCoding}
-              disabled={evaluateCoding.isPending}
+              disabled={codingHealthCheck.isLoading}
               variant="outline"
               className="w-full"
             >
-              {evaluateCoding.isPending ? 'Evaluating...' : 'Evaluate Code'}
+              {codingHealthCheck.isLoading ? 'Checking...' : 'Health Check'}
             </Button>
           </div>
         </Card>

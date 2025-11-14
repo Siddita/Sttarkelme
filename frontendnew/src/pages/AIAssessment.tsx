@@ -31,8 +31,8 @@ import Footer from "@/components/Footer";
 import { 
   useGenerateBehavioralQuestions, 
   useEvaluateBehavioralAnswers,
-  useGenerateCodingChallenge,
-  useEvaluateCodeSolution,
+  useGenerateCodingQuestion,
+  useCodingHealthCheck,
   useQuizSession,
   useQuizProgress,
   type AptitudeQuestion,
@@ -109,8 +109,9 @@ const AIAssessment = () => {
   // Quiz hooks
   const generateBehavioralQuestions = useGenerateBehavioralQuestions();
   const evaluateBehavioralAnswers = useEvaluateBehavioralAnswers();
-  const generateCodingChallenge = useGenerateCodingChallenge();
-  const evaluateCodeSolution = useEvaluateCodeSolution();
+  const generateCodingQuestion = useGenerateCodingQuestion();
+  // Note: Coding service doesn't have an evaluation endpoint, only health check available
+  const codingHealthCheck = useCodingHealthCheck();
   const quizSession = useQuizSession();
   const quizProgress = useQuizProgress();
 
@@ -381,10 +382,9 @@ const AIAssessment = () => {
       
       const challenge = (quizQuestions[0] as any)?.challenge || "Coding challenge";
       
-      const response = await evaluateCodeSolution.mutateAsync({
-        challenge: challenge,
-        solution: codeSolution
-      });
+      // Note: Coding service doesn't have an evaluation endpoint
+      // Evaluation functionality removed
+      const response = { message: 'Evaluation not available in coding service' };
 
       // Create a mock results object since the API returns evaluation text
       const mockResults = {
@@ -896,9 +896,9 @@ const AIAssessment = () => {
                           <Button 
                             className="w-full" 
                             onClick={startCodingAssessment}
-                            disabled={generateCodingChallenge.isPending}
+                            disabled={generateCodingQuestion.isPending}
                           >
-                            {generateCodingChallenge.isPending ? (
+                            {generateCodingQuestion.isPending ? (
                               <>
                                 <Clock className="ml-2 h-4 w-4 animate-spin" />
                                 Starting...

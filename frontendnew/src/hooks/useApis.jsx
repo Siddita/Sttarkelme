@@ -4,7 +4,8 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 
 // --- API Client Configuration ---
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zettanix.in';
+// Import from centralized config
+import { API_BASE_URL } from '../config/api';
 
 /**
  * A generic API client that handles different content types.
@@ -40,6 +41,13 @@ async function apiClient(method, path, data = null, contentType = 'application/j
       };
       options.body = JSON.stringify(data);
     }
+  } else if (method.toUpperCase() === 'PATCH' || method.toUpperCase() === 'PUT') {
+    // Ensure PATCH/PUT requests always have a Content-Type header and body
+    options.headers = {
+      ...options.headers,
+      'Content-Type': contentType,
+    };
+    options.body = JSON.stringify({});
   }
 
   const response = await fetch(url, options);
@@ -48,8 +56,23 @@ async function apiClient(method, path, data = null, contentType = 'application/j
     const error = new Error(`API request failed with status ${response.status}`);
     try {
       error.response = await response.json();
+      console.error('API Error Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        url: url,
+        body: error.response,
+        requestBody: options.body,
+        fullError: JSON.stringify(error.response, null, 2)
+      });
     } catch (e) {
       error.response = await response.text();
+      console.error('API Error Response (text):', {
+        status: response.status,
+        statusText: response.statusText,
+        url: url,
+        body: error.response,
+        requestBody: options.body
+      });
     }
     throw error;
   }
@@ -994,8 +1017,14 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {object} source
  */
 /**
- * @typedef {object} Body_upload_resume_upload_resume__post
- * @property {string} file
+ * @typedef {object} Profile
+ * @property {string} Education
+ * @property {integer} Years_of_Experience
+ * @property {integer} Project_Count
+ * @property {string} Domain
+ * @property {string[]} Skills
+ * @property {string} Certifications
+ * @property {string} Skill_Level
  */
 
 // --- Generated React Query Hooks ---
@@ -2017,7 +2046,21 @@ export const bookSessionSessionsPost = (options) => {
  */
 export const updateSessionSessions_SessionId_Patch = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('patch', '/mentorship/sessions/{session_id}', data, 'application/json'),
+    mutationFn: ({ session_id, ...data }) => {
+      // Ensure session_id is a number
+      const sessionId = typeof session_id === 'string' ? parseInt(session_id, 10) : session_id;
+      console.log('Update session request:', { session_id: sessionId, body: data, session_id_type: typeof sessionId });
+      return apiClient('patch', `/mentorship/sessions/${sessionId}`, data, 'application/json').catch(error => {
+        console.error('Update session error details:', {
+          session_id: sessionId,
+          requestBody: data,
+          errorResponse: error.response,
+          errorDetail: error.response?.detail,
+          fullErrorBody: error.response
+        });
+        throw error;
+      });
+    },
     ...options,
   });
 };
@@ -2914,52 +2957,26 @@ export const profileHealthzHealthzGet = (options) => {
 };
 
 /**
- * @description Hook for /coding/upload_resume/ [POST]
- * @param {Body_upload_resume_upload_resume__post} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, Body_upload_resume_upload_resume__post>}
+ * @description Hook for /coding/coding/generate_question/ [POST]
+ * @param {Profile} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<object, unknown, Profile>}
  */
-export const uploadResumeUploadResume_Post = (options) => {
+export const generateQuestionCodingGenerateQuestion_Post = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/coding/upload_resume/', data, 'multipart/form-data'),
+    mutationFn: (data) => apiClient('post', '/coding/coding/generate_question/', data, 'application/json'),
     ...options,
   });
 };
 
 /**
  * @description Hook for /coding/ [GET]
- * @returns {import('@tanstack/react-query').QueryResult<RootModel>}
+ * @returns {import('@tanstack/react-query').QueryResult<object>}
  */
-export const codingRoot_Get = (options) => {
-  const queryKey = ['coding_root__get'];
+export const codingHealthCheck_Get = (options) => {
+  const queryKey = ['coding_health_check__get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/coding/'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /coding/health [GET]
- * @returns {import('@tanstack/react-query').QueryResult<HealthModel>}
- */
-export const codingHealthCheckHealthGet = (options) => {
-  const queryKey = ['coding_health_check_health_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/coding/health'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /coding/healthz [GET]
- * @returns {import('@tanstack/react-query').QueryResult<HealthZModel>}
- */
-export const codingHealthzHealthzGet = (options) => {
-  const queryKey = ['coding_healthz_healthz_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/coding/healthz'),
     ...options,
   });
 };

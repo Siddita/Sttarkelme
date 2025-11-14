@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { FeatureSteps } from "@/components/new_ui/feature-section2";
 import { Progress } from "@/components/ui/progress";
 import { 
   Brain, 
@@ -82,10 +83,10 @@ import {
   evaluateAnswersEvaluateAptitudePost,
   generateBehavioralQuestionsGenerateBehavioralQuestionsPost,
   evaluateBehavioralResponseEvaluateBehavioralPost,
-  generateRandomCodingChallengeGenerateChallengePost,
-  evaluateCodeSolutionEvaluateCodePost,
   generateWritingPromptGenerateWritingPromptPost,
   evaluateWritingResponseEvaluateWritingPost,
+  generateQuestionCodingGenerateQuestion_Post,
+  evaluateCodeSolutionEvaluateCodePost,
   // AI Interview endpoints
   startInterviewInterviewStartPost,
   submitReplyInterviewReplyPost,
@@ -98,8 +99,53 @@ import {
   // calculateSkillMatchPercentageResumeCalculateSkillMatchPercentagePost
 } from "@/hooks/useApis";
 import './OutlinedText.css';
+import { API_BASE_URL, getApiUrl } from "@/config/api";
 
-const API_BASE = "https://zettanix.in";
+const API_BASE = API_BASE_URL;
+
+//---------- feature-secection2.tsx ----------
+const features = [
+  {
+    step: "Step 1",
+    title: "Upload Resume",
+    content: "Upload your resume for AI analysis.",
+    image: "/Images/feature-section2/Upload Resume.png"
+
+  },
+  {
+    step: "Step 2",
+    title: "AI Analysis",
+    content:
+      "AI extracts and analyzes your skills.",
+    image: "/Images/feature-section2/AI Analysis.png"
+
+  },
+  {
+    step: "Step 3",
+    title: "Job Matching",
+    content:
+      "Get personalized job recommendations.",
+    image: "/Images/feature-section2/Job Matching.png"
+  },
+  {
+    step: "Step 4",
+    title: "Choose Your Path",
+    content:
+      "Select your preferred assessment method.",
+    image: "/Images/feature-section2/ChoosePath.png"
+
+  },
+  {
+    step: "Step 5",
+    title: "Get Results",
+    content:
+      "Receive your personalized assessment report.",
+    image: "/Images/feature-section2/Get Results.png"
+
+  },
+]
+// --------- feature-secection2.tsx ----------
+
 
 async function apiClient(
   method: "GET" | "POST",
@@ -146,6 +192,240 @@ async function apiClient(
   return json;
 }
 
+// Helper function to extract profile data from parsed resume or dashboard state
+const getProfileFromResume = () => {
+  try {
+    // First, try to get data from parsedResumeData
+    const storedResume = localStorage.getItem('parsedResumeData');
+    let resumeData = null;
+    
+    if (storedResume) {
+      try {
+        resumeData = JSON.parse(storedResume);
+      } catch (e) {
+        console.warn('Failed to parse parsedResumeData:', e);
+      }
+    }
+    
+    // If no resume data, try to get from dashboard-state (userProfile)
+    let userProfile = null;
+    let dashboardSkills = null;
+    if (!resumeData) {
+      const dashboardState = localStorage.getItem('dashboard-state');
+      if (dashboardState) {
+        try {
+          const parsedState = JSON.parse(dashboardState);
+          userProfile = parsedState.userProfile;
+          dashboardSkills = parsedState.skills; // Also get skills array from dashboard state
+        } catch (e) {
+          console.warn('Failed to parse dashboard-state:', e);
+        }
+      }
+    }
+    
+    // Use resumeData if available, otherwise use userProfile
+    const dataSource = resumeData || userProfile;
+    if (!dataSource) {
+      console.log('No profile data found in localStorage');
+      return null;
+    }
+    
+    // Extract Education (get highest degree)
+    let education = "Bachelor's in Computer Science"; // Default
+    if (resumeData) {
+      // From parsed resume format
+      if (resumeData.education && Array.isArray(resumeData.education) && resumeData.education.length > 0) {
+        const highestEdu = resumeData.education[0]; // Usually sorted by date, first is most recent
+        education = highestEdu.degree || highestEdu.qualification || education;
+      }
+    } else if (userProfile) {
+      // From userProfile format
+      if (userProfile.education && Array.isArray(userProfile.education) && userProfile.education.length > 0) {
+        const highestEdu = userProfile.education[0]; // Usually sorted by date, first is most recent
+        education = highestEdu.degree || education;
+      } else if (userProfile.specialization) {
+        education = `${userProfile.specialization} - ${userProfile.graduation_year || 'N/A'}`;
+      }
+    }
+    
+    // Extract Years_of_Experience (calculate from experience array)
+    let yearsOfExperience = 0;
+    if (resumeData) {
+      // From parsed resume format
+      if (resumeData.experience && Array.isArray(resumeData.experience)) {
+        const totalMonths = resumeData.experience.reduce((total: number, exp: any) => {
+          if (exp.start_date && exp.end_date) {
+            const start = new Date(exp.start_date);
+            const end = exp.end_date === 'Present' || !exp.end_date ? new Date() : new Date(exp.end_date);
+            const months = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30);
+            return total + Math.max(0, months);
+          }
+          return total;
+        }, 0);
+        yearsOfExperience = Math.floor(totalMonths / 12);
+      }
+    } else if (userProfile) {
+      // From userProfile format
+      if (userProfile.work_experience && Array.isArray(userProfile.work_experience)) {
+        const totalMonths = userProfile.work_experience.reduce((total: number, exp: any) => {
+          if (exp.duration) {
+            // Parse duration string like "2022-2024" or "2 years"
+            const durationMatch = exp.duration.match(/(\d+)\s*years?/i);
+            if (durationMatch) {
+              return total + parseInt(durationMatch[1], 10) * 12;
+            }
+            // Try to parse year range
+            const yearRange = exp.duration.match(/(\d{4})\s*-\s*(\d{4}|Present)/i);
+            if (yearRange) {
+              const startYear = parseInt(yearRange[1], 10);
+              const endYear = yearRange[2] === 'Present' ? new Date().getFullYear() : parseInt(yearRange[2], 10);
+              return total + (endYear - startYear) * 12;
+            }
+          }
+          return total;
+        }, 0);
+        yearsOfExperience = Math.floor(totalMonths / 12);
+      }
+    }
+    
+    // Extract Project_Count
+    let projectCount = 0;
+    if (resumeData) {
+      projectCount = resumeData.projects && Array.isArray(resumeData.projects) 
+        ? resumeData.projects.length 
+        : 0;
+    } else if (userProfile) {
+      projectCount = userProfile.projects && Array.isArray(userProfile.projects) 
+        ? userProfile.projects.length 
+        : 0;
+    }
+    
+    // Extract Domain (from experience or specialization)
+    let domain = "Software Development"; // Default
+    if (resumeData) {
+      if (resumeData.experience && resumeData.experience.length > 0) {
+        const latestExp = resumeData.experience[0];
+        domain = latestExp.domain || latestExp.industry || latestExp.position || domain;
+      }
+    } else if (userProfile) {
+      if (userProfile.work_experience && userProfile.work_experience.length > 0) {
+        const latestExp = userProfile.work_experience[0];
+        domain = latestExp.role || latestExp.company || domain;
+      } else if (userProfile.specialization) {
+        domain = userProfile.specialization;
+      } else if (userProfile.preferred_job_roles && userProfile.preferred_job_roles.length > 0) {
+        domain = userProfile.preferred_job_roles[0];
+      }
+    }
+    
+    // Extract Skills
+    let skills: string[] = ["Software Engineering"]; // Default
+    if (resumeData) {
+      if (resumeData.skills && Array.isArray(resumeData.skills) && resumeData.skills.length > 0) {
+        skills = resumeData.skills;
+      } else if (resumeData.experience && resumeData.experience.length > 0) {
+        // Try to extract from experience descriptions
+        const allSkills = new Set<string>();
+        resumeData.experience.forEach((exp: any) => {
+          if (exp.description) {
+            const techKeywords = ['Python', 'JavaScript', 'Java', 'C++', 'React', 'Node.js', 'SQL', 'AWS', 'Docker'];
+            techKeywords.forEach(keyword => {
+              if (exp.description.toLowerCase().includes(keyword.toLowerCase())) {
+                allSkills.add(keyword);
+              }
+            });
+          }
+        });
+        if (allSkills.size > 0) {
+          skills = Array.from(allSkills);
+        }
+      }
+    } else if (userProfile) {
+      // First, try to get skills from dashboard state's skills array
+      if (dashboardSkills && Array.isArray(dashboardSkills) && dashboardSkills.length > 0) {
+        skills = dashboardSkills.map((skill: any) => skill.name || skill).filter(Boolean);
+      }
+      
+      // If no skills from dashboard state, try to get from projects
+      if (skills.length === 0 || (skills.length === 1 && skills[0] === "Software Engineering")) {
+        if (userProfile.projects && Array.isArray(userProfile.projects) && userProfile.projects.length > 0) {
+          const allSkills = new Set<string>();
+          userProfile.projects.forEach((project: any) => {
+            if (project.skills_used && Array.isArray(project.skills_used)) {
+              project.skills_used.forEach((skill: string) => allSkills.add(skill));
+            }
+          });
+          if (allSkills.size > 0) {
+            skills = Array.from(allSkills);
+          }
+        }
+      }
+      
+      // Also check work experience descriptions
+      if (skills.length === 0 || (skills.length === 1 && skills[0] === "Software Engineering")) {
+        if (userProfile.work_experience && Array.isArray(userProfile.work_experience)) {
+          const allSkills = new Set<string>(skills.length > 0 ? skills : []);
+          userProfile.work_experience.forEach((exp: any) => {
+            if (exp.description) {
+              const techKeywords = ['Python', 'JavaScript', 'Java', 'C++', 'React', 'Node.js', 'SQL', 'AWS', 'Docker', 'TypeScript', 'MongoDB', 'PostgreSQL'];
+              techKeywords.forEach(keyword => {
+                if (exp.description.toLowerCase().includes(keyword.toLowerCase())) {
+                  allSkills.add(keyword);
+                }
+              });
+            }
+          });
+          if (allSkills.size > 0) {
+            skills = Array.from(allSkills);
+          }
+        }
+      }
+    }
+    
+    // Extract Certifications
+    let certifications = "None";
+    if (resumeData) {
+      if (resumeData.certifications && Array.isArray(resumeData.certifications) && resumeData.certifications.length > 0) {
+        certifications = resumeData.certifications.map((cert: any) => 
+          cert.name || cert.title || cert
+        ).join(', ');
+      }
+    } else if (userProfile) {
+      if (userProfile.certifications && Array.isArray(userProfile.certifications) && userProfile.certifications.length > 0) {
+        certifications = userProfile.certifications.map((cert: any) => 
+          cert.name || cert
+        ).join(', ');
+      }
+    }
+    
+    // Determine Skill_Level based on experience and education
+    let skillLevel = "intermediate";
+    if (yearsOfExperience >= 5) {
+      skillLevel = "hard";
+    } else if (yearsOfExperience >= 2) {
+      skillLevel = "intermediate";
+    } else {
+      skillLevel = "easy";
+    }
+    
+    const profileData = {
+      Education: education,
+      Years_of_Experience: yearsOfExperience,
+      Project_Count: projectCount,
+      Domain: domain,
+      Skills: skills,
+      Certifications: certifications,
+      Skill_Level: skillLevel
+    };
+    
+    console.log('Profile data extracted from localStorage:', profileData);
+    return profileData;
+  } catch (error) {
+    console.error('Error extracting profile from resume or dashboard state:', error);
+    return null;
+  }
+};
+
 const PersonalizedAssessment = () => {
   const navigate = useNavigate();
   
@@ -188,6 +468,18 @@ const PersonalizedAssessment = () => {
   const [isGeneratingCoding, setIsGeneratingCoding] = useState(false);
   const [isEvaluatingCoding, setIsEvaluatingCoding] = useState(false);
   const [codingResults, setCodingResults] = useState<any>(null);
+  const [codeEvaluation, setCodeEvaluation] = useState<any>(null);
+  const [showCodingProfileForm, setShowCodingProfileForm] = useState(false);
+  const [codingProfileData, setCodingProfileData] = useState({
+    Education: '',
+    Years_of_Experience: 0,
+    Project_Count: 0,
+    Domain: '',
+    Skills: [] as string[],
+    Certifications: '',
+    Skill_Level: ''
+  });
+  const [currentCodingSkillInput, setCurrentCodingSkillInput] = useState('');
 
   // AI Interview State
   const [interviewSessionId, setInterviewSessionId] = useState<string | null>(null);
@@ -279,8 +571,8 @@ const PersonalizedAssessment = () => {
   const evaluateAptitudeAnswers = evaluateAnswersEvaluateAptitudePost();
   const generateBehavioralQuestions = generateBehavioralQuestionsGenerateBehavioralQuestionsPost();
   const evaluateBehavioralAnswers = evaluateBehavioralResponseEvaluateBehavioralPost();
-  const generateCodingChallenge = generateRandomCodingChallengeGenerateChallengePost();
-  const evaluateCodingSolution = evaluateCodeSolutionEvaluateCodePost();
+  const generateCodingQuestion = generateQuestionCodingGenerateQuestion_Post();
+  const evaluateCodeSolution = evaluateCodeSolutionEvaluateCodePost();
   
   // AI Interview hooks
   const startInterview = startInterviewInterviewStartPost();
@@ -1007,6 +1299,25 @@ const PersonalizedAssessment = () => {
     }
   }, [isInterviewComplete]);
 
+  // Auto-fill coding profile form from localStorage when form is shown
+  useEffect(() => {
+    if (showCodingProfileForm) {
+      const profileData = getProfileFromResume();
+      if (profileData) {
+        console.log('Auto-filling coding profile form from localStorage:', profileData);
+        setCodingProfileData({
+          Education: profileData.Education || '',
+          Years_of_Experience: profileData.Years_of_Experience || 0,
+          Project_Count: profileData.Project_Count || 0,
+          Domain: profileData.Domain || '',
+          Skills: profileData.Skills || [],
+          Certifications: profileData.Certifications || 'None',
+          Skill_Level: profileData.Skill_Level || 'intermediate'
+        });
+      }
+    }
+  }, [showCodingProfileForm]);
+
   // Auto-read new questions (optional - can be disabled if user prefers manual control)
   useEffect(() => {
     if (currentInterviewQuestion && interviewSessionId && !isInterviewComplete) {
@@ -1271,15 +1582,59 @@ const PersonalizedAssessment = () => {
       console.log('Sanitized skills:', sanitizedSkills);
       console.log('Sanitized job role:', sanitizedJobRole);
       
-      const response = await generateBehavioralQuestions.mutateAsync(requestData);
+      // Double-check JSON is valid before sending
+      let finalRequestData = requestData;
+      try {
+        const testJson = JSON.stringify(requestData);
+        finalRequestData = JSON.parse(testJson);
+      } catch (jsonErr) {
+        console.error('Final JSON validation failed, using fallback:', jsonErr);
+        finalRequestData = {
+          skills: 'JavaScript, React, Node.js, Python, SQL',
+          level: 'intermediate',
+          job_role: 'Software Engineer',
+          test_type: 'behavioral',
+          company: 'Tech Company'
+        };
+      }
+      
+      const response = await generateBehavioralQuestions.mutateAsync(finalRequestData);
+      
+      // Validate response is valid
+      if (!response) {
+        throw new Error('Empty response from API');
+      }
+      
+      // Handle different response formats
+      let questions: any[] = [];
+      if (Array.isArray(response)) {
+        questions = response;
+      } else if (response.questions && Array.isArray(response.questions)) {
+        questions = response.questions;
+      } else if (response.data && Array.isArray(response.data)) {
+        questions = response.data;
+      } else if (typeof response === 'string') {
+        // Try to parse if it's a JSON string
+        try {
+          const parsed = JSON.parse(response);
+          questions = parsed.questions || parsed.data || (Array.isArray(parsed) ? parsed : []);
+        } catch (parseErr) {
+          console.error('Failed to parse string response:', parseErr);
+          throw new Error('Invalid response format from API');
+        }
+      }
       
       console.log('Behavioral questions generated:', response);
-      console.log('Questions array:', response.questions);
-      console.log('First question:', response.questions?.[0]);
+      console.log('Questions array:', questions);
+      console.log('First question:', questions?.[0]);
       
-      setBehavioralQuestions(response.questions || []);
+      if (questions.length === 0) {
+        throw new Error('No questions received from API');
+      }
+      
+      setBehavioralQuestions(questions);
       setCurrentBehavioralQuestion(0);
-      setBehavioralAnswers(new Array(response.questions?.length || 0).fill(''));
+      setBehavioralAnswers(new Array(questions.length).fill(''));
       
       // Scroll to questions after they are loaded
       scrollToQuestions();
@@ -1288,27 +1643,21 @@ const PersonalizedAssessment = () => {
       console.error('Error generating behavioral questions:', error);
       console.error('Error details:', error?.response || error?.message);
       
-      // Show user-friendly error message
-      const errorDetail = error?.response?.detail || error?.response?.data?.detail || '';
-      let errorMessage = 'Failed to generate behavioral questions. Please try again.';
-      
-      if (errorDetail) {
-        if (typeof errorDetail === 'string') {
-          errorMessage = errorDetail;
-        } else if (Array.isArray(errorDetail)) {
-          errorMessage = errorDetail.map((err: any) => err.msg || err.message || 'Validation error').join(', ');
+      // More detailed error message
+      let errorMessage = 'Failed to generate behavioral questions. ';
+      if (error?.message) {
+        if (error.message.includes('JSON') || error.message.includes('delimiter')) {
+          errorMessage += 'The server returned invalid data. Please try again.';
+        } else {
+          errorMessage += error.message;
         }
-      } else if (error?.message) {
-        errorMessage = error.message;
+      } else if (error?.response?.detail) {
+        errorMessage += String(error.response.detail);
+      } else {
+        errorMessage += 'Please try again.';
       }
       
-      // Show error to user - using console for now since toast might not be imported
-      console.error('Behavioral questions generation failed:', errorMessage);
-      
-      // Fallback: show alert if available
-      if (typeof alert !== 'undefined') {
-        alert(`Error: ${errorMessage}`);
-      }
+      alert(errorMessage);
       
     } finally {
       setIsGeneratingBehavioral(false);
@@ -1345,66 +1694,159 @@ const PersonalizedAssessment = () => {
 
   // Coding Test Functions
   const startCodingTest = async () => {
+    // Show profile form first
+    setShowCodingProfileForm(true);
+  };
+
+  const handleAddCodingSkill = () => {
+    if (currentCodingSkillInput.trim() && !codingProfileData.Skills.includes(currentCodingSkillInput.trim())) {
+      setCodingProfileData(prev => ({
+        ...prev,
+        Skills: [...prev.Skills, currentCodingSkillInput.trim()]
+      }));
+      setCurrentCodingSkillInput('');
+    }
+  };
+
+  const handleRemoveCodingSkill = (skill: string) => {
+    setCodingProfileData(prev => ({
+      ...prev,
+      Skills: prev.Skills.filter(s => s !== skill)
+    }));
+  };
+
+  const handleCodingProfileSubmit = async () => {
+    // Validate all required fields
+    if (!codingProfileData.Education || !codingProfileData.Domain || !codingProfileData.Certifications || 
+        !codingProfileData.Skill_Level || codingProfileData.Skills.length === 0) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
     try {
       setIsGeneratingCoding(true);
       
-      // Sanitize skills data to prevent JSON parsing issues
-      const rawSkills = resumeAnalysis?.skills?.join(', ') || 'General';
-      const sanitizedSkills = rawSkills
-        .replace(/[^\w\s,.-]/g, '') // Remove special characters except basic punctuation
-        .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-        .trim()
-        .substring(0, 500); // Limit length to prevent issues
+      const response = await generateCodingQuestion.mutateAsync(codingProfileData);
       
-      // Sanitize job role
-      const rawJobRole = suggestedRole || 'Software Engineer';
-      const sanitizedJobRole = rawJobRole
-        .replace(/[^\w\s.-]/g, '') // Remove special characters
-        .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-        .trim()
-        .substring(0, 100); // Limit length
+      console.log('Coding question generated:', response);
       
-      const requestData = {
-        skills: sanitizedSkills,
-        job_role: sanitizedJobRole,
-        job_description: 'Software development role',
-        level: 'intermediate',
-        company: 'Tech Company'
-      };
-      
-      console.log('Sending coding challenge request:', requestData);
-      console.log('Sanitized skills:', sanitizedSkills);
-      console.log('Sanitized job role:', sanitizedJobRole);
-      
-      // Additional validation before sending
-      if (JSON.stringify(requestData).length > 10000) {
-        throw new Error('Request data too large, please try again');
+      // Handle the API response structure - same as CodingRoundPage
+      // It may have generated_questions array
+      let challengeText = '';
+      if (response.generated_questions && Array.isArray(response.generated_questions) && response.generated_questions.length > 0) {
+        // Use the first question from the array
+        const firstQuestion = response.generated_questions[0];
+        // Ensure it's a string - could be an object with a question property
+        if (typeof firstQuestion === 'string') {
+          challengeText = firstQuestion;
+        } else if (firstQuestion && typeof firstQuestion === 'object') {
+          // If it's an object, try to extract question text
+          challengeText = firstQuestion.question || firstQuestion.challenge || firstQuestion.text || JSON.stringify(firstQuestion, null, 2);
+        } else {
+          // Fallback: join all questions
+          challengeText = response.generated_questions.map(q => typeof q === 'string' ? q : (q?.question || q?.challenge || JSON.stringify(q))).join('\n\n');
+        }
+      } else if (response.challenge) {
+        challengeText = typeof response.challenge === 'string' ? response.challenge : String(response.challenge);
+      } else if (response.question) {
+        challengeText = typeof response.question === 'string' ? response.question : String(response.question);
+      } else if (response.problem) {
+        challengeText = typeof response.problem === 'string' ? response.problem : String(response.problem);
+      } else if (response.description) {
+        challengeText = typeof response.description === 'string' ? response.description : String(response.description);
+      } else if (typeof response === 'string') {
+        challengeText = response;
+      } else {
+        // Fallback: try to extract any text from the response
+        challengeText = JSON.stringify(response, null, 2);
       }
       
-      const response = await generateCodingChallenge.mutateAsync(requestData);
+      // Ensure challengeText is always a string
+      challengeText = String(challengeText || 'No challenge available');
       
-      console.log('Coding challenge generated:', response);
-      setCodingChallenge(response);
+      setCodingChallenge({
+        challenge: challengeText,
+        problem: challengeText,
+        description: challengeText,
+        id: response.id,
+        difficulty: response.difficulty || codingProfileData.Skill_Level || 'intermediate',
+        language: response.language || 'python',
+        generated_questions: response.generated_questions,
+        profile_used: response.profile_used,
+        total_latency_sec: response.total_latency_sec,
+        ...response
+      });
       setUserCodeSolution('');
+      setCodeEvaluation(null);
+      setShowCodingProfileForm(false);
       
       // Scroll to questions after they are loaded
       scrollToQuestions();
       
     } catch (error) {
-      console.error('Error generating coding challenge:', error);
+      console.error('Error generating coding question:', error);
+      alert('Failed to generate coding question. Please try again.');
     } finally {
       setIsGeneratingCoding(false);
     }
   };
 
   const submitCodingSolution = async () => {
+    if (!codingChallenge || !userCodeSolution.trim()) {
+      alert("Please provide a code solution first.");
+      return;
+    }
+
     try {
       setIsEvaluatingCoding(true);
+      
+      // Use the same evaluation endpoint as CodingRoundPage
+      const evaluationData = {
+        challenge: codingChallenge.challenge || codingChallenge.problem || codingChallenge.description || '',
+        solution: userCodeSolution
+      };
+
+      console.log('Evaluating code solution:', evaluationData);
+      const result = await evaluateCodeSolution.mutateAsync(evaluationData);
+      
+      // Parse the evaluation response (same logic as CodingRoundPage)
+      const evaluationText = result.evaluation || result.evaluation_text || '';
+      
+      // Try to extract score from evaluation text (format: "Score: X/10" or similar)
+      let extractedScore: number | undefined;
+      const scoreMatch = evaluationText.match(/score[:\s]+(\d+(?:\.\d+)?)\s*(?:\/|\s*out\s*of\s*)?\s*10/i);
+      if (scoreMatch) {
+        extractedScore = parseFloat(scoreMatch[1]);
+      } else {
+        // Try to find any number between 0-10
+        const numberMatch = evaluationText.match(/\b([0-9](?:\.[0-9]+)?|10)\b/);
+        if (numberMatch) {
+          const num = parseFloat(numberMatch[1]);
+          if (num >= 0 && num <= 10) {
+            extractedScore = num;
+          }
+        }
+      }
+      
+      // If no score found, estimate based on solution length and time
+      const finalScore = extractedScore !== undefined 
+        ? extractedScore 
+        : Math.min(10, Math.max(5, 10 - (elapsedTime / 60) / 2));
+      
+      const evaluationResult = { 
+        evaluation: evaluationText || "Evaluation completed successfully.",
+        score: finalScore,
+        feedback: evaluationText
+      };
+      
+      setCodeEvaluation(evaluationResult);
+      setCodingResults(evaluationResult);
       
       // Store coding test data for later evaluation in analytics page
       const codingTestData = {
         challenge: codingChallenge,
         solution: userCodeSolution,
+        evaluation: evaluationResult,
         completedAt: new Date().toISOString(),
         testType: 'coding'
       };
@@ -1412,6 +1854,7 @@ const PersonalizedAssessment = () => {
       // Store in localStorage for analytics page to access
       localStorage.setItem('codingTestData', JSON.stringify(codingTestData));
       
+      console.log('Code evaluation completed:', result);
       console.log('Coding test completed, data stored for evaluation');
       
       // Move to results for quick-test path, or interview for ai-interview path
@@ -1422,8 +1865,14 @@ const PersonalizedAssessment = () => {
       }
       scrollToTop();
       
-    } catch (error) {
-      console.error('Error storing coding test data:', error);
+    } catch (error: any) {
+      console.error('Failed to evaluate code:', error);
+      alert("Failed to evaluate code. Please try again.");
+      // Set a fallback evaluation
+      setCodeEvaluation({ 
+        evaluation: "Evaluation failed. Please try again or check your solution.",
+        score: 0
+      });
     } finally {
       setIsEvaluatingCoding(false);
     }
@@ -2050,7 +2499,7 @@ const PersonalizedAssessment = () => {
     const b64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
     try {
       const body = { frame_data: b64 };
-      const res = await fetch('https://zettanix.in/interview/analyze/frame', {
+      const res = await fetch(getApiUrl('/interview/analyze/frame'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2202,7 +2651,7 @@ const PersonalizedAssessment = () => {
               headers["Authorization"] = `Bearer ${token}`;
             }
 
-            const resp = await fetch("https://zettanix.in/interview/audio/transcribe", {
+            const resp = await fetch(getApiUrl("/interview/audio/transcribe"), {
               method: "POST",
               headers,
               body: form,
@@ -2499,7 +2948,7 @@ const PersonalizedAssessment = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: "easeOut" }}
           viewport={{ once: true }}
-          className="relative z-40 lg:min-h-screen max-w-screen-2xl mx-auto pt-8 bg-gradient-to-b from-cyan-100 to-white overflow-hidden"
+          className="relative z-0 lg:min-h-screen max-w-screen-2xl mx-auto pt-8 bg-gradient-to-b from-cyan-100 to-white overflow-hidden pb-36"
         >
           <div className="relative max-w-7xl mx-auto pt-8 lg:pt-12">
             
@@ -2531,7 +2980,7 @@ const PersonalizedAssessment = () => {
             </div>
 
             {/* Start Assessment Button - Only show on welcome step */}
-            {currentStep === 'welcome' && (
+            {/* {currentStep === 'welcome' && (
               <div className="text-center mb-6">
                 <Button 
                   size="lg" 
@@ -2543,7 +2992,7 @@ const PersonalizedAssessment = () => {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
-            )}
+            )} */}
 
             {/* Progress Indicator */}
             {currentStep !== 'welcome' && (
@@ -2604,175 +3053,33 @@ const PersonalizedAssessment = () => {
 
             {/* Welcome Step */}
             {currentStep === 'welcome' && (
-              <Card className="p-8 max-w-4xl mx-auto">
+              <Card className="p-0 md:m-4 w-4xl mx-auto">
 
-                {/* Branching Assessment Roadmap */}
-                <section className="relative w-full bg-white py-20">
-                  <div className="max-w-7xl mx-auto px-6">
+                
+                {/* feature-section2 */}
+                <FeatureSteps
+                  features={features}
+                  title="How to get Started?"
+                  autoPlayInterval={4000}
+                  imageHeight="h-[450px]"
+                />
 
-                    {/* Roadmap with Branching */}
-                    <div className="relative">
-                      {/* Main Path Line */}
-                      <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-gradient-to-r from-primary/20 via-primary/60 to-primary/20 -translate-y-1/2"></div>
-                      
-                      {/* Branching Point */}
-                      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-primary rounded-full"></div>
-                      
-                      {/* Branch Lines - Hidden for now, will be positioned correctly below */}
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
-                        {/* Initial Steps */}
-                        {[
-                          { 
-                            title: "Upload Resume", 
-                            desc: "Upload your resume for AI analysis"
-                          },
-                          { 
-                            title: "Analysis", 
-                            desc: "AI extracts and analyzes your skills"
-                          },
-                          { 
-                            title: "Job Matching", 
-                            desc: "Get personalized job recommendations"
-                          },
-                        ].map((step, index) => (
-                          <motion.div
-                            key={index}
-                            initial={{ opacity: 0, y: 30 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.5, delay: index * 0.1 }}
-                            viewport={{ once: true }}
-                            className="relative flex flex-col items-center group"
-                          >
-                            {/* Step Number */}
-                            <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-semibold text-lg mb-4 shadow-md group-hover:shadow-lg transition-all duration-300">
-                              {index + 1}
-                            </div>
-
-                            {/* Step Card */}
-                            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all duration-300 w-full max-w-xs text-center group-hover:border-primary/20">
-                              {/* Content */}
-                              <h3 className="text-base font-semibold text-[#2D3253] mb-2">
-                                {step.title}
-                              </h3>
-                              <p className="text-sm text-gray-600 leading-relaxed">
-                                {step.desc}
-                              </p>
-                            </div>
-                          </motion.div>
-                        ))}
-
-                        {/* Branching Point */}
-                        <motion.div
-                          initial={{ opacity: 0, y: 30 }}
-                          whileInView={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.5, delay: 0.3 }}
-                          viewport={{ once: true }}
-                          className="relative flex flex-col items-center group"
-                        >
-                          {/* Branching Number */}
-                          <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-semibold text-lg mb-4 shadow-md group-hover:shadow-lg transition-all duration-300">
-                            4
-                          </div>
-
-                          {/* Branching Card */}
-                          <div className="bg-white border border-primary/30 rounded-xl p-6 shadow-sm hover:shadow-md transition-all duration-300 w-full max-w-xs text-center group-hover:border-primary/50">
-                            <h3 className="text-base font-semibold text-[#2D3253] mb-2">
-                              Choose Your Path
-                            </h3>
-                            <p className="text-sm text-gray-600 leading-relaxed">
-                              Select your preferred assessment method
-                            </p>
-                          </div>
-                        </motion.div>
-
-                        {/* Final Step */}
-                        <motion.div
-                          initial={{ opacity: 0, y: 30 }}
-                          whileInView={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.5, delay: 0.4 }}
-                          viewport={{ once: true }}
-                          className="relative flex flex-col items-center group"
-                        >
-                          {/* Step Number */}
-                          <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white font-semibold text-lg mb-4 shadow-md group-hover:shadow-lg transition-all duration-300">
-                            5
-                          </div>
-
-                          {/* Step Card */}
-                          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all duration-300 w-full max-w-xs text-center group-hover:border-primary/20">
-                            <h3 className="text-base font-semibold text-[#2D3253] mb-2">
-                              Get Results
-                            </h3>
-                            <p className="text-sm text-gray-600 leading-relaxed">
-                              Receive your personalized assessment report
-                            </p>
-                          </div>
-                        </motion.div>
-                      </div>
-
-                      {/* Assessment Path Options */}
-                      <div className="mt-16 grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-                        {/* Quick Test Path */}
-                        <motion.div
-                          initial={{ opacity: 0, x: -30 }}
-                          whileInView={{ opacity: 1, x: 0 }}
-                          transition={{ duration: 0.6, delay: 0.5 }}
-                          viewport={{ once: true }}
-                          className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-xl p-6"
-                        >
-                          <div className="mb-4">
-                            <h3 className="text-lg font-semibold text-[#2D3253]">Quick Test Path</h3>
-                          </div>
-                          <p className="text-sm text-gray-600 mb-4">Complete aptitude, behavioral, and coding assessments</p>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                              <span>Aptitude Test</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                              <span>Scenario-Based Assessment</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                              <span>Coding Challenge</span>
-                            </div>
-                          </div>
-                        </motion.div>
-
-                        {/* AI Interview Path */}
-                        <motion.div
-                          initial={{ opacity: 0, x: 30 }}
-                          whileInView={{ opacity: 1, x: 0 }}
-                          transition={{ duration: 0.6, delay: 0.6 }}
-                          viewport={{ once: true }}
-                          className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-xl p-6"
-                        >
-                          <div className="mb-4">
-                            <h3 className="text-lg font-semibold text-[#2D3253]">AI Interview Path</h3>
-                          </div>
-                          <p className="text-sm text-gray-600 mb-4">Experience a realistic AI-powered interview session</p>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span>Real-time AI Interview</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span>Video & Audio Analysis</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span>Performance Feedback</span>
-                            </div>
-                          </div>
-                        </motion.div>
-                      </div>
-                    </div>
-                  </div>
-                </section>
               </Card>
+            )}
+ 
+            {/* Start Assessment Button - Only show on welcome step */}
+            {currentStep === 'welcome' && (
+              <div className="text-center m-16">
+                <Button 
+                  size="lg" 
+                  onClick={startAssessment}
+                  className="px-8 py-3 text-lg rounded-2xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 cursor-pointer"
+                  type="button"
+                >
+                  Start Your Assessment
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
             )}
 
             {/* Upload Step */}
@@ -3452,7 +3759,135 @@ const PersonalizedAssessment = () => {
             )}
 
             {/* Coding Round Step */}
-            {currentStep === 'coding' && !codingChallenge && (
+            {currentStep === 'coding' && showCodingProfileForm && (
+              <Card className="p-8 max-w-4xl mx-auto">
+                <div className="mb-8">
+                  <h3 className="text-2xl font-bold mb-4">Profile Information for Coding Assessment</h3>
+                  <p className="text-muted-foreground mb-6">
+                    Please provide your profile information to generate a personalized coding question.
+                  </p>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Education *</label>
+                      <input
+                        type="text"
+                        value={codingProfileData.Education}
+                        onChange={(e) => setCodingProfileData(prev => ({ ...prev, Education: e.target.value }))}
+                        placeholder="e.g., Bachelor's in Computer Science"
+                        className="w-full p-2 border rounded-lg bg-background"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Years of Experience *</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={codingProfileData.Years_of_Experience}
+                        onChange={(e) => setCodingProfileData(prev => ({ ...prev, Years_of_Experience: parseInt(e.target.value) || 0 }))}
+                        className="w-full p-2 border rounded-lg bg-background"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Project Count *</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={codingProfileData.Project_Count}
+                        onChange={(e) => setCodingProfileData(prev => ({ ...prev, Project_Count: parseInt(e.target.value) || 0 }))}
+                        className="w-full p-2 border rounded-lg bg-background"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Domain *</label>
+                      <input
+                        type="text"
+                        value={codingProfileData.Domain}
+                        onChange={(e) => setCodingProfileData(prev => ({ ...prev, Domain: e.target.value }))}
+                        placeholder="e.g., Web Development, Data Science, Mobile Development"
+                        className="w-full p-2 border rounded-lg bg-background"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Skills *</label>
+                      <div className="flex gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={currentCodingSkillInput}
+                          onChange={(e) => setCurrentCodingSkillInput(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && handleAddCodingSkill()}
+                          placeholder="Enter a skill and press Enter"
+                          className="flex-1 p-2 border rounded-lg bg-background"
+                        />
+                        <Button onClick={handleAddCodingSkill} type="button">Add</Button>
+                      </div>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {codingProfileData.Skills.map((skill, index) => (
+                          <Badge key={index} variant="secondary" className="flex items-center gap-2">
+                            {skill}
+                            <button
+                              onClick={() => handleRemoveCodingSkill(skill)}
+                              className="text-xs hover:text-destructive"
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Certifications *</label>
+                      <input
+                        type="text"
+                        value={codingProfileData.Certifications}
+                        onChange={(e) => setCodingProfileData(prev => ({ ...prev, Certifications: e.target.value }))}
+                        placeholder="e.g., AWS Certified, Google Cloud Professional"
+                        className="w-full p-2 border rounded-lg bg-background"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Skill Level *</label>
+                      <select
+                        value={codingProfileData.Skill_Level}
+                        onChange={(e) => setCodingProfileData(prev => ({ ...prev, Skill_Level: e.target.value }))}
+                        className="w-full p-2 border rounded-lg bg-background"
+                      >
+                        <option value="">Select skill level</option>
+                        <option value="beginner">Beginner</option>
+                        <option value="intermediate">Intermediate</option>
+                        <option value="advanced">Advanced</option>
+                        <option value="expert">Expert</option>
+                      </select>
+                    </div>
+
+                    <div className="flex gap-4 mt-6">
+                      <Button
+                        onClick={handleCodingProfileSubmit}
+                        disabled={isGeneratingCoding}
+                        className="flex-1"
+                      >
+                        {isGeneratingCoding ? 'Generating Question...' : 'Generate Coding Question'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowCodingProfileForm(false)}
+                        disabled={isGeneratingCoding}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {currentStep === 'coding' && !codingChallenge && !showCodingProfileForm && (
               <Card className="p-8 max-w-4xl mx-auto">
                 <div className="text-center mb-8">
                   <h3 className="text-2xl font-bold mb-4">Coding Round</h3>
@@ -5225,52 +5660,52 @@ const PersonalizedAssessment = () => {
                         const timeTaken = elapsedTime;
                         
                         const pdfContent = `
-# Personalized Assessment Report
+                          # Personalized Assessment Report
 
-## Assessment Summary
-- **Score**: ${score}/100
-- **Assessment Type**: PERSONALIZED ASSESSMENT
-- **Time Taken**: ${Math.floor(timeTaken / 60)} minutes
-- **Date**: ${new Date().toLocaleDateString()}
-- **Suggested Role**: ${suggestedRole || 'Software Engineer'}
+                          ## Assessment Summary
+                          - **Score**: ${score}/100
+                          - **Assessment Type**: PERSONALIZED ASSESSMENT
+                          - **Time Taken**: ${Math.floor(timeTaken / 60)} minutes
+                          - **Date**: ${new Date().toLocaleDateString()}
+                          - **Suggested Role**: ${suggestedRole || 'Software Engineer'}
 
-## Performance Analysis
-${performanceGaps ? `
-### Areas for Improvement
-${performanceGaps.areas_for_improvement ? performanceGaps.areas_for_improvement.map((area: any, index: number) => 
-  `${index + 1}. ${typeof area === 'string' ? area : area.title || area.area || JSON.stringify(area)}`
-).join('\n') : 'No specific areas identified'}
+                          ## Performance Analysis
+                          ${performanceGaps ? `
+                          ### Areas for Improvement
+                          ${performanceGaps.areas_for_improvement ? performanceGaps.areas_for_improvement.map((area: any, index: number) => 
+                            `${index + 1}. ${typeof area === 'string' ? area : area.title || area.area || JSON.stringify(area)}`
+                          ).join('\n') : 'No specific areas identified'}
 
-### Strengths
-${performanceGaps.strengths ? performanceGaps.strengths.map((strength: any, index: number) => 
-  `${index + 1}. ${typeof strength === 'string' ? strength : strength.title || strength.strength || JSON.stringify(strength)}`
-).join('\n') : 'No specific strengths identified'}
-` : ''}
+                          ### Strengths
+                          ${performanceGaps.strengths ? performanceGaps.strengths.map((strength: any, index: number) => 
+                            `${index + 1}. ${typeof strength === 'string' ? strength : strength.title || strength.strength || JSON.stringify(strength)}`
+                          ).join('\n') : 'No specific strengths identified'}
+                          ` : ''}
 
-## Skill Recommendations
-${skillRecommendations ? `
-### Assessment Summary
-${skillRecommendations.assessment_summary || 'No summary available'}
+                          ## Skill Recommendations
+                          ${skillRecommendations ? `
+                          ### Assessment Summary
+                          ${skillRecommendations.assessment_summary || 'No summary available'}
 
-### Learning Paths
-${skillRecommendations.learning_paths ? skillRecommendations.learning_paths.map((path: any, index: number) => 
-  `${index + 1}. ${typeof path === 'string' ? path : path.title || path.name || JSON.stringify(path)}`
-).join('\n') : 'No learning paths available'}
+                          ### Learning Paths
+                          ${skillRecommendations.learning_paths ? skillRecommendations.learning_paths.map((path: any, index: number) => 
+                            `${index + 1}. ${typeof path === 'string' ? path : path.title || path.name || JSON.stringify(path)}`
+                          ).join('\n') : 'No learning paths available'}
 
-### Practice Projects
-${skillRecommendations.practice_projects ? skillRecommendations.practice_projects.map((project: any, index: number) => 
-  `${index + 1}. ${typeof project === 'string' ? project : project.title || project.name || JSON.stringify(project)}`
-).join('\n') : 'No practice projects available'}
-` : ''}
+                          ### Practice Projects
+                          ${skillRecommendations.practice_projects ? skillRecommendations.practice_projects.map((project: any, index: number) => 
+                            `${index + 1}. ${typeof project === 'string' ? project : project.title || project.name || JSON.stringify(project)}`
+                          ).join('\n') : 'No practice projects available'}
+                          ` : ''}
 
-## Next Steps
-1. Review the assessment results and identify areas for improvement
-2. Follow the recommended learning paths
-3. Practice with similar assessments
-4. Consider taking additional assessments to track progress
+                          ## Next Steps
+                          1. Review the assessment results and identify areas for improvement
+                          2. Follow the recommended learning paths
+                          3. Practice with similar assessments
+                          4. Consider taking additional assessments to track progress
 
----
-Generated on ${new Date().toLocaleString()}
+                          ---
+                          Generated on ${new Date().toLocaleString()}
                         `;
                         
                         // Create and download PDF
