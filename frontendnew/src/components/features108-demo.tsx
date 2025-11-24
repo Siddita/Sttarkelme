@@ -4,7 +4,7 @@ import { Feature108 } from "@/components/new_ui/features108";
 const demoData = {
   badge: "",
   heading: "Turn your Career Confusion into Clarity With proven Assessments, expert Mentorship and Guidance.",
-  description: "Join us to build yourself",
+  description: "",
   tabs: [
       {
     value: "tab-1",
@@ -15,7 +15,7 @@ const demoData = {
       title: "Conduct realistic\nAI-driven interviews.",
       description:
         "Simulate real interview scenarios with AI asking role-specific questions, evaluating responses, and providing instant structured feedback.",
-      buttonText: "Start Demo",
+      buttonText: "Start Journey",
       imageSrc: "/Images/Icons/Interview1.png", // replace with your image
       imageAlt: "AI interview process",
     },

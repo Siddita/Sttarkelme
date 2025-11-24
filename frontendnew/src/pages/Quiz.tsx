@@ -22,8 +22,8 @@ import QuizResults from "@/components/quiz/QuizResults";
 import { 
   useGenerateAptitudeQuestions,
   useEvaluateAptitudeAnswers,
-  useGenerateCodingChallenge,
-  useEvaluateCodeSolution,
+  useGenerateCodingQuestion,
+  useCodingHealthCheck,
   useGenerateMCQQuestions,
   useGenerateBehavioralQuestions,
   useEvaluateBehavioralAnswers,
@@ -59,8 +59,9 @@ const Quiz: React.FC = () => {
   // API hooks
   const generateAptitude = useGenerateAptitudeQuestions();
   const evaluateAptitude = useEvaluateAptitudeAnswers();
-  const generateCoding = useGenerateCodingChallenge();
-  const evaluateCoding = useEvaluateCodeSolution();
+  const generateCoding = useGenerateCodingQuestion();
+  // Note: Coding service doesn't have an evaluation endpoint
+  const codingHealthCheck = useCodingHealthCheck();
   const generateMCQ = useGenerateMCQQuestions();
   const generateBehavioral = useGenerateBehavioralQuestions();
   const evaluateBehavioral = useEvaluateBehavioralAnswers();
@@ -103,7 +104,7 @@ const Quiz: React.FC = () => {
       color: 'text-green-600 bg-green-100 border-green-200'
     },
     behavioral: {
-      title: "Behavioral Assessment",
+      title: "Scenario-Based Assessment",
       description: "Evaluate your soft skills and behavioral patterns",
       icon: Users,
       difficulty: 'medium' as const,
@@ -136,9 +137,16 @@ const Quiz: React.FC = () => {
           response = await generateAptitude.mutateAsync({});
           break;
         case 'coding':
+          // Note: New coding endpoint requires Profile data
+          // For now, using default profile - should be updated to collect user input
           response = await generateCoding.mutateAsync({
-            difficulty: config.difficulty,
-            language: 'python'
+            Education: 'Bachelor\'s in Computer Science',
+            Years_of_Experience: 2,
+            Project_Count: 5,
+            Domain: 'Software Development',
+            Skills: ['Python', 'JavaScript'],
+            Certifications: 'None',
+            Skill_Level: 'intermediate'
           });
           break;
         case 'mcq':
@@ -312,12 +320,13 @@ const Quiz: React.FC = () => {
           response = await evaluateAptitude.mutateAsync(aptitudeRequest);
           break;
         case 'coding':
-          response = await evaluateCoding.mutateAsync({
-            code: answers.join('\n'),
-            language: 'python',
-            challenge_id: quizData.challenge.id,
-            time_taken: timeTaken
-          });
+          // Note: Coding service doesn't have an evaluation endpoint
+          // Creating mock response for now
+          response = {
+            message: 'Evaluation not available in coding service',
+            score: 0,
+            feedback: 'Code evaluation endpoint is not available in the coding service'
+          };
           break;
         case 'behavioral':
           response = await evaluateBehavioral.mutateAsync({

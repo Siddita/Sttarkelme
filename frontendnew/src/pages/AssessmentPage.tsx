@@ -21,15 +21,14 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { 
-  generateQuestionsGenerateAptitudePost,
-  evaluateAnswersEvaluateAptitudePost,
-  generateRandomCodingChallengeGenerateChallengePost,
-  evaluateCodeSolutionEvaluateCodePost,
-  generateMcqQuestionsGenerateMcqPost,
-  analyzePerformanceGapsAnalyzePerformanceGapsPost,
-  generateSkillBasedRecommendationsGenerateSkillBasedRecommendationsPost,
-  downloadReportDownloadReportPost,
-  generateInterviewPdfGenerateInterviewPdfPost
+  generateQuestionsV1GenerateAptitudePost,
+  evaluateAnswersV1EvaluateAptitudePost,
+  generateMcqQuestionsV1GenerateMcqPost,
+  analyzePerformanceGapsV1AnalyzePerformanceGapsPost,
+  generateSkillBasedRecommendationsV1GenerateSkillBasedRecommendationsPost,
+  downloadReportV1DownloadReportPost,
+  generateInterviewPdfV1GenerateInterviewPdfPost,
+  generateQuestionV1CodingGenerateQuestionPost
 } from "@/hooks/useApis";
 import { analyticsService, AssessmentResult } from "@/services/analyticsService";
 
@@ -82,9 +81,79 @@ const AssessmentPage = () => {
   const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState(false);
   const [downloadedReport, setDownloadedReport] = useState<any>(null);
   const [generatedPdf, setGeneratedPdf] = useState<any>(null);
+  
+  // Profile form state for coding assessment
+  const [showProfileForm, setShowProfileForm] = useState(false);
+  const [profileData, setProfileData] = useState({
+    Education: '',
+    Years_of_Experience: 0,
+    Project_Count: 0,
+    Domain: '',
+    Skills: [] as string[],
+    Certifications: '',
+    Skill_Level: ''
+  });
+  const [currentSkillInput, setCurrentSkillInput] = useState('');
+
+  // Helper function to parse JSON strings safely
+  const parseJsonSafely = (data: any) => {
+    if (typeof data === 'string') {
+      try {
+        return JSON.parse(data);
+      } catch (error) {
+        console.warn('Failed to parse JSON string:', error);
+        return data;
+      }
+    }
+    return data;
+  };
+
+  // Helper function to format JSON objects as readable content
+  const formatJsonContent = (content: any) => {
+    const parsed = parseJsonSafely(content);
+    
+    if (Array.isArray(parsed)) {
+      return (
+        <ul className="space-y-2">
+          {parsed.map((item, index) => (
+            <li key={index} className="flex items-start gap-2">
+              <span className="text-xs mt-1 text-primary">•</span>
+              <span className="text-sm leading-relaxed">{typeof item === 'string' ? item : JSON.stringify(item)}</span>
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    
+    if (typeof parsed === 'object' && parsed !== null) {
+      return (
+        <div className="space-y-3">
+          {Object.entries(parsed).map(([key, value]) => (
+            <div key={key} className="p-3 bg-gray-50 rounded-lg">
+              <h5 className="font-semibold text-sm mb-2 capitalize">{key.replace(/_/g, ' ')}</h5>
+              {Array.isArray(value) ? (
+                <ul className="space-y-1">
+                  {value.map((item, index) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <span className="text-xs mt-1 text-primary">•</span>
+                      <span className="text-sm">{typeof item === 'string' ? item : JSON.stringify(item)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm">{typeof value === 'string' ? value : JSON.stringify(value)}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    
+    return <span className="text-sm">{String(parsed)}</span>;
+  };
 
   // Quiz service hooks
-  const { mutate: generateAptitudeQuestions, isLoading: isGeneratingAptitude } = generateQuestionsGenerateAptitudePost({
+  const { mutate: generateAptitudeQuestions, isLoading: isGeneratingAptitude } = generateQuestionsV1GenerateAptitudePost({
     onSuccess: (data) => {
       console.log('Aptitude questions generated:', data);
       console.log('Raw questions from API:', data.questions);
@@ -136,7 +205,7 @@ const AssessmentPage = () => {
     }
   });
 
-  const { mutate: generateMcqQuestions, isLoading: isGeneratingMcq } = generateMcqQuestionsGenerateMcqPost({
+  const { mutate: generateMcqQuestions, isLoading: isGeneratingMcq } = generateMcqQuestionsV1GenerateMcqPost({
     onSuccess: (data) => {
       console.log('MCQ questions generated:', data);
       const formattedQuestions = (data.questions || []).map((q: any, index: number) => ({
@@ -160,12 +229,14 @@ const AssessmentPage = () => {
     }
   });
 
-  const { mutate: generateCodingChallenge, isLoading: isGeneratingCoding } = generateRandomCodingChallengeGenerateChallengePost({
+  const { mutate: generateCodingQuestion, isLoading: isGeneratingCodingQuestion } = generateQuestionV1CodingGenerateQuestionPost({
     onSuccess: (data) => {
-      console.log('Coding challenge generated:', data);
+      console.log('Coding question generated:', data);
+      // Handle the response - it might have different structure
+      const questionText = data.question || data.problem || data.description || JSON.stringify(data);
       const formattedQuestions = [{
         id: 1,
-        question: data.problem || data.description || 'Solve the coding challenge',
+        question: questionText,
         type: 'coding' as const,
         options: [],
         correctAnswer: data.solution || '',
@@ -176,15 +247,16 @@ const AssessmentPage = () => {
       setQuestions(formattedQuestions);
       setAssessmentState(prev => ({ ...prev, totalQuestions: formattedQuestions.length }));
       setIsLoading(false);
+      setShowProfileForm(false);
     },
     onError: (error) => {
-      console.error('Failed to generate coding challenge:', error);
-      setApiError('Failed to generate coding challenge. Please try again.');
+      console.error('Failed to generate coding question:', error);
+      setApiError('Failed to generate coding question. Please try again.');
       setIsLoading(false);
     }
   });
 
-  const { mutate: evaluateAnswers } = evaluateAnswersEvaluateAptitudePost({
+  const { mutate: evaluateAnswers } = evaluateAnswersV1EvaluateAptitudePost({
     onSuccess: (data) => {
       console.log('✅ Assessment evaluation successful!');
       console.log('🔍 FULL BACKEND RESPONSE:', JSON.stringify(data, null, 2));
@@ -408,48 +480,11 @@ const AssessmentPage = () => {
     }
   });
 
-  const { mutate: evaluateCode } = evaluateCodeSolutionEvaluateCodePost({
-    onSuccess: (data) => {
-      console.log('Code evaluation results:', data);
-      setTestResults(data);
-      setAssessmentState(prev => ({ ...prev, isCompleted: true, score: data.score || 0 }));
-      
-      // Trigger additional analysis for coding assessment
-      setIsGeneratingAnalysis(true);
-      
-      // Analyze performance gaps for coding assessment - format according to API spec
-      const performanceGapsData = {
-        scores: {
-          overall_score: data.score || 0,
-          total_questions: questions.length,
-          accuracy: questions.length ? (data.score / questions.length) * 100 : 0,
-          time_efficiency: assessmentState.timeRemaining ? (questions.length / (assessmentState.timeRemaining / 60)) : 0
-        },
-        feedback: `Coding assessment completed with score ${data.score || 0}. ${data.passed ? 'Passed' : 'Failed'} the coding challenge.`
-      };
-      
-      analyzePerformanceGaps(performanceGapsData);
-      
-      // Generate skill-based recommendations for coding assessment - format according to API spec
-      const skillRecommendationsData = {
-        skills: questions.map(q => q.question).join(' ').substring(0, 500), // Extract skills from questions
-        scores: {
-          overall_score: data.score || 0,
-          total_questions: questions.length,
-          accuracy: questions.length ? (data.score / questions.length) * 100 : 0,
-          time_efficiency: assessmentState.timeRemaining ? (questions.length / (assessmentState.timeRemaining / 60)) : 0
-        }
-      };
-      
-      generateSkillRecommendations(skillRecommendationsData);
-    },
-    onError: (error) => {
-      console.error('Failed to evaluate code:', error);
-    }
-  });
+  // Note: Coding service doesn't have an evaluation endpoint, so evaluation is disabled
+  // If evaluation is needed, it should be handled separately or through a different service
 
   // New quiz analysis hooks
-  const { mutate: analyzePerformanceGaps } = analyzePerformanceGapsAnalyzePerformanceGapsPost({
+  const { mutate: analyzePerformanceGaps } = analyzePerformanceGapsV1AnalyzePerformanceGapsPost({
     onSuccess: (data) => {
       console.log('Performance gaps analysis:', data);
       setPerformanceGaps(data);
@@ -461,7 +496,7 @@ const AssessmentPage = () => {
     }
   });
 
-  const { mutate: generateSkillRecommendations } = generateSkillBasedRecommendationsGenerateSkillBasedRecommendationsPost({
+  const { mutate: generateSkillRecommendations } = generateSkillBasedRecommendationsV1GenerateSkillBasedRecommendationsPost({
     onSuccess: (data) => {
       console.log('Skill recommendations:', data);
       setSkillRecommendations(data);
@@ -473,7 +508,7 @@ const AssessmentPage = () => {
     }
   });
 
-  const { mutate: downloadReport } = downloadReportDownloadReportPost({
+  const { mutate: downloadReport } = downloadReportV1DownloadReportPost({
     onSuccess: (data) => {
       console.log('Report download initiated:', data);
       setDownloadedReport(data);
@@ -483,7 +518,7 @@ const AssessmentPage = () => {
     }
   });
 
-  const { mutate: generateInterviewPdf } = generateInterviewPdfGenerateInterviewPdfPost({
+  const { mutate: generateInterviewPdf } = generateInterviewPdfV1GenerateInterviewPdfPost({
     onSuccess: (data) => {
       console.log('Interview PDF generated:', data);
       setGeneratedPdf(data);
@@ -509,11 +544,9 @@ const AssessmentPage = () => {
           count: 10
         });
       } else if (assessmentType === 'coding') {
-        generateCodingChallenge({
-          difficulty: 'medium',
-          language: 'python',
-          topic: 'algorithms'
-        });
+        // Show profile form for coding assessment
+        setIsLoading(false);
+        setShowProfileForm(true);
       }
     }, 500);
 
@@ -563,11 +596,10 @@ const AssessmentPage = () => {
     setIsRetrying(false);
     
     if (assessmentType === 'coding') {
-      evaluateCode({
-        code: assessmentState.answers[0] || "",
-        language: 'python',
-        problem: questions[0]?.question || ""
-      });
+      // Note: Coding service doesn't have an evaluation endpoint
+      // For now, mark as completed without evaluation
+      setAssessmentState(prev => ({ ...prev, isCompleted: true }));
+      setTestResults({ message: 'Coding assessment completed. Evaluation not available.' });
     } else {
       // Format data according to EvaluateRequest schema
       const answers = questions.map((question, index) => {
@@ -928,6 +960,174 @@ const AssessmentPage = () => {
     console.log('Question flagged for review');
   };
 
+  const handleAddSkill = () => {
+    if (currentSkillInput.trim() && !profileData.Skills.includes(currentSkillInput.trim())) {
+      setProfileData(prev => ({
+        ...prev,
+        Skills: [...prev.Skills, currentSkillInput.trim()]
+      }));
+      setCurrentSkillInput('');
+    }
+  };
+
+  const handleRemoveSkill = (skill: string) => {
+    setProfileData(prev => ({
+      ...prev,
+      Skills: prev.Skills.filter(s => s !== skill)
+    }));
+  };
+
+  const handleProfileSubmit = () => {
+    // Validate all required fields
+    if (!profileData.Education || !profileData.Domain || !profileData.Certifications || 
+        !profileData.Skill_Level || profileData.Skills.length === 0) {
+      setApiError('Please fill in all required fields');
+      return;
+    }
+
+    setIsLoading(true);
+    setApiError(null);
+    generateCodingQuestion(profileData);
+  };
+
+  if (showProfileForm) {
+    return (
+      <div className="min-h-screen bg-gradient-bg flex items-center justify-center p-4">
+        <Card className="w-full max-w-2xl">
+          <div className="p-6">
+            <h2 className="text-2xl font-bold mb-6">Profile Information for Coding Assessment</h2>
+            <p className="text-muted-foreground mb-6">
+              Please provide your profile information to generate a personalized coding question.
+            </p>
+
+            {apiError && (
+              <div className="mb-4 p-3 bg-destructive/10 border border-destructive rounded-lg">
+                <p className="text-sm text-destructive">{apiError}</p>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Education *</label>
+                <input
+                  type="text"
+                  value={profileData.Education}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, Education: e.target.value }))}
+                  placeholder="e.g., Bachelor's in Computer Science"
+                  className="w-full p-2 border rounded-lg bg-background"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Years of Experience *</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={profileData.Years_of_Experience}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, Years_of_Experience: parseInt(e.target.value) || 0 }))}
+                  className="w-full p-2 border rounded-lg bg-background"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Project Count *</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={profileData.Project_Count}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, Project_Count: parseInt(e.target.value) || 0 }))}
+                  className="w-full p-2 border rounded-lg bg-background"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Domain *</label>
+                <input
+                  type="text"
+                  value={profileData.Domain}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, Domain: e.target.value }))}
+                  placeholder="e.g., Web Development, Data Science, Mobile Development"
+                  className="w-full p-2 border rounded-lg bg-background"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Skills *</label>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={currentSkillInput}
+                    onChange={(e) => setCurrentSkillInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleAddSkill()}
+                    placeholder="Enter a skill and press Enter"
+                    className="flex-1 p-2 border rounded-lg bg-background"
+                  />
+                  <Button onClick={handleAddSkill} type="button">Add</Button>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {profileData.Skills.map((skill, index) => (
+                    <Badge key={index} variant="secondary" className="flex items-center gap-2">
+                      {skill}
+                      <button
+                        onClick={() => handleRemoveSkill(skill)}
+                        className="text-xs hover:text-destructive"
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Certifications *</label>
+                <input
+                  type="text"
+                  value={profileData.Certifications}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, Certifications: e.target.value }))}
+                  placeholder="e.g., AWS Certified, Google Cloud Professional"
+                  className="w-full p-2 border rounded-lg bg-background"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Skill Level *</label>
+                <select
+                  value={profileData.Skill_Level}
+                  onChange={(e) => setProfileData(prev => ({ ...prev, Skill_Level: e.target.value }))}
+                  className="w-full p-2 border rounded-lg bg-background"
+                >
+                  <option value="">Select skill level</option>
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
+                  <option value="expert">Expert</option>
+                </select>
+              </div>
+
+              <div className="flex gap-4 mt-6">
+                <Button
+                  onClick={handleProfileSubmit}
+                  disabled={isGeneratingCodingQuestion}
+                  className="flex-1"
+                >
+                  {isGeneratingCodingQuestion ? 'Generating Question...' : 'Generate Coding Question'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate(-1)}
+                  disabled={isGeneratingCodingQuestion}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-bg flex items-center justify-center">
@@ -1177,9 +1377,7 @@ const AssessmentPage = () => {
                   <div className="mb-6">
                     <h4 className="text-lg font-semibold text-blue-800 mb-3">Action Items</h4>
                     <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <pre className="text-sm text-blue-700 whitespace-pre-wrap">
-                        {JSON.stringify(performanceGaps.action_items, null, 2)}
-                      </pre>
+                      {formatJsonContent(performanceGaps.action_items)}
                     </div>
                   </div>
                 )}
@@ -1189,9 +1387,7 @@ const AssessmentPage = () => {
                   <div className="mb-6">
                     <h4 className="text-lg font-semibold text-purple-800 mb-3">Learning Resources</h4>
                     <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                      <pre className="text-sm text-purple-700 whitespace-pre-wrap">
-                        {JSON.stringify(performanceGaps.learning_resources, null, 2)}
-                      </pre>
+                      {formatJsonContent(performanceGaps.learning_resources)}
                     </div>
                   </div>
                 )}
@@ -1201,9 +1397,7 @@ const AssessmentPage = () => {
                   <div className="mb-6">
                     <h4 className="text-lg font-semibold text-indigo-800 mb-3">Learning Timeline</h4>
                     <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-                      <pre className="text-sm text-indigo-700 whitespace-pre-wrap">
-                        {JSON.stringify(performanceGaps.timeline, null, 2)}
-                      </pre>
+                      {formatJsonContent(performanceGaps.timeline)}
                     </div>
                   </div>
                 )}
@@ -1254,9 +1448,7 @@ const AssessmentPage = () => {
                   <div className="mb-6">
                     <h4 className="text-lg font-semibold text-purple-800 mb-3">Courses & Resources</h4>
                     <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                      <pre className="text-sm text-purple-700 whitespace-pre-wrap">
-                        {JSON.stringify(skillRecommendations.courses_resources, null, 2)}
-                      </pre>
+                      {formatJsonContent(skillRecommendations.courses_resources)}
                     </div>
                   </div>
                 )}
@@ -1286,9 +1478,7 @@ const AssessmentPage = () => {
                   <div className="mb-6">
                     <h4 className="text-lg font-semibold text-indigo-800 mb-3">Learning Timeline</h4>
                     <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-                      <pre className="text-sm text-indigo-700 whitespace-pre-wrap">
-                        {JSON.stringify(skillRecommendations.timeline, null, 2)}
-                      </pre>
+                      {formatJsonContent(skillRecommendations.timeline)}
                     </div>
                   </div>
                 )}

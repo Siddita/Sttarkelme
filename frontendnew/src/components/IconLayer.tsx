@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import FloatingIcon from "./FloatingIcon";
-import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 
 interface IconConfig {
@@ -201,13 +200,6 @@ const IconLayer: React.FC = () => {
       {/* Foreground Content */}
       <div className="relative z-10">
         <div className="text-center max-w-4xl mx-auto">
-          <Badge
-            variant="outline"
-            className="w-fit mx-auto mb-6 lg:mx-0 bg-gradient-to-r from-slate-50 to-slate-100 text-[#2D3253]"
-          >
-            Professional Assessment Platform
-          </Badge>
-
           <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-normal mb-6 leading-tight text-[#2D3253]">
             Build the Skills that <br />
             power your{" "}
@@ -234,7 +226,7 @@ const IconLayer: React.FC = () => {
               }}
               className="text-white cursor-pointer group justify-center flex items-center gap-3 px-8 py-3 pl-6 pr-6 text-xs lg:text-lg rounded-2xl bg-gradient-to-r from-gray-800 to-gray-600 border-2 border-gray-700 hover:bg-gray-700 hover:text-white transition-colors duration-800 hover:bg-gradient-to-r hover:from-gray-700 hover:to-gray-500 hover:border-gray-900"
             >
-              Start Assessment
+              Start Journey
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width={24}
@@ -252,7 +244,15 @@ const IconLayer: React.FC = () => {
               </svg>
             </button>
 
-            <div className="inline-flex items-center justify-center px-8 py-3 pl-6 pr-6 text-xs lg:text-lg border border-gray-600 border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-2xl font-medium transition-colors cursor-pointer hover:scale-105">
+            <div 
+              className="inline-flex items-center justify-center px-8 py-3 pl-6 pr-6 text-xs lg:text-lg border border-gray-600 border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-2xl font-medium transition-colors cursor-pointer hover:scale-105"
+              onClick={() => {
+                const videoSection = document.getElementById('video-section');
+                if (videoSection) {
+                  videoSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+              }}
+            >
               Learn More
             </div>
           </div>

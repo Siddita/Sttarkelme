@@ -52,7 +52,7 @@ import {
   ThumbsDown
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { downloadReportDownloadReportPost } from "@/hooks/useApis";
+import { downloadReportV1DownloadReportPost } from "@/hooks/useApis";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -125,7 +125,7 @@ const AssessmentReport = () => {
   ];
 
   // Initialize the download mutation
-  const downloadReportMutation = downloadReportDownloadReportPost({
+  const downloadReportMutation = downloadReportV1DownloadReportPost({
     onSuccess: (data) => {
       // Handle successful download according to ReportResponse schema
       if (data && data.report) {

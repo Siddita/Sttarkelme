@@ -1,5 +1,5 @@
 // API client function
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zettanix.in';
+import { API_BASE_URL } from '../config/api';
 
 async function apiClient(method: string, path: string, data: any = null, contentType: string = 'application/json') {
   const url = `${API_BASE_URL}${path}`;

@@ -5,12 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Navbar } from "@/components/ui/navbar-menu";
 import { 
-  generateWritingPromptGenerateWritingPromptPost,
-  evaluateWritingResponseEvaluateWritingPost,
-  analyzePerformanceGapsAnalyzePerformanceGapsPost,
-  generateSkillBasedRecommendationsGenerateSkillBasedRecommendationsPost,
-  downloadReportDownloadReportPost,
-  generateInterviewPdfGenerateInterviewPdfPost
+  generateWritingPromptV1GenerateWritingPromptPost,
+  evaluateWritingResponseV1EvaluateWritingPost,
+  analyzePerformanceGapsV1AnalyzePerformanceGapsPost,
+  generateSkillBasedRecommendationsV1GenerateSkillBasedRecommendationsPost,
+  downloadReportV1DownloadReportPost,
+  generateInterviewPdfV1GenerateInterviewPdfPost
 } from "@/hooks/useApis";
 import {
   FileText,
@@ -58,11 +58,11 @@ export default function WritingTestPage() {
   const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(null);
 
   // React Query mutations - call hooks at component level
-  const generateWritingPromptMutation = generateWritingPromptGenerateWritingPromptPost();
-  const evaluateWritingMutation = evaluateWritingResponseEvaluateWritingPost();
+  const generateWritingPromptMutation = generateWritingPromptV1GenerateWritingPromptPost();
+  const evaluateWritingMutation = evaluateWritingResponseV1EvaluateWritingPost();
 
   // Quiz analysis hooks
-  const { mutate: analyzePerformanceGaps } = analyzePerformanceGapsAnalyzePerformanceGapsPost({
+  const { mutate: analyzePerformanceGaps } = analyzePerformanceGapsV1AnalyzePerformanceGapsPost({
     onSuccess: (data) => {
       console.log('Performance gaps analysis:', data);
       setPerformanceGaps(data);
@@ -74,7 +74,7 @@ export default function WritingTestPage() {
     }
   });
 
-  const { mutate: generateSkillRecommendations } = generateSkillBasedRecommendationsGenerateSkillBasedRecommendationsPost({
+  const { mutate: generateSkillRecommendations } = generateSkillBasedRecommendationsV1GenerateSkillBasedRecommendationsPost({
     onSuccess: (data) => {
       console.log('Skill recommendations:', data);
       setSkillRecommendations(data);
@@ -86,7 +86,7 @@ export default function WritingTestPage() {
     }
   });
 
-  const { mutate: downloadReport } = downloadReportDownloadReportPost({
+  const { mutate: downloadReport } = downloadReportV1DownloadReportPost({
     onSuccess: (data) => {
       console.log('Report download initiated:', data);
       setDownloadedReport(data);
@@ -96,7 +96,7 @@ export default function WritingTestPage() {
     }
   });
 
-  const { mutate: generateInterviewPdf } = generateInterviewPdfGenerateInterviewPdfPost({
+  const { mutate: generateInterviewPdf } = generateInterviewPdfV1GenerateInterviewPdfPost({
     onSuccess: (data) => {
       console.log('Interview PDF generated:', data);
       setGeneratedPdf(data);

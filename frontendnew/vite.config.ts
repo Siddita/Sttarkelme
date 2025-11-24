@@ -6,10 +6,32 @@ import { execSync } from 'child_process';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  base: "./",
+  base: "/",
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      '/coding': {
+        target: process.env.VITE_API_BASE_URL || 'https://talentcueai.com',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/quiz': {
+        target: process.env.VITE_API_BASE_URL || 'https://talentcueai.com',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/auth': {
+        target: process.env.VITE_API_BASE_URL || 'https://talentcueai.com',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/api': {
+        target: process.env.VITE_API_BASE_URL || 'https://talentcueai.com',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
   plugins: [
     {

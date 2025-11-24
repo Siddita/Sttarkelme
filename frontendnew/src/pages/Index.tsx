@@ -206,71 +206,87 @@ return (
 
       {/* Section 2 */}
       <motion.section
+        id="video-section"
         transition={{ duration: 0.7, ease: "easeOut", delay: 0.1 }}
         viewport={{ once: true }}
-        className=" relative  lg:min-h-screen max-w-screen-2xl mx-auto pb-10 bg-gradient-to-b from-white to-cyan-100 overflow-hidden"
+        className=" relative  lg:min-h-screen max-w-screen-2xl mx-auto bg-gradient-to-b from-white to-cyan-100 overflow-hidden"
       >
-        <div className="text-center pt-14 relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center flex flex-col justify-center py-12 relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.h1
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, ease: "easeOut" }}
             viewport={{ once: true }}
-            className="text-xl mb-6 sm:text-4xl md:text-6xl lg:text-4xl font-normal leading-tight text-[#2D3253] z-50"
+            className="text-xl mb-16 sm:text-4xl md:text-6xl lg:text-4xl font-normal leading-tight text-[#2D3253] z-50"
           >
             Finding interviews stressful or unsure how to answer questions?
           </motion.h1>
 
-          <div className="relative flex justify-center items-center w-full h-auto mt-8 px-4">
-            {/* Image Base Layer */}
-            <motion.img
-              src="/Images/browser window.png"
-              alt="Career Icon"
-              initial={{ opacity: 0, y: 50 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1.2, ease: "easeOut" }}
-              viewport={{ once: true }}
-              className="w-full max-w-5xl rounded-xl"
-            />
-
-            {/* Video Overlay */}
-            <motion.video
-              src="/Images/Video.mp4"
-              autoPlay
-              muted
-              loop
-              playsInline
-              initial={{ opacity: 0, y: 50 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1.2, ease: "easeOut", delay: 0.2 }}
-              viewport={{ once: true }}
-              className="
-                absolute 
-                w-[83%] max-w-4xl lg:w-[77%] lg:max-w-5xl lg:pt-1
-                rounded-sm lg:rounded-lg  
-                object-cover object-center
-              "
-            />
-          </div>
-          
-          {/* Start Demo Button */}
-          <div className="flex justify-center mt-8">
-            <Button 
-              type="button"
-              size="lg" 
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-                setTimeout(() => {
-                  navigate('/personalized-assessment');
-                }, 100);
+          <div className="relative flex justify-center items-center w-full h-auto px-4 mb-8">
+            {/* Mobile Phone Frame Container */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.3, y: 150, rotate: -15 }}
+              whileInView={{ opacity: 1, scale: 1, y: 0, rotate: 0 }}
+              transition={{ 
+                duration: 1.2, 
+                ease: [0.34, 1.56, 0.64, 1],
+                delay: 0.3
               }}
-              className="px-8 py-3 text-lg rounded-2xl bg-gradient-to-r from-gray-800 to-gray-600 border-2 border-gray-700 hover:bg-gray-700 hover:text-white transition-colors duration-800 hover:bg-gradient-to-r hover:from-gray-700 hover:to-gray-500 hover:border-gray-900"
+              viewport={{ once: true }}
+              className="relative w-full max-w-sm mx-auto"
             >
-              Start Demo
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
+              {/* Mobile Phone Outer Frame */}
+              <div className="relative bg-gradient-to-b from-gray-900 to-black rounded-[2.5rem] p-2.5 shadow-2xl">
+                {/* Screen Bezel */}
+                <div className="bg-black rounded-[2rem] p-1.5">
+                  {/* Notch */}
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-5 bg-black rounded-b-2xl z-20"></div>
+                  
+                  {/* Screen Content */}
+                  <div className="relative bg-black rounded-[1.75rem] overflow-hidden aspect-[9/16]">
+                    {/* Status Bar */}
+                    <div className="absolute top-0 left-0 right-0 h-7 bg-black z-10 flex items-center justify-between px-4 pt-0.5">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-semibold text-white">9:41</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+                        </svg>
+                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M17.778 8.222a7.966 7.966 0 01-1.293 1.293 3.75 3.75 0 001.433-2.829 6.007 6.007 0 00-1.14-1.464zM15 6.75a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zM4.464 4.464a9.961 9.961 0 013.182 1.982l4.768 4.768a9.961 9.961 0 01-1.982 3.182 10.143 10.143 0 01-4.768-4.768 9.96 9.96 0 01-1.982-3.182zM2.34 6.28a7.921 7.921 0 001.414 1.414l1.74-1.74a6.007 6.007 0 00-1.14-1.464L2.34 6.28zM5.5 17.5a3.75 3.75 0 01-2.829-1.433 6.007 6.007 0 011.464-1.14l1.74 1.74a7.921 7.921 0 01-1.414 1.414l-1.74-1.74a9.961 9.961 0 01-1.982-3.182l4.768-4.768a9.961 9.961 0 013.182 1.982l-4.768 4.768a10.143 10.143 0 01-4.768 4.768z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    {/* Video */}
+                    <motion.video
+                      src={encodeURI("/demo video/WhatsApp Video 2025-11-05 at 15.55.32_76b9dbc4.mp4")}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      controls
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 1, ease: "easeOut", delay: 0.8 }}
+                      viewport={{ once: true }}
+                      className="w-full h-full object-contain rounded-[1.75rem]"
+                      onError={(e) => {
+                        const video = e.target as HTMLVideoElement;
+                        // Try alternative path if first fails
+                        if (!video.src.includes('fallback')) {
+                          video.src = "/Images/Video.mp4";
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Home Indicator */}
+                <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-24 h-1 bg-gray-700 rounded-full"></div>
+              </div>
+            </motion.div>
           </div>
         </div>
       </motion.section>
@@ -280,8 +296,8 @@ return (
         className="relative z-20 max-w-screen-2xl mx-auto bg-gradient-to-t from-cyan-50 to-cyan-100 lg:rounded-bl-[70px] lg:rounded-br-[70px] sm:rounded-bl-[50px] sm:rounded-br-[50px] rounded-bl-[40px] rounded-br-[40px] overflow-hidden pb-14"
       >
         {/* from-[#5247C8] to-[#BC76DD] */}
-        <div className="text-center relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ">
-            <div className="mt-8">
+        <div className="text-center relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+            <div className="mt-0">
               
               <Feature108Demo />
             </div>

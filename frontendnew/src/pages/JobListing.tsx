@@ -33,31 +33,19 @@ import {
 import { useState, useRef, useEffect } from "react";
 import { motion } from 'framer-motion';
 import Footer from "@/components/Footer";
+import { getApiUrl } from "@/config/api";
 import { Navbar } from "@/components/ui/navbar-menu";
 import { TextHoverEffect } from "@/components/ui/text-hover-effect";
 import './OutlinedText.css';
 import { 
   uploadResumeApiV1ResumesPost, 
-  listResumesApiV1ResumesGet,
   getResumeApiV1Resumes_ResumeId_Get,
   getAnalysisApiV1Resumes_ResumeId_AnalysisGet,
   deleteResumeApiV1Resumes_ResumeId_Delete,
-  // Job API imports
+  recommendJobsApiV1ListingsRecommendPost,
+  searchJobsApiV1ListingsSearchPost,
   listJobsApiV1JobsGet,
-  createJobApiV1JobsPost,
-  getJobApiV1Jobs_JobId_Get,
-  updateJobApiV1Jobs_JobId_Put,
-  deleteJobApiV1Jobs_JobId_Delete,
-  restoreJobApiV1Jobs_JobId_RestorePost,
-  listJobAuditsApiV1Jobs_JobId_AuditsGet,
-  hardDeleteJobApiV1Jobs_JobId_HardDeleteDelete,
-  jobsStatsApiV1JobsStatsGet,
-  // Company API imports
-  listCompaniesApiV1CompaniesGet,
-  createCompanyApiV1CompaniesPost,
-  getCompanyApiV1Companies_CompanyId_Get,
-  updateCompanyApiV1Companies_CompanyId_Put,
-  deleteCompanyApiV1Companies_CompanyId_Delete
+  getJobApiV1Jobs_JobId_Get
 } from "@/hooks/useApis";
 
 
@@ -75,6 +63,9 @@ const JobListing = () => {
   const [selectedResumeId, setSelectedResumeId] = useState<string | null>(null);
   const [showResumeAnalysis, setShowResumeAnalysis] = useState(false);
   const [useResumeMatching, setUseResumeMatching] = useState(false);
+  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
+  const [recommendedJobs, setRecommendedJobs] = useState<any[]>([]);
+  const [recommendationMeta, setRecommendationMeta] = useState<{ total_jobs_found?: number; skills_searched?: string[] }>({});
   
   // Voice input states
   const [isRecording, setIsRecording] = useState(false);
@@ -91,25 +82,313 @@ const JobListing = () => {
   
 
   const { mutate: uploadResume, isLoading } = uploadResumeApiV1ResumesPost();
-  
-  // Resume API hooks
-  const { data: resumes, refetch: refetchResumes } = listResumesApiV1ResumesGet();
   const { data: selectedResume } = getResumeApiV1Resumes_ResumeId_Get({
     enabled: !!selectedResumeId,
     resume_id: selectedResumeId
   });
+  // Only show the resume that is just uploaded (or explicitly selected)
+  const visibleResumes = selectedResumeId ? [{ id: selectedResumeId }] as any[] : [];
   const { data: resumeAnalysis, refetch: refetchAnalysis, isLoading: isAnalysisLoading, error: analysisError } = getAnalysisApiV1Resumes_ResumeId_AnalysisGet({
     enabled: !!selectedResumeId,
     resume_id: selectedResumeId
   });
-
+  
+  // Job listing queries - using recommend and search endpoints only
+  const { mutate: recommendJobs, isPending: isRecommendingJobs } = recommendJobsApiV1ListingsRecommendPost();
+  const { mutate: searchJobs, isPending: isSearchingJobs } = searchJobsApiV1ListingsSearchPost();
+  // listJobsApiV1JobsGet available for fallback if needed
+  const { mutate: deleteResume } = deleteResumeApiV1Resumes_ResumeId_Delete();
+  
+  // isLoadingJobs is now derived from mutation states
+  const isLoadingJobs = isRecommendingJobs || isSearchingJobs;
 
   // Extract the actual analysis data - handle both nested and direct structures
   const analysisData = resumeAnalysis?.analysis || (resumeAnalysis?.status === 'COMPLETE' ? resumeAnalysis : null);
   const isAnalysisComplete = resumeAnalysis?.status === 'COMPLETE';
   const isAnalysisPending = resumeAnalysis?.status === 'PENDING' || resumeAnalysis?.status === 'IN_PROGRESS';
   const isAnalysisFailed = resumeAnalysis?.status === 'FAILED';
-  const { mutate: deleteResume } = deleteResumeApiV1Resumes_ResumeId_Delete();
+
+  // Helper function to extract skills from localStorage
+  const getSkillsFromLocalStorage = (): string[] => {
+    const skills: string[] = [];
+    
+    try {
+      // First, check for the latest resume upload
+      const latestUpload = localStorage.getItem('latestResumeUpload');
+      let latestResumeId: string | null = null;
+      
+      if (latestUpload) {
+        try {
+          const uploadData = JSON.parse(latestUpload);
+          latestResumeId = uploadData?.resumeId || uploadData?.id || null;
+          console.log('📋 Latest resume upload found:', latestResumeId);
+          
+          // If latest upload has direct skills/data, use them first
+          if (uploadData?.skills && Array.isArray(uploadData.skills)) {
+            skills.push(...uploadData.skills.map((skill: any) => typeof skill === 'string' ? skill : skill.skill || skill.name || String(skill)));
+          }
+        } catch (e) {
+          console.warn('Error parsing latestResumeUpload:', e);
+        }
+      }
+      
+      // Try to get skills from resumeAnalysis (prioritize if it matches latest upload)
+      const resumeAnalysis = localStorage.getItem('resumeAnalysis');
+      if (resumeAnalysis) {
+        const analysis = JSON.parse(resumeAnalysis);
+        // If we have a latest resume ID, only use analysis if it matches
+        if (!latestResumeId || analysis?.resume_id === latestResumeId || analysis?.id === latestResumeId) {
+          if (analysis?.skills && Array.isArray(analysis.skills)) {
+            skills.push(...analysis.skills.map((skill: any) => typeof skill === 'string' ? skill : skill.skill || skill.name || String(skill)));
+          }
+        }
+      }
+      
+      // Try to get skills from parsedResumeData (only if no latest upload or if it matches)
+      const parsedResume = localStorage.getItem('parsedResumeData');
+      if (parsedResume) {
+        const resumeData = JSON.parse(parsedResume);
+        // Only use if no latest upload specified, or if it matches
+        if (!latestResumeId || resumeData?.resumeId === latestResumeId || resumeData?.id === latestResumeId) {
+          if (resumeData?.skills && Array.isArray(resumeData.skills)) {
+            skills.push(...resumeData.skills.map((skill: any) => typeof skill === 'string' ? skill : skill.skill || skill.name || String(skill)));
+          }
+        }
+      }
+      
+      // Try to get skills from dashboard-state (fallback)
+      const dashboardState = localStorage.getItem('dashboard-state');
+      if (dashboardState) {
+        const state = JSON.parse(dashboardState);
+        if (state?.skills && Array.isArray(state.skills)) {
+          skills.push(...state.skills.map((skill: any) => typeof skill === 'string' ? skill : skill.skill || skill.name || String(skill)));
+        }
+        if (state?.userProfile?.skills && Array.isArray(state.userProfile.skills)) {
+          skills.push(...state.userProfile.skills.map((skill: any) => typeof skill === 'string' ? skill : skill.skill || skill.name || String(skill)));
+        }
+      }
+      
+      // Also try to get skills from resume analysis data if available (and matches latest)
+      if (analysisData?.skills && (!latestResumeId || selectedResumeId === latestResumeId)) {
+        const analysisSkills = Array.isArray(analysisData.skills) 
+          ? analysisData.skills 
+          : typeof analysisData.skills === 'string'
+          ? analysisData.skills.split(',').map(s => s.trim())
+          : [];
+        skills.push(...analysisSkills);
+      }
+    } catch (error) {
+      console.warn('Error extracting skills from localStorage:', error);
+    }
+    
+    // Remove duplicates and return
+    return [...new Set(skills.filter(skill => skill && skill.trim()))];
+  };
+
+  // Function to fetch recommended jobs (explicitly passes skills from localStorage)
+  const handleFetchRecommendedJobs = () => {
+    console.log('🔄 Fetching recommended jobs...');
+    const skills = getSkillsFromLocalStorage();
+    console.log('📋 Skills extracted from localStorage:', skills);
+    
+    if (skills.length === 0) {
+      console.warn('⚠️ No skills found in localStorage, using empty array');
+    }
+    
+    recommendJobs(
+      { skills: Array.isArray(skills) ? skills : [skills] },
+      {
+        onSuccess: (data: any) => {
+          console.log('✅ Job recommendations received - Raw response:', data);
+          console.log('📋 Response type:', typeof data);
+          console.log('📋 Is array:', Array.isArray(data));
+          console.log('📋 Has primary_match:', !!data?.primary_match);
+          console.log('📋 Has jobs property:', !!data?.jobs);
+          
+          // Transform API response format to array of jobs
+          // API returns: { primary_match, second_match, third_match, ... }
+          let jobs: any[] = [];
+          
+          if (data?.primary_match || data?.second_match || data?.third_match) {
+            // Handle recommend API response format
+            console.log('✅ Using recommend API format (primary/second/third match)');
+            const matches = [
+              data.primary_match,
+              data.second_match,
+              data.third_match
+            ].filter(Boolean); // Remove null/undefined
+            
+            console.log(`📊 Found ${matches.length} matches`);
+            
+            jobs = matches.map((match: any, index: number) => ({
+              id: match.id || `recommend-${index}`,
+              title: match.job_title || match.title || 'Job Title',
+              company_name: match.company || 'Company',
+              company: typeof match.company === 'string' ? match.company : match.company?.name || 'Company',
+              location: match.location || 'Location',
+              country: match.location?.split(',')[1]?.trim() || match.location,
+              city: match.location?.split(',')[0]?.trim() || match.location,
+              salary_min: match.salary_min,
+              salary_max: match.salary_max,
+              description: match.description || '',
+              skills: match.matched_skills || match.skills || [],
+              matchScore: match.match_score || match.matchScore || 0,
+              url: match.url || match.application_url || '',
+              created_at: match.created || match.posted_at || new Date().toISOString(),
+              employment_type: match.employment_type || 'full_time',
+              work_type: match.work_type || 'onsite',
+              seniority_level: match.seniority_level || 'entry',
+              isPrimaryMatch: index === 0,
+              matchType: index === 0 ? 'primary' : index === 1 ? 'second' : 'third'
+            }));
+          } else if (Array.isArray(data)) {
+            // Handle array response
+            console.log('✅ Using array response format');
+            jobs = data;
+          } else if (data?.jobs && Array.isArray(data.jobs)) {
+            // Handle search API response format: { jobs: [...], total_found, ... }
+            console.log('✅ Using search API format (jobs array)');
+            jobs = data.jobs;
+          } else {
+            // Fallback: try to use searchJobs API
+            console.log('⚠️ Recommend API returned unexpected format:', data);
+            console.log('🔄 Attempting fallback: using searchJobs API with skills...');
+            
+            // Try searchJobs as fallback
+            searchJobs(
+              { skills: Array.isArray(skills) ? skills : [skills] },
+              {
+                onSuccess: (searchData: any) => {
+                  console.log('✅ Search jobs response:', searchData);
+                  const searchJobs = Array.isArray(searchData) ? searchData : searchData?.jobs || [];
+                  setRecommendedJobs(searchJobs);
+                },
+                onError: (searchError: any) => {
+                  console.error('❌ Search jobs also failed:', searchError);
+                }
+              }
+            );
+            return; // Exit early since we're using fallback
+          }
+          
+          console.log(`📊 Processed ${jobs.length} jobs:`, jobs);
+          if (jobs.length === 0) {
+            console.warn('⚠️ No jobs found! Response was:', data);
+          }
+          setRecommendedJobs(jobs);
+          setRecommendationMeta({
+            total_jobs_found: data?.total_jobs_found,
+            skills_searched: data?.skills_searched
+          });
+          setUseResumeMatching(true);
+        },
+        onError: (error: any) => {
+          console.error('❌ Error fetching job recommendations:', error);
+          console.error('❌ Error details:', error?.response || error?.message);
+          // Fallback: try to fetch jobs using searchJobs API
+          console.log('🔄 Attempting fallback: using searchJobs API...');
+          searchJobs(
+            { skills: Array.isArray(skills) ? skills : [skills] },
+            {
+              onSuccess: (searchData: any) => {
+                console.log('✅ Fallback search jobs response:', searchData);
+                const searchJobs = Array.isArray(searchData) ? searchData : searchData?.jobs || [];
+                setRecommendedJobs(searchJobs);
+              },
+              onError: (searchError: any) => {
+                console.error('❌ Fallback search jobs also failed:', searchError);
+                setRecommendedJobs([]);
+              }
+            }
+          );
+        }
+      }
+    );
+  };
+
+  // Function to search jobs (explicitly passes skills from localStorage, plus search filters)
+  const handleSearchJobs = (searchFilters?: { location?: string; salary_min?: number; salary_max?: number }) => {
+    console.log('🔍 Searching jobs with filters:', searchFilters);
+    const skills = getSkillsFromLocalStorage();
+    console.log('📋 Skills extracted from localStorage:', skills);
+    
+    const searchData = {
+      skills,
+      ...searchFilters
+    };
+    
+    searchJobs(searchData, {
+      onSuccess: (data: any) => {
+        console.log('✅ Search results received:', data);
+        // API returns: { jobs: [], total_found, search_criteria }
+        const jobs = Array.isArray(data) ? data : (Array.isArray(data?.jobs) ? data.jobs : []);
+        console.log('📊 Number of search results:', jobs.length);
+        setRecommendedJobs(jobs);
+        setRecommendationMeta({
+          total_jobs_found: data?.total_found || data?.total_jobs_found,
+          skills_searched: searchData.skills
+        });
+        setUseResumeMatching(false);
+      },
+      onError: (error: any) => {
+        console.error('❌ Error searching jobs:', error);
+        console.error('❌ Error details:', error?.response || error?.message);
+        setRecommendedJobs([]);
+      }
+    });
+  };
+
+  // Function to refresh jobs - fetch recommended jobs
+  const handleRefreshJobs = () => {
+    handleFetchRecommendedJobs();
+  };
+
+  // Update loading state when analysis completes
+  useEffect(() => {
+    if (!isAnalysisLoading && (resumeAnalysis || analysisError)) {
+      setIsLoadingAnalysis(false);
+    }
+  }, [isAnalysisLoading, resumeAnalysis, analysisError]);
+
+  // Fetch recommended jobs on component mount (skills will be auto-extracted from localStorage)
+  useEffect(() => {
+    handleFetchRecommendedJobs();
+  }, []); // Only run on mount
+
+  // Handle search with filters - use searchJobs endpoint when filters are applied
+  useEffect(() => {
+    // Only search if we have active filters (not "All")
+    const hasActiveFilters = 
+      selectedLocation !== "All" || 
+      selectedSalaryRange !== "All" ||
+      selectedCategory !== "All" ||
+      selectedJobType !== "All" ||
+      selectedExperience !== "All" ||
+      selectedWorkArrangement !== "All" ||
+      selectedCompanySize !== "All";
+
+    if (hasActiveFilters) {
+      const searchFilters: any = {};
+      
+      if (selectedLocation !== "All") {
+        searchFilters.location = selectedLocation;
+      }
+      
+      if (selectedSalaryRange !== "All") {
+        // Parse salary range (e.g., "₹20L-₹30L" -> min: 2000000, max: 3000000)
+        const salaryMatch = selectedSalaryRange.match(/₹(\d+)L-₹(\d+)L/);
+        if (salaryMatch) {
+          searchFilters.salary_min = parseInt(salaryMatch[1]) * 100000;
+          searchFilters.salary_max = parseInt(salaryMatch[2]) * 100000;
+        }
+      }
+      
+      handleSearchJobs(searchFilters);
+    } else if (!searchTerm) {
+      // If no filters and no search term, show recommended jobs
+      handleFetchRecommendedJobs();
+    }
+  }, [selectedLocation, selectedSalaryRange, selectedCategory, selectedJobType, selectedExperience, selectedWorkArrangement, selectedCompanySize]);
   
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -120,9 +399,24 @@ const JobListing = () => {
       const formData = new FormData();
       formData.append('file', file, file.name);
       uploadResume(formData, {
-        onSuccess: () => {
+        onSuccess: (created: any) => {
           setIsUploading(false);
-          refetchResumes();
+          // Store the latest upload response in localStorage
+          try {
+            const uploadResponse = {
+              ...created,
+              uploadedAt: new Date().toISOString(),
+              resumeId: created?.id ?? created?.resume?.id
+            };
+            localStorage.setItem('latestResumeUpload', JSON.stringify(uploadResponse));
+            console.log('✅ Latest resume upload stored in localStorage:', uploadResponse);
+          } catch (error) {
+            console.error('Failed to store latest resume upload in localStorage:', error);
+          }
+          // set the just uploaded resume id and show it
+          const newId = created?.id ?? created?.resume?.id;
+          if (newId) setSelectedResumeId(String(newId));
+          setShowResumeAnalysis(false);
         },
         onError: () => {
           setIsUploading(false);
@@ -133,14 +427,14 @@ const JobListing = () => {
 
   const handleResumeSelect = (resumeId: string) => {
     console.log('Selecting resume:', resumeId);
-    setSelectedResumeId(resumeId);
+    setIsLoadingAnalysis(true);
     setShowResumeAnalysis(true);
+    setSelectedResumeId(resumeId);
   };
 
   const handleResumeDelete = (resumeId: string) => {
     deleteResume({ resume_id: resumeId }, {
       onSuccess: () => {
-        refetchResumes();
         if (selectedResumeId === resumeId) {
           setSelectedResumeId(null);
           setShowResumeAnalysis(false);
@@ -237,7 +531,7 @@ const JobListing = () => {
               headers["Authorization"] = `Bearer ${token}`;
             }
 
-            const resp = await fetch("https://zettanix.in/interview/audio/transcribe", {
+            const resp = await fetch(getApiUrl("/interview/audio/transcribe"), {
               method: "POST",
               headers,
               body: form,
@@ -472,12 +766,14 @@ const JobListing = () => {
 
   // Function to filter jobs based on resume analysis
   const getResumeBasedJobs = () => {
-    if (!analysisData?.skills) return jobs;
-    
-    return jobs.map(job => ({
-      ...job,
-      matchScore: getJobMatchScore(job)
-    })).sort((a, b) => b.matchScore - a.matchScore);
+    // Return recommended jobs from the microservice
+    if (recommendedJobs && recommendedJobs.length > 0) {
+      return recommendedJobs.map(job => ({
+        ...job,
+        matchScore: getJobMatchScore(job)
+      })).sort((a, b) => b.matchScore - a.matchScore);
+    }
+    return [];
   };
 
   const categories = [
@@ -569,8 +865,7 @@ const JobListing = () => {
     "Enterprise (5000+)"
   ];
 
-  // Real job data from API
-  const { data: jobs, isLoading: jobsLoading, error: jobsError } = listJobsApiV1JobsGet();
+  // Jobs data removed - now using resume-based skill extraction only
 
   return (
     <div className="min-h-screen bg-[#031527]">
@@ -674,7 +969,7 @@ const JobListing = () => {
 
 
           {/* Resume Management Section */}
-          {resumes && resumes.length > 0 && (
+          {selectedResumeId && (
               <motion.div 
                 className="max-w-6xl mx-auto mb-12"
                 initial={{ opacity: 0, y: 20 }}
@@ -721,15 +1016,6 @@ const JobListing = () => {
                     {/* Action Buttons */}
                     <div className="flex flex-wrap sm:flex-nowrap justify-center sm:justify-end items-center gap-2">
                       <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => refetchResumes()}
-                        className="flex items-center gap-2"
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                        Refresh
-                      </Button>
-                      <Button
                         size="sm"
                         onClick={() => document.getElementById('resume-upload')?.click()}
                         className="flex items-center gap-2"
@@ -740,57 +1026,10 @@ const JobListing = () => {
                     </div>
                   </div>
                   
-                  {/* <div className="grid gap-4">
-                    {resumes.map((resume) => (
-                      <div key={resume.id} className="flex items-center justify-between p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                            <FileText className="h-5 w-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-lg">{resume.filename || `Resume ${resume.id}`}</p>
-                            <p className="text-sm text-muted-foreground">
-                              Uploaded: {new Date(resume.created_at).toLocaleDateString()}
-                            </p>
-                            <div className="flex items-center gap-2 mt-1">
-                              <Badge variant="outline" className="text-xs">
-                                {resume.filename?.split('.').pop()?.toUpperCase() || 'PDF'}
-                              </Badge>
-                              {selectedResumeId === resume.id && (
-                                <Badge variant="default" className="text-xs">
-                                  Active
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleResumeSelect(resume.id)}
-                            className="flex items-center gap-2"
-                          >
-                            <Eye className="w-4 h-4" />
-                            View Analysis
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleResumeDelete(resume.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-2"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div> */}
+                  {/* Removed prior resumes listing UI */}
 
                   <div className="grid gap-4">
-                    {resumes.map((resume) => (
+                    {visibleResumes.map((resume) => (
                       <div
                         key={resume.id}
                         className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
@@ -802,14 +1041,14 @@ const JobListing = () => {
                           </div>
                           <div>
                             <p className="font-medium text-base sm:text-lg">
-                              {resume.filename || `Resume ${resume.id}`}
+                              {selectedResume?.filename || `Resume ${resume.id}`}
                             </p>
                             <p className="text-sm text-muted-foreground">
-                              Uploaded: {new Date(resume.created_at).toLocaleDateString()}
+                              {selectedResume?.created_at ? `Uploaded: ${new Date(selectedResume.created_at).toLocaleDateString()}` : ''}
                             </p>
                             <div className="flex flex-wrap items-center gap-2 mt-1">
                               <Badge variant="outline" className="text-xs">
-                                {resume.filename?.split('.').pop()?.toUpperCase() || 'PDF'}
+                                {selectedResume?.filename?.split('.').pop()?.toUpperCase() || 'PDF'}
                               </Badge>
                               {selectedResumeId === resume.id && (
                                 <Badge variant="default" className="text-xs">
@@ -827,9 +1066,19 @@ const JobListing = () => {
                             size="sm"
                             onClick={() => handleResumeSelect(resume.id)}
                             className="flex items-center gap-2"
+                            disabled={(isAnalysisLoading || isLoadingAnalysis) && selectedResumeId === resume.id}
                           >
-                            <Eye className="w-4 h-4" />
-                            View Analysis
+                            {(isAnalysisLoading || isLoadingAnalysis) && selectedResumeId === resume.id ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Loading Analysis...
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="w-4 h-4" />
+                                View Analysis
+                              </>
+                            )}
                           </Button>
                           <Button
                             variant="outline"
@@ -847,27 +1096,7 @@ const JobListing = () => {
 
                   
                   
-                  {/* Resume Statistics */}
-                  <div className="mt-6 pt-6 border-t border-gray-200">
-                    <div className="grid md:grid-cols-3 gap-4">
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-primary">{resumes.length}</p>
-                        <p className="text-sm text-muted-foreground">Total Resumes</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-green-600">
-                          {resumes.filter(r => r.id === selectedResumeId).length > 0 ? '1' : '0'}
-                        </p>
-                        <p className="text-sm text-muted-foreground">Active Resume</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-blue-600">
-                          {useResumeMatching ? jobs.filter(job => getJobMatchScore(job) > 0).length : 0}
-                        </p>
-                        <p className="text-sm text-muted-foreground">Job Matches</p>
-                      </div>
-                    </div>
-                  </div>
+                  {/* Statistics removed per request */}
                 </Card>
               </motion.div>
             )}
@@ -881,206 +1110,113 @@ const JobListing = () => {
                 transition={{ duration: 0.6, ease: "easeOut" }}
               >
                 <Card className="p-6 bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
-                  <div className="flex items-center justify-between mb-6">
+                  {/* Header Section */}
+                  <div className="mb-6">
                     <h3 className="text-2xl font-bold text-[#2D3253]">Resume Analysis & Analytics</h3>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setUseResumeMatching(!useResumeMatching)}
-                        className={useResumeMatching ? 'bg-primary text-white' : ''}
-                        disabled={isAnalysisLoading}
-                      >
-                        {useResumeMatching ? 'Disable' : 'Enable'} Job Matching
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowResumeAnalysis(false)}
-                      >
-                        Close
-                      </Button>
-                    </div>
                   </div>
                   
-                  {isAnalysisLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <div className="text-center">
-                        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                        <p className="text-muted-foreground">Analyzing your resume...</p>
+                  {(isAnalysisLoading || isLoadingAnalysis) && (
+                    <div className="flex flex-col items-center justify-center py-16 space-y-4">
+                      <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                      <div className="text-center space-y-2">
+                        <h4 className="text-lg font-semibold text-gray-800">Analyzing Your Resume</h4>
+                        <p className="text-sm text-gray-600">
+                          AI is extracting skills, experience, and generating personalized insights...
+                        </p>
+                        <div className="flex items-center justify-center gap-2 mt-4">
+                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                        </div>
                       </div>
                     </div>
-                  ) : isAnalysisComplete && analysisData ? (
-                    <>
-                      {/* Analytics Dashboard */}
-                      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        {/* Skills Overview */}
-                        <Card className="p-4 bg-white/80 border-green-200">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                              <Award className="h-4 w-4 text-green-600" />
-                            </div>
-                            <h4 className="font-semibold text-sm text-[#2D3253]">Skills Count</h4>
-                          </div>
-                          <p className="text-2xl font-bold text-green-600">
-                            {analysisData?.skills?.length || 0}
-                          </p>
-                          {analysisData && !analysisData.skills && (
-                            <p className="text-xs text-muted-foreground mt-1">No skills detected</p>
-                          )}
-                        </Card>
+                  )}
+                  
+                   {!(isAnalysisLoading || isLoadingAnalysis) && isAnalysisComplete && analysisData ? (
+                     <>
+                       {/* Content Layout: Grid with Skills Count on right, Categories and Skills on left */}
+                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                         {/* Left Column: Skill Categories and Skills Detected */}
+                         <div className="lg:col-span-2 space-y-6">
+                           {/* Skill Categories */}
+                           {analysisData?.skills && (
+                             <div>
+                               <h4 className="font-semibold mb-3 text-lg text-[#2D3253]">Skill Categories</h4>
+                               <Card className="p-4 bg-white border-gray-200 shadow-sm rounded-lg">
+                                 <div className="grid grid-cols-2 gap-4 text-sm">
+                                   <div className="flex items-center justify-between">
+                                     <span className="text-muted-foreground">Technical:</span>
+                                     <span className="font-semibold text-[#2D3253]">
+                                       {analysisData.skills.filter(skill => {
+                                         const techKeywords = ['javascript', 'python', 'react', 'node', 'java', 'c++', 'c', 'sql', 'html', 'css', 'arduino', 'matlab', 'raspberry pi', 'embedded systems', 'signal processing', 'circuit design', 'bluetooth', 'gps', 'gsm', 'keil uvision', 'labview', 'cadence'];
+                                         return techKeywords.some(tech => skill.toLowerCase().includes(tech.toLowerCase()));
+                                       }).length}
+                                     </span>
+                                   </div>
+                                   <div className="flex items-center justify-between">
+                                     <span className="text-muted-foreground">Soft Skills:</span>
+                                     <span className="font-semibold text-[#2D3253]">
+                                       {analysisData.skills.filter(skill => {
+                                         const softKeywords = ['leadership', 'communication', 'teamwork', 'problem solving', 'management', 'communication technologies'];
+                                         return softKeywords.some(soft => skill.toLowerCase().includes(soft.toLowerCase()));
+                                       }).length}
+                                     </span>
+                                   </div>
+                                 </div>
+                               </Card>
+                             </div>
+                           )}
 
-                        {/* Experience Level */}
-                        <Card className="p-4 bg-white/80 border-blue-200">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                              <TrendingUp className="h-4 w-4 text-blue-600" />
-                            </div>
-                            <h4 className="font-semibold text-sm text-[#2D3253]">Experience</h4>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {analysisData?.experience_level || 'Not specified'}
-                          </p>
-                        </Card>
+                           {/* Skills Detected */}
+                           <div>
+                             <h4 className="font-semibold mb-3 text-lg text-[#2D3253]">Skills Detected</h4>
+                             <div className="flex flex-wrap gap-2.5 bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+                               {analysisData?.skills?.map((skill, index) => (
+                                 <Badge
+                                   key={index}
+                                   variant="secondary"
+                                   className="text-xs leading-tight px-3 py-1.5 rounded-full whitespace-nowrap bg-gray-100 border border-gray-200 text-gray-700 hover:bg-gray-200 transition-colors"
+                                 >
+                                   {skill}
+                                 </Badge>
+                               ))}
+                             </div>
+                           </div>
+                         </div>
 
-                        {/* Match Score */}
-                        <Card className="p-4 bg-white/80 border-purple-200">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                              <Target className="h-4 w-4 text-purple-600" />
-                            </div>
-                            <h4 className="font-semibold text-sm text-[#2D3253]">Job Matches</h4>
-                          </div>
-                          <p className="text-2xl font-bold text-purple-600">
-                            {useResumeMatching ? jobs.filter(job => getJobMatchScore(job) > 0).length : 0}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {useResumeMatching ? 'Active matching' : 'Enable matching'}
-                          </p>
-                        </Card>
+                         {/* Right Column: Skills Count Card */}
+                         <div className="lg:col-span-1">
+                           <div className="sticky top-6">
+                             <Card className="p-4 bg-white border-green-200 shadow-sm rounded-lg">
+                               <div className="flex items-center gap-3 mb-2">
+                                 <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                   <Award className="h-4 w-4 text-green-600" />
+                                 </div>
+                                 <h4 className="font-semibold text-sm text-[#2D3253]">Skills Count</h4>
+                               </div>
+                               <p className="text-3xl font-extrabold tracking-tight text-green-600">
+                                 {analysisData?.skills?.length || 0}
+                               </p>
+                               {analysisData && !analysisData.skills && (
+                                 <p className="text-xs text-muted-foreground mt-1">No skills detected</p>
+                               )}
+                             </Card>
+                           </div>
+                         </div>
+                       </div>
 
-                        {/* Analysis Quality */}
-                        <Card className="p-4 bg-white/80 border-orange-200">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
-                              <BarChart3 className="h-4 w-4 text-orange-600" />
-                            </div>
-                            <h4 className="font-semibold text-sm text-[#2D3253]">Analysis</h4>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {analysisData?.summary ? 'Complete' : 'In Progress'}
-                          </p>
-                        </Card>
-                      </div>
-                      
-                      <div className="grid md:grid-cols-2 gap-6">
-                        <div>
-                          <h4 className="font-semibold mb-3 text-lg">Skills Detected</h4>
-                          <div className="flex flex-wrap gap-2">
-                            {analysisData?.skills?.map((skill, index) => (
-                              <Badge key={index} variant="secondary" className="text-xs">
-                                {skill}
-                              </Badge>
-                            ))}
-                          </div>
-                          
-                          {/* Skill Categories */}
-                          {analysisData?.skills && (
-                            <div className="mt-4">
-                              <h5 className="font-medium mb-2 text-sm">Skill Categories</h5>
-                              <div className="grid grid-cols-2 gap-2 text-xs">
-                                <div className="flex justify-between">
-                                  <span>Technical:</span>
-                                  <span className="font-medium">
-                                    {analysisData.skills.filter(skill => 
-                                      ['javascript', 'python', 'react', 'node', 'java', 'c++', 'sql', 'html', 'css'].some(tech => 
-                                        skill.toLowerCase().includes(tech)
-                                      )
-                                    ).length}
-                                  </span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span>Soft Skills:</span>
-                                  <span className="font-medium">
-                                    {analysisData.skills.filter(skill => 
-                                      ['leadership', 'communication', 'teamwork', 'problem solving', 'management'].some(soft => 
-                                        skill.toLowerCase().includes(soft)
-                                      )
-                                    ).length}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <div>
-                          <h4 className="font-semibold mb-3 text-lg">Job Recommendations</h4>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm">
-                              <Target className="h-4 w-4 text-primary" />
-                              <span>Focus on {analysisData?.experience_level || 'your experience level'} roles</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm">
-                              <Target className="h-4 w-4 text-primary" />
-                              <span>Highlight your top {analysisData?.skills?.slice(0, 3).join(', ') || 'skills'}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm">
-                              <Target className="h-4 w-4 text-primary" />
-                              <span>Consider remote/hybrid opportunities</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm">
-                              <Target className="h-4 w-4 text-primary" />
-                              <span>Apply to {jobs.filter(job => getJobMatchScore(job) > 70).length} high-match jobs</span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {analysisData?.summary && (
-                          <div className="md:col-span-2">
-                            <h4 className="font-semibold mb-3 text-lg">AI Analysis Summary</h4>
-                            <p className="text-sm text-muted-foreground leading-relaxed">
-                              {analysisData.summary}
-                            </p>
-                          </div>
-                        )}
-                      </div>
+                       {/* Summary at the bottom */}
+                       {analysisData?.summary && (
+                         <div className="mt-6 pt-6 border-t border-gray-200">
+                           <h4 className="font-semibold mb-3 text-lg text-[#2D3253]">AI Analysis Summary</h4>
+                           <Card className="p-4 bg-white border-gray-200 shadow-sm rounded-lg">
+                             <p className="text-sm text-muted-foreground leading-relaxed">
+                               {analysisData.summary}
+                             </p>
+                           </Card>
+                         </div>
+                       )}
                     </>
-                  ) : isAnalysisPending ? (
-                    <div className="text-center py-12">
-                      <div className="w-16 h-16 bg-yellow-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                        <RefreshCw className="h-8 w-8 text-yellow-600 animate-spin" />
-                      </div>
-                      <h3 className="text-lg font-semibold mb-2 text-yellow-800">Analysis in Progress</h3>
-                      <p className="text-muted-foreground mb-4">
-                        Your resume is being analyzed. This usually takes a few minutes.
-                      </p>
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                        <p className="text-sm text-yellow-700">
-                          <strong>Status:</strong> {resumeAnalysis?.status}
-                        </p>
-                        <p className="text-xs text-yellow-600 mt-1">
-                          Please wait while our AI analyzes your resume...
-                        </p>
-                      </div>
-                      <div className="flex gap-2 justify-center">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => refetchAnalysis()}
-                        >
-                          <RefreshCw className="w-4 h-4 mr-2" />
-                          Refresh Status
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowResumeAnalysis(false)}
-                        >
-                          Close
-                        </Button>
-                      </div>
-                    </div>
                   ) : isAnalysisFailed ? (
                     <div className="text-center py-12">
                       <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -1108,47 +1244,7 @@ const JobListing = () => {
                         </Button>
                       </div>
                     </div>
-                  ) : (
-                    <div className="text-center py-12">
-                      <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                        <BarChart3 className="h-8 w-8 text-gray-400" />
-                      </div>
-                      <h3 className="text-lg font-semibold mb-2 text-gray-600">No Analysis Data</h3>
-                      <p className="text-muted-foreground mb-4">
-                        Resume analysis is not available. This could be because:
-                      </p>
-                      <div className="text-sm text-muted-foreground mb-6 space-y-1">
-                        <p>• The resume hasn't been analyzed yet</p>
-                        <p>• Analysis is still in progress</p>
-                        <p>• There was an error during analysis</p>
-                        <p>• The analysis status is: {resumeAnalysis?.status || 'Unknown'}</p>
-                      </div>
-                      
-                      {/* Debug Information */}
-                      {analysisError && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 text-left">
-                          <h4 className="font-semibold text-red-800 mb-2">Error Details:</h4>
-                          <p className="text-sm text-red-700">
-                            {analysisError.message || 'Unknown error occurred'}
-                          </p>
-                          <p className="text-xs text-red-600 mt-2">
-                            Resume ID: {selectedResumeId}
-                          </p>
-                        </div>
-                      )}
-                      
-                      
-                      <div className="flex gap-2 justify-center">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowResumeAnalysis(false)}
-                        >
-                          Close
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  ) : null}
                 </Card>
               </motion.div>
             )}
@@ -1218,300 +1314,367 @@ const JobListing = () => {
             </div>
           </div>
 
-            {/* Advanced Filters */}
-            <div className="max-w-7xl mx-auto mb-12 pb-14">
-              <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-6 m-6 lg:ml-20 lg:mr-20 sm:p-8 border border-primary/20 shadow-sm">
-              {/* Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-y-4 mb-8">
-                <div className="flex items-center gap-3 justify-center sm:justify-start">
-                  <Filter className="h-6 w-6 text-primary" />
-                  <h3 className="text-lg sm:text-xl font-bold text-[#2D3253]">Advanced Job Filters</h3>
-                </div>
-                <div className="flex flex-wrap justify-center sm:justify-end items-center gap-3">
-                  {resumeAnalysis && (
+          {/* Job Listings - using microservice job recommendations */}
+          <div className="max-w-6xl mx-auto px-3 sm:px-6">
+
+          {/* Recommendation Summary */}
+          {!isLoadingJobs && recommendationMeta.total_jobs_found && recommendedJobs.length > 0 && (
+            <Card className="p-4 mb-6 bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-[#2D3253] mb-2">
+                    Job Recommendations Summary
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-4 text-sm">
                     <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="resume-matching"
-                        checked={useResumeMatching}
-                        onChange={(e) => setUseResumeMatching(e.target.checked)}
-                        className="w-4 h-4 text-primary rounded focus:ring-primary"
-                      />
-                      <label htmlFor="resume-matching" className="text-sm font-medium text-[#2D3253]">
-                        Match with Resume
-                      </label>
+                      <Target className="h-4 w-4 text-primary" />
+                      <span className="font-medium">
+                        {recommendationMeta.total_jobs_found} total jobs found
+                      </span>
                     </div>
-                  )}
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSelectedCategory("All");
-                      setSelectedJobType("All");
-                      setSelectedSalaryRange("All");
-                      setSelectedLocation("All");
-                      setSelectedExperience("All");
-                      setSelectedWorkArrangement("All");
-                      setSelectedCompanySize("All");
-                    }}
-                    className="text-sm hover:bg-red-50 hover:border-red-200 hover:text-red-600"
-                  >
-                    Clear All Filters
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">
+                        {recommendedJobs.length} jobs displayed
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                {recommendationMeta.skills_searched && recommendationMeta.skills_searched.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase">Skills Searched:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {recommendationMeta.skills_searched.slice(0, 10).map((skill, index) => (
+                        <Badge key={index} variant="outline" className="text-xs">
+                          {skill}
+                        </Badge>
+                      ))}
+                      {recommendationMeta.skills_searched.length > 10 && (
+                        <Badge variant="outline" className="text-xs">
+                          +{recommendationMeta.skills_searched.length - 10} more
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {isLoadingJobs && (
+            <div className="text-center py-8">
+              <div className="flex items-center justify-center gap-3">
+                <RefreshCw className="animate-spin text-gray-600" />
+                <div className="text-lg text-gray-600">Loading job recommendations based on your skills...</div>
+              </div>
+            </div>
+          )}
+
+          {!isLoadingJobs && recommendedJobs.length === 0 && (
+            <div className="text-center py-8">
+              <div className="text-lg text-gray-600 mb-4">
+                {selectedResumeId ? 'No job recommendations found.' : 'Upload a resume to get personalized job recommendations'}
+              </div>
+              <div className="flex gap-4 justify-center items-center">
+                <Button onClick={handleRefreshJobs} className="mt-2 bg-blue-600 hover:bg-blue-700">
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Refresh Jobs
+                </Button>
+                {selectedResumeId && (
+                  <Button onClick={handleRefreshJobs} variant="outline" className="mt-2">
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Retry Job Recommendations
                   </Button>
-                  </div>
-                </div>
-
-                {/* First Row - Primary Filters */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  {/* Category Filter */}
-                  <div>
-                    <label className="block text-sm font-semibold text-[#2D3253] mb-2">Job Category</label>
-                    <select
-                      value={selectedCategory}
-                      onChange={(e) => setSelectedCategory(e.target.value)}
-                      className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary bg-white shadow-sm hover:border-gray-300 transition-colors"
-                    >
-                      {categories.map((category) => (
-                        <option key={category} value={category}>{category}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Job Type Filter */}
-                  <div>
-                    <label className="block text-sm font-semibold text-[#2D3253] mb-2">Employment Type</label>
-                    <select
-                      value={selectedJobType}
-                      onChange={(e) => setSelectedJobType(e.target.value)}
-                      className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary bg-white shadow-sm hover:border-gray-300 transition-colors"
-                    >
-                      {jobTypes.map((type) => (
-                        <option key={type} value={type}>{type}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Experience Level Filter */}
-                  <div>
-                    <label className="block text-sm font-semibold text-[#2D3253] mb-2">Experience Level</label>
-                    <select
-                      value={selectedExperience}
-                      onChange={(e) => setSelectedExperience(e.target.value)}
-                      className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary bg-white shadow-sm hover:border-gray-300 transition-colors"
-                    >
-                      {experienceLevels.map((level) => (
-                        <option key={level} value={level}>{level}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Location Filter */}
-                  <div>
-                    <label className="block text-sm font-semibold text-[#2D3253] mb-2">Location</label>
-                    <select
-                      value={selectedLocation}
-                      onChange={(e) => setSelectedLocation(e.target.value)}
-                      className="w-full p-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary bg-white shadow-sm hover:border-gray-300 transition-colors"
-                    >
-                      {locations.map((location) => (
-                        <option key={location} value={location}>{location}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-              {/* Secondary Filters */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[{
-                  label: "Salary Range",
-                  value: selectedSalaryRange,
-                  onChange: setSelectedSalaryRange,
-                  options: salaryRanges
-                }, {
-                  label: "Work Arrangement",
-                  value: selectedWorkArrangement,
-                  onChange: setSelectedWorkArrangement,
-                  options: workArrangements
-                }, {
-                  label: "Company Size",
-                  value: selectedCompanySize,
-                  onChange: setSelectedCompanySize,
-                  options: companySizes
-                }].map(({ label, value, onChange, options }) => (
-                  <div key={label}>
-                    <label className="block text-sm font-semibold text-[#2D3253] mb-3">{label}</label>
-                    <select
-                      value={value}
-                      onChange={(e) => onChange(e.target.value)}
-                      className="w-full p-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/50 focus:border-primary bg-white shadow-sm hover:border-gray-300 transition-colors"
-                    >
-                      {options.map((opt) => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                  </div>
-                ))}
-              </div>
-
-              {/* Active Filters Summary */}
-              <div className="mt-6 pt-6 border-t border-gray-200">
-                <div className="flex flex-wrap gap-2">
-                  {selectedCategory !== "All" && (
-                    <Badge variant="secondary" className="px-3 py-1">Category: {selectedCategory}</Badge>
-                  )}
-                  {selectedJobType !== "All" && (
-                    <Badge variant="secondary" className="px-3 py-1">Type: {selectedJobType}</Badge>
-                  )}
-                  {selectedLocation !== "All" && (
-                    <Badge variant="secondary" className="px-3 py-1">Location: {selectedLocation}</Badge>
-                  )}
-                  {selectedExperience !== "All" && (
-                    <Badge variant="secondary" className="px-3 py-1">Experience: {selectedExperience}</Badge>
-                  )}
-                  {selectedSalaryRange !== "All" && (
-                    <Badge variant="secondary" className="px-3 py-1">Salary: {selectedSalaryRange}</Badge>
-                  )}
-                  {selectedWorkArrangement !== "All" && (
-                    <Badge variant="secondary" className="px-3 py-1">Work: {selectedWorkArrangement}</Badge>
-                  )}
-                  {selectedCompanySize !== "All" && (
-                    <Badge variant="secondary" className="px-3 py-1">Company: {selectedCompanySize}</Badge>
-                  )}
-                </div>
+                )}
               </div>
             </div>
+          )}
 
+          <div className="grid gap-4 sm:gap-6 my-6">
+            {(() => {
+              const filteredJobs = getResumeBasedJobs()
+                .filter(job => selectedCategory === "All" || job.category === selectedCategory)
+                .filter(job => selectedJobType === "All" || job.employment_type === selectedJobType)
+                .filter(job => selectedLocation === "All" || job.location === selectedLocation)
+                .filter(job => selectedExperience === "All" || job.seniority_level === selectedExperience)
+                .filter(job => selectedWorkArrangement === "All" || job.work_type === selectedWorkArrangement)
+                .filter(job => selectedCompanySize === "All" || job.companySize === selectedCompanySize)
+                .filter(job => {
+                  if (selectedSalaryRange === "All") return true;
+                  const jobSalary = job.salary_min && job.salary_max ? `${job.salary_min} - ${job.salary_max}` : job.salary || '';
+                  switch (selectedSalaryRange) {
+                    case "Under ₹5L":
+                      return jobSalary.includes("₹3L") || jobSalary.includes("₹4L") || jobSalary.includes("₹5L");
+                    case "₹5L - ₹8L":
+                      return jobSalary.includes("₹5L") || jobSalary.includes("₹6L") || jobSalary.includes("₹7L") || jobSalary.includes("₹8L");
+                    case "₹8L - ₹12L":
+                      return jobSalary.includes("₹8L") || jobSalary.includes("₹9L") || jobSalary.includes("₹10L") || jobSalary.includes("₹11L") || jobSalary.includes("₹12L");
+                    case "₹12L - ₹18L":
+                      return jobSalary.includes("₹12L") || jobSalary.includes("₹13L") || jobSalary.includes("₹14L") || jobSalary.includes("₹15L") || jobSalary.includes("₹16L") || jobSalary.includes("₹17L") || jobSalary.includes("₹18L");
+                    case "₹18L - ₹25L":
+                      return jobSalary.includes("₹18L") || jobSalary.includes("₹20L") || jobSalary.includes("₹22L") || jobSalary.includes("₹24L") || jobSalary.includes("₹25L");
+                    case "₹25L - ₹35L":
+                      return jobSalary.includes("₹25L") || jobSalary.includes("₹28L") || jobSalary.includes("₹30L") || jobSalary.includes("₹32L") || jobSalary.includes("₹35L");
+                    case "₹35L+":
+                      return jobSalary.includes("₹35L") || jobSalary.includes("₹40L") || jobSalary.includes("₹45L") || jobSalary.includes("₹50L");
+                    default:
+                      return true;
+                  }
+                })
+                .filter(job => {
+                  const searchLower = (searchTerm || '').toLowerCase();
+                  const jobTitle = (job.title || '').toLowerCase();
+                  const companyName = ((job.company_name || job.company || '')).toLowerCase();
+                  const jobSkills = (job.skills || []).map(skill => (skill || '').toLowerCase());
+                  
+                  return jobTitle.includes(searchLower) || 
+                         companyName.includes(searchLower) ||
+                         jobSkills.some(skill => skill.includes(searchLower));
+                });
 
-          {/* Job Listings */}
-<div className="max-w-6xl mx-auto px-3 sm:px-6">
-  {jobsLoading && (
-    <div className="text-center py-8">
-      <div className="text-lg text-gray-600">Loading jobs...</div>
-    </div>
-  )}
-  {jobsError && (
-    <div className="text-center py-8">
-      <div className="text-lg text-red-600">Error loading jobs: {jobsError.message}</div>
-    </div>
-  )}
+              // Track company occurrences
+              const companyCounts = new Map<string, number>();
+              filteredJobs.forEach(job => {
+                const companyName = typeof job.company_name === 'string' ? job.company_name : typeof job.company === 'string' ? job.company : '';
+                if (companyName) {
+                  companyCounts.set(companyName, (companyCounts.get(companyName) || 0) + 1);
+                }
+              });
 
-  <div className="grid gap-4 sm:gap-6 my-6">
-    {(useResumeMatching ? getResumeBasedJobs() : (jobs || []))
-      .filter(job => selectedCategory === "All" || job.category === selectedCategory)
-      .filter(job => selectedJobType === "All" || job.employment_type === selectedJobType)
-      .filter(job => selectedLocation === "All" || job.location === selectedLocation)
-      .filter(job => selectedExperience === "All" || job.seniority_level === selectedExperience)
-      .filter(job => selectedWorkArrangement === "All" || job.work_type === selectedWorkArrangement)
-      .filter(job => selectedCompanySize === "All" || job.companySize === selectedCompanySize)
-      .filter(job => {
-        if (selectedSalaryRange === "All") return true;
-        const jobSalary = job.salary_min && job.salary_max ? `${job.salary_min} - ${job.salary_max}` : job.salary || '';
-        switch (selectedSalaryRange) {
-          case "Under ₹5L":
-            return jobSalary.includes("₹3L") || jobSalary.includes("₹4L") || jobSalary.includes("₹5L");
-          case "₹5L - ₹8L":
-            return jobSalary.includes("₹5L") || jobSalary.includes("₹6L") || jobSalary.includes("₹7L") || jobSalary.includes("₹8L");
-          case "₹8L - ₹12L":
-            return jobSalary.includes("₹8L") || jobSalary.includes("₹9L") || jobSalary.includes("₹10L") || jobSalary.includes("₹11L") || jobSalary.includes("₹12L");
-          case "₹12L - ₹18L":
-            return jobSalary.includes("₹12L") || jobSalary.includes("₹13L") || jobSalary.includes("₹14L") || jobSalary.includes("₹15L") || jobSalary.includes("₹16L") || jobSalary.includes("₹17L") || jobSalary.includes("₹18L");
-          case "₹18L - ₹25L":
-            return jobSalary.includes("₹18L") || jobSalary.includes("₹20L") || jobSalary.includes("₹22L") || jobSalary.includes("₹24L") || jobSalary.includes("₹25L");
-          case "₹25L - ₹35L":
-            return jobSalary.includes("₹25L") || jobSalary.includes("₹28L") || jobSalary.includes("₹30L") || jobSalary.includes("₹32L") || jobSalary.includes("₹35L");
-          case "₹35L+":
-            return jobSalary.includes("₹35L") || jobSalary.includes("₹40L") || jobSalary.includes("₹45L") || jobSalary.includes("₹50L");
-          default:
-            return true;
-        }
-      })
-      .filter(job => job.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                    (job.company_name || job.company || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    (job.skills || []).some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase())))
-      .map((job) => (
-        <motion.div
-          key={job.id}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          whileHover={{ scale: 1.02 }}
-        >
-          <Card className="p-4 sm:p-6 hover:shadow-lg transition-all duration-300 border-primary/10 hover:border-primary/30">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-              <div className="flex-1">
-                <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <h3 className="font-bold text-lg sm:text-xl truncate">{job.title}</h3>
-                  {job.featured && (
-                    <Badge variant="secondary" className="text-xs">Featured</Badge>
-                  )}
-                  {useResumeMatching && (job as any).matchScore > 0 && (
-                    <Badge
-                      variant={(job as any).matchScore > 70 ? "default" : (job as any).matchScore > 40 ? "secondary" : "outline"}
-                      className="text-xs"
-                    >
-                      {Math.round((job as any).matchScore)}% Match
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-primary font-medium mb-1 text-sm sm:text-base">
-                  {typeof job.company_name === 'string' ? job.company_name : typeof job.company === 'string' ? job.company : 'N/A'}
-                </p>
+              // Helper function to format salary
+              const formatSalary = (job: any) => {
+                if (job.salary_min && job.salary_max) {
+                  const currency = job.salary_currency || '₹';
+                  const period = job.salary_period || 'yearly';
+                  
+                  // Convert to lakhs if yearly and values are large
+                  if (period === 'yearly' && job.salary_min >= 100000) {
+                    const minL = (job.salary_min / 100000).toFixed(1).replace('.0', '');
+                    const maxL = (job.salary_max / 100000).toFixed(1).replace('.0', '');
+                    return `${currency}${minL}L - ${currency}${maxL}L per year`;
+                  } else if (period === 'yearly') {
+                    return `${currency}${job.salary_min.toLocaleString()} - ${currency}${job.salary_max.toLocaleString()} per year`;
+                  } else {
+                    return `${currency}${job.salary_min.toLocaleString()} - ${currency}${job.salary_max.toLocaleString()} per ${period}`;
+                  }
+                } else if (job.salary_min) {
+                  const currency = job.salary_currency || '₹';
+                  const period = job.salary_period || 'yearly';
+                  if (period === 'yearly' && job.salary_min >= 100000) {
+                    const minL = (job.salary_min / 100000).toFixed(1).replace('.0', '');
+                    return `${currency}${minL}L+ per year`;
+                  }
+                  return `${currency}${job.salary_min.toLocaleString()}+ per ${period}`;
+                } else if (job.salary) {
+                  return job.salary;
+                }
+                return 'Not specified';
+              };
 
-                <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <MapPin className="h-3 w-3 sm:h-4 sm:w-4" />
-                    {job.location || job.country || 'N/A'}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
-                    {job.employment_type || job.type || 'N/A'}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
-                    {job.salary_min && job.salary_max
-                      ? `${job.salary_min} - ${job.salary_max}`
-                      : job.salary || 'N/A'}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
-                    {job.created_at ? new Date(job.created_at).toLocaleDateString() : 'N/A'}
-                  </div>
-                </div>
-              </div>
-            </div>
+              // Helper function to format experience
+              const formatExperience = (job: any) => {
+                if (job.min_experience_years && job.max_experience_years) {
+                  return `${job.min_experience_years} - ${job.max_experience_years} years`;
+                } else if (job.min_experience_years) {
+                  return `${job.min_experience_years}+ years`;
+                } else if (job.max_experience_years) {
+                  return `Up to ${job.max_experience_years} years`;
+                }
+                return null;
+              };
 
-            <p className="text-muted-foreground mt-3 mb-4 text-sm sm:text-base line-clamp-3">
-              {typeof job.description === 'string'
-                ? job.description
-                : JSON.stringify(job.description) || 'No description available'}
-            </p>
+              return filteredJobs.map((job, index) => {
+                const companyName = typeof job.company_name === 'string' ? job.company_name : typeof job.company === 'string' ? job.company : '';
+                const isDuplicateCompany = companyName && companyCounts.get(companyName)! > 1 && 
+                  filteredJobs.slice(0, index).some(j => {
+                    const prevCompany = typeof j.company_name === 'string' ? j.company_name : typeof j.company === 'string' ? j.company : '';
+                    return prevCompany === companyName;
+                  });
 
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                {(job.skills || []).map((skill, index) => (
-                  <Badge key={index} variant="outline" className="text-xs sm:text-sm">
-                    {typeof skill === 'string' ? skill : JSON.stringify(skill)}
-                  </Badge>
-                ))}
-              </div>
+                return (
+                  <motion.div
+                    key={job.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6 }}
+                    whileHover={{ scale: 1.02 }}
+                  >
+                    <Card className="p-4 sm:p-6 hover:shadow-lg transition-all duration-300 border-primary/10 hover:border-primary/30">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div className="flex-1">
+                          {/* Role Title - Bold */}
+                          <div className="mb-2">
+                            <h3 className="font-bold text-xl sm:text-2xl mb-1 truncate">{job.title}</h3>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {(job as any).isPrimaryMatch && (
+                                <Badge variant="default" className="text-xs bg-green-600 hover:bg-green-700">
+                                  ⭐ Best Match
+                                </Badge>
+                              )}
+                              {(job as any).matchType === 'second' && (
+                                <Badge variant="secondary" className="text-xs bg-blue-500 hover:bg-blue-600">
+                                  🎯 Second Match
+                                </Badge>
+                              )}
+                              {(job as any).matchType === 'third' && (
+                                <Badge variant="secondary" className="text-xs bg-purple-500 hover:bg-purple-600">
+                                  🎯 Third Match
+                                </Badge>
+                              )}
+                              {job.featured && (
+                                <Badge variant="secondary" className="text-xs">Featured</Badge>
+                              )}
+                              {useResumeMatching && (job as any).matchScore > 0 && (
+                                <Badge
+                                  variant={(job as any).matchScore > 70 ? "default" : (job as any).matchScore > 40 ? "secondary" : "outline"}
+                                  className="text-xs"
+                                >
+                                  {Math.round((job as any).matchScore)}% Match
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Company Name - Below Role */}
+                          <div className="flex flex-wrap items-center gap-2 mb-3">
+                            <p className="text-primary font-semibold text-base sm:text-lg">
+                              {companyName || 'N/A'}
+                            </p>
+                            {isDuplicateCompany && (
+                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                                Another job from this company
+                              </Badge>
+                            )}
+                          </div>
 
-              <div className="flex flex-wrap gap-2 justify-center sm:justify-end w-full sm:w-auto">
-                <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                  <Bookmark className="w-4 h-4" />
-                </Button>
-                <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                  <Share2 className="w-4 h-4" />
-                </Button>
-                <Button size="sm" className="w-full sm:w-auto flex items-center justify-center">
-                  Apply Now
-                  <ArrowRight className="w-4 h-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </motion.div>
-      ))}
-  </div>
-</div>
+                          {/* Main Details Row */}
+                          <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-muted-foreground mb-3">
+                            <div className="flex items-center gap-1">
+                              <MapPin className="h-3 w-3 sm:h-4 sm:w-4" />
+                              <span>{job.location || job.city || job.state || job.country || 'N/A'}</span>
+                              </div>
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+                              <span>{job.employment_type || job.type || 'N/A'}</span>
+                            </div>
+                            {job.work_type && (
+                              <div className="flex items-center gap-1">
+                                <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+                                <span className="capitalize">{job.work_type.replace('_', ' ')}</span>
+                              </div>
+                            )}
+                            {job.seniority_level && (
+                              <div className="flex items-center gap-1">
+                                <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4" />
+                                <span className="capitalize">{job.seniority_level.replace('_', ' ')}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Salary and Experience Row */}
+                          <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm mb-3 p-2 bg-gray-50 rounded-lg">
+                            <div className="flex items-center gap-1 font-semibold text-primary">
+                              <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
+                              <span>{formatSalary(job)}</span>
+                            </div>
+                            {formatExperience(job) && (
+                              <div className="flex items-center gap-1">
+                                <Target className="h-3 w-3 sm:h-4 sm:w-4" />
+                                <span>Experience: {formatExperience(job)}</span>
+                              </div>
+                            )}
+                            {job.created_at && (
+                              <div className="flex items-center gap-1">
+                                <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+                                <span>Posted: {new Date(job.created_at).toLocaleDateString()}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Additional Benefits */}
+                          {(job.benefits && job.benefits.length > 0) || job.visa_sponsorship || job.relocation_assistance ? (
+                            <div className="flex flex-wrap items-center gap-2 mb-3">
+                              {job.benefits && job.benefits.length > 0 && (
+                                <>
+                                  {job.benefits.slice(0, 3).map((benefit: string, idx: number) => (
+                                    <Badge key={idx} variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                                      {benefit}
+                                    </Badge>
+                                  ))}
+                                  {job.benefits.length > 3 && (
+                                    <Badge variant="outline" className="text-xs">
+                                      +{job.benefits.length - 3} more
+                                    </Badge>
+                                  )}
+                                </>
+                              )}
+                              {job.visa_sponsorship && (
+                                <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                                  Visa Sponsorship
+                                </Badge>
+                              )}
+                              {job.relocation_assistance && (
+                                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                                  Relocation Assistance
+                                </Badge>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <p className="text-muted-foreground mt-3 mb-4 text-sm sm:text-base line-clamp-3">
+                        {typeof job.description === 'string'
+                          ? job.description
+                          : JSON.stringify(job.description) || 'No description available'}
+                      </p>
+
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                          {(job.skills || []).map((skill, index) => (
+                            <Badge key={index} variant="outline" className="text-xs sm:text-sm">
+                              {typeof skill === 'string' ? skill : JSON.stringify(skill)}
+                            </Badge>
+                          ))}
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 justify-center sm:justify-end w-full sm:w-auto">
+                          <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                            <Bookmark className="w-4 h-4" />
+                          </Button>
+                          <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                            <Share2 className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            className="w-full sm:w-auto flex items-center justify-center"
+                            onClick={() => {
+                              const applicationUrl = job.url || job.application_url || job.applicationUrl;
+                              if (applicationUrl) {
+                                // Open in new tab if it's a full URL, otherwise navigate
+                                if (applicationUrl.startsWith('http://') || applicationUrl.startsWith('https://')) {
+                                  window.open(applicationUrl, '_blank', 'noopener,noreferrer');
+                                } else {
+                                  window.open(`https://${applicationUrl}`, '_blank', 'noopener,noreferrer');
+                                }
+                              } else {
+                                console.warn('No application URL found for job:', job.id);
+                                // Optionally show a toast or alert
+                                alert('Application URL not available for this job.');
+                              }
+                            }}
+                          >
+                            Apply Now
+                            <ArrowRight className="w-4 h-4 ml-1" />
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  </motion.div>
+                );
+              });
+            })()}
+          </div>
+          </div>
 
 
           {/* Load More */}
@@ -1520,7 +1683,6 @@ const JobListing = () => {
               Load More Jobs
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-          </div>
           </div>
           </div>
         </motion.section>

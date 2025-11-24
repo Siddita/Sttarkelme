@@ -1,4 +1,4 @@
-// Comprehensive Vercel API route to proxy ALL requests to zettanix.in
+// Comprehensive Vercel API route to proxy ALL requests to talentcueai.com
 export default async function handler(req, res) {
   // Enable CORS for your frontend domain
   res.setHeader('Access-Control-Allow-Origin', 'https://quiz-new-j3wl.vercel.app');
@@ -23,10 +23,11 @@ export default async function handler(req, res) {
     const queryString = new URLSearchParams(query).toString();
     const finalPath = queryString ? `${fullPath}?${queryString}` : fullPath;
     
-    console.log(`Proxying ${method} request to: https://zettanix.in${finalPath}`);
+    const API_BASE_URL = process.env.VITE_API_BASE_URL || 'https://talentcueai.com';
+    console.log(`Proxying ${method} request to: ${API_BASE_URL}${finalPath}`);
     
     // Forward the request to the actual API
-    const response = await fetch(`https://zettanix.in${finalPath}`, {
+    const response = await fetch(`${API_BASE_URL}${finalPath}`, {
       method,
       headers: {
         'Content-Type': 'application/json',
@@ -53,7 +54,7 @@ export default async function handler(req, res) {
     res.status(500).json({ 
       error: 'Internal server error',
       message: error.message,
-      details: 'Failed to proxy request to zettanix.in'
+      details: 'Failed to proxy request to API server'
     });
   }
 }

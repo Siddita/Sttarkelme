@@ -1,18 +1,29 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Navbar } from "@/components/ui/navbar-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { 
-  generateRandomCodingChallengeGenerateChallengePost,
-  evaluateCodeSolutionEvaluateCodePost,
-  getTemplatesTemplates_Get,
-  analyzePerformanceGapsAnalyzePerformanceGapsPost,
-  generateSkillBasedRecommendationsGenerateSkillBasedRecommendationsPost,
-  downloadReportDownloadReportPost,
-  generateInterviewPdfGenerateInterviewPdfPost
+  generateQuestionV1CodingGenerateQuestionPost,
+  evaluateCodeSolutionV1EvaluateCodePost,
+  analyzePerformanceGapsV1AnalyzePerformanceGapsPost,
+  generateSkillBasedRecommendationsV1GenerateSkillBasedRecommendationsPost,
+  downloadReportV1DownloadReportPost,
+  generateInterviewPdfV1GenerateInterviewPdfPost
 } from "@/hooks/useApis";
 import {
   Code,
@@ -26,13 +37,11 @@ import {
   RefreshCw,
   FileText,
   Zap,
-  Star,
   AlertCircle,
   Lightbulb,
   BarChart3,
   Timer,
   Eye,
-  User,
   Smile,
   Hand,
   RotateCcw,
@@ -44,6 +53,9 @@ type CodingChallenge = {
   id?: string;
   difficulty?: string;
   language?: string;
+  generated_questions?: string[];
+  profile_used?: any;
+  total_latency_sec?: number;
 };
 
 
@@ -53,20 +65,269 @@ type CodeEvaluation = {
   feedback?: string;
 };
 
-type InterviewTemplate = {
-  id: string;
-  name: string;
-  company: string;
-  position: string;
-  industry: string;
-  difficulty: "easy" | "intermediate" | "hard";
-  questions: string[];
-  description: string;
+// Helper function to extract profile data from parsed resume or dashboard state
+const getProfileFromResume = () => {
+  try {
+    // First, check for the latest resume upload
+    const latestUpload = localStorage.getItem('latestResumeUpload');
+    let latestResumeId: string | null = null;
+    let resumeData = null;
+    
+    if (latestUpload) {
+      try {
+        const uploadData = JSON.parse(latestUpload);
+        latestResumeId = uploadData?.resumeId || uploadData?.id || null;
+        console.log('📋 Latest resume upload found in CodingRoundPage:', latestResumeId);
+        // If latest upload has direct data, use it
+        if (uploadData && Object.keys(uploadData).length > 2) { // More than just id and uploadedAt
+          resumeData = uploadData;
+        }
+      } catch (e) {
+        console.warn('Failed to parse latestResumeUpload:', e);
+      }
+    }
+    
+    // If no data from latest upload, try to get from parsedResumeData (only if it matches latest)
+    if (!resumeData) {
+      const storedResume = localStorage.getItem('parsedResumeData');
+      if (storedResume) {
+        try {
+          const parsed = JSON.parse(storedResume);
+          // Only use if no latest upload specified, or if it matches
+          if (!latestResumeId || parsed?.resumeId === latestResumeId || parsed?.id === latestResumeId) {
+            resumeData = parsed;
+          }
+        } catch (e) {
+          console.warn('Failed to parse parsedResumeData:', e);
+        }
+      }
+    }
+    
+    // If no resume data, try to get from dashboard-state (userProfile)
+    let userProfile = null;
+    let dashboardSkills = null;
+    if (!resumeData) {
+      const dashboardState = localStorage.getItem('dashboard-state');
+      if (dashboardState) {
+        try {
+          const parsedState = JSON.parse(dashboardState);
+          userProfile = parsedState.userProfile;
+          dashboardSkills = parsedState.skills; // Also get skills array from dashboard state
+        } catch (e) {
+          console.warn('Failed to parse dashboard-state:', e);
+        }
+      }
+    }
+    
+    // Use resumeData if available, otherwise use userProfile
+    const dataSource = resumeData || userProfile;
+    if (!dataSource) {
+      console.log('No profile data found in localStorage');
+      return null;
+    }
+    
+    // Extract Education (get highest degree)
+    let education = "Bachelor's in Computer Science"; // Default
+    if (resumeData) {
+      // From parsed resume format
+      if (resumeData.education && Array.isArray(resumeData.education) && resumeData.education.length > 0) {
+        const highestEdu = resumeData.education[0]; // Usually sorted by date, first is most recent
+        education = highestEdu.degree || highestEdu.qualification || education;
+      }
+    } else if (userProfile) {
+      // From userProfile format
+      if (userProfile.education && Array.isArray(userProfile.education) && userProfile.education.length > 0) {
+        const highestEdu = userProfile.education[0]; // Usually sorted by date, first is most recent
+        education = highestEdu.degree || education;
+      } else if (userProfile.specialization) {
+        education = `${userProfile.specialization} - ${userProfile.graduation_year || 'N/A'}`;
+      }
+    }
+    
+    // Extract Years_of_Experience (calculate from experience array)
+    let yearsOfExperience = 0;
+    if (resumeData) {
+      // From parsed resume format
+      if (resumeData.experience && Array.isArray(resumeData.experience)) {
+        const totalMonths = resumeData.experience.reduce((total: number, exp: any) => {
+          if (exp.start_date && exp.end_date) {
+            const start = new Date(exp.start_date);
+            const end = exp.end_date === 'Present' || !exp.end_date ? new Date() : new Date(exp.end_date);
+            const months = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30);
+            return total + Math.max(0, months);
+          }
+          return total;
+        }, 0);
+        yearsOfExperience = Math.floor(totalMonths / 12);
+      }
+    } else if (userProfile) {
+      // From userProfile format
+      if (userProfile.work_experience && Array.isArray(userProfile.work_experience)) {
+        const totalMonths = userProfile.work_experience.reduce((total: number, exp: any) => {
+          if (exp.duration) {
+            // Parse duration string like "2022-2024" or "2 years"
+            const durationMatch = exp.duration.match(/(\d+)\s*years?/i);
+            if (durationMatch) {
+              return total + parseInt(durationMatch[1], 10) * 12;
+            }
+            // Try to parse year range
+            const yearRange = exp.duration.match(/(\d{4})\s*-\s*(\d{4}|Present)/i);
+            if (yearRange) {
+              const startYear = parseInt(yearRange[1], 10);
+              const endYear = yearRange[2] === 'Present' ? new Date().getFullYear() : parseInt(yearRange[2], 10);
+              return total + (endYear - startYear) * 12;
+            }
+          }
+          return total;
+        }, 0);
+        yearsOfExperience = Math.floor(totalMonths / 12);
+      }
+    }
+    
+    // Extract Project_Count
+    let projectCount = 0;
+    if (resumeData) {
+      projectCount = resumeData.projects && Array.isArray(resumeData.projects) 
+        ? resumeData.projects.length 
+        : 0;
+    } else if (userProfile) {
+      projectCount = userProfile.projects && Array.isArray(userProfile.projects) 
+        ? userProfile.projects.length 
+        : 0;
+    }
+    
+    // Extract Domain (from experience or specialization)
+    let domain = "Software Development"; // Default
+    if (resumeData) {
+      if (resumeData.experience && resumeData.experience.length > 0) {
+        const latestExp = resumeData.experience[0];
+        domain = latestExp.domain || latestExp.industry || latestExp.position || domain;
+      }
+    } else if (userProfile) {
+      if (userProfile.work_experience && userProfile.work_experience.length > 0) {
+        const latestExp = userProfile.work_experience[0];
+        domain = latestExp.role || latestExp.company || domain;
+      } else if (userProfile.specialization) {
+        domain = userProfile.specialization;
+      } else if (userProfile.preferred_job_roles && userProfile.preferred_job_roles.length > 0) {
+        domain = userProfile.preferred_job_roles[0];
+      }
+    }
+    
+    // Extract Skills
+    let skills: string[] = ["Software Engineering"]; // Default
+    if (resumeData) {
+      if (resumeData.skills && Array.isArray(resumeData.skills) && resumeData.skills.length > 0) {
+        skills = resumeData.skills;
+      } else if (resumeData.experience && resumeData.experience.length > 0) {
+        // Try to extract from experience descriptions
+        const allSkills = new Set<string>();
+        resumeData.experience.forEach((exp: any) => {
+          if (exp.description) {
+            const techKeywords = ['Python', 'JavaScript', 'Java', 'C++', 'React', 'Node.js', 'SQL', 'AWS', 'Docker'];
+            techKeywords.forEach(keyword => {
+              if (exp.description.toLowerCase().includes(keyword.toLowerCase())) {
+                allSkills.add(keyword);
+              }
+            });
+          }
+        });
+        if (allSkills.size > 0) {
+          skills = Array.from(allSkills);
+        }
+      }
+    } else if (userProfile) {
+      // First, try to get skills from dashboard state's skills array
+      if (dashboardSkills && Array.isArray(dashboardSkills) && dashboardSkills.length > 0) {
+        skills = dashboardSkills.map((skill: any) => skill.name || skill).filter(Boolean);
+      }
+      
+      // If no skills from dashboard state, try to get from projects
+      if (skills.length === 0 || (skills.length === 1 && skills[0] === "Software Engineering")) {
+        if (userProfile.projects && Array.isArray(userProfile.projects) && userProfile.projects.length > 0) {
+          const allSkills = new Set<string>();
+          userProfile.projects.forEach((project: any) => {
+            if (project.skills_used && Array.isArray(project.skills_used)) {
+              project.skills_used.forEach((skill: string) => allSkills.add(skill));
+            }
+          });
+          if (allSkills.size > 0) {
+            skills = Array.from(allSkills);
+          }
+        }
+      }
+      
+      // Also check work experience descriptions
+      if (skills.length === 0 || (skills.length === 1 && skills[0] === "Software Engineering")) {
+        if (userProfile.work_experience && Array.isArray(userProfile.work_experience)) {
+          const allSkills = new Set<string>(skills.length > 0 ? skills : []);
+          userProfile.work_experience.forEach((exp: any) => {
+            if (exp.description) {
+              const techKeywords = ['Python', 'JavaScript', 'Java', 'C++', 'React', 'Node.js', 'SQL', 'AWS', 'Docker', 'TypeScript', 'MongoDB', 'PostgreSQL'];
+              techKeywords.forEach(keyword => {
+                if (exp.description.toLowerCase().includes(keyword.toLowerCase())) {
+                  allSkills.add(keyword);
+                }
+              });
+            }
+          });
+          if (allSkills.size > 0) {
+            skills = Array.from(allSkills);
+          }
+        }
+      }
+    }
+    
+    // Extract Certifications
+    let certifications = "None";
+    if (resumeData) {
+      if (resumeData.certifications && Array.isArray(resumeData.certifications) && resumeData.certifications.length > 0) {
+        certifications = resumeData.certifications.map((cert: any) => 
+          cert.name || cert.title || cert
+        ).join(', ');
+      }
+    } else if (userProfile) {
+      if (userProfile.certifications && Array.isArray(userProfile.certifications) && userProfile.certifications.length > 0) {
+        certifications = userProfile.certifications.map((cert: any) => 
+          cert.name || cert
+        ).join(', ');
+      }
+    }
+    
+    // Determine Skill_Level based on experience and education
+    let skillLevel = "intermediate";
+    if (yearsOfExperience >= 5) {
+      skillLevel = "hard";
+    } else if (yearsOfExperience >= 2) {
+      skillLevel = "intermediate";
+    } else {
+      skillLevel = "easy";
+    }
+    
+    const profileData = {
+      Education: education,
+      Years_of_Experience: yearsOfExperience,
+      Project_Count: projectCount,
+      Domain: domain,
+      Skills: skills,
+      Certifications: certifications,
+      Skill_Level: skillLevel
+    };
+    
+    console.log('Profile data extracted from localStorage:', profileData);
+    return profileData;
+  } catch (error) {
+    console.error('Error extracting profile from resume or dashboard state:', error);
+    return null;
+  }
 };
 
 export default function CodingRoundPage() {
-  const [templates, setTemplates] = useState<InterviewTemplate[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState<InterviewTemplate | null>(null);
+  const navigate = useNavigate();
+  
+  // Profile data check state
+  const [showResumePrompt, setShowResumePrompt] = useState(false);
+  const [hasProfileData, setHasProfileData] = useState(false);
   
   // Coding challenge states
   const [currentChallenge, setCurrentChallenge] = useState<CodingChallenge | null>(null);
@@ -85,13 +346,145 @@ export default function CodingRoundPage() {
   
   // Timer
   const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(null);
+  
+  // Function to check for profile data
+  const checkProfileData = () => {
+    try {
+      // First, check for the latest resume upload
+      const latestUpload = localStorage.getItem('latestResumeUpload');
+      let resumeData = null;
+      
+      if (latestUpload) {
+        try {
+          const uploadData = JSON.parse(latestUpload);
+          const latestResumeId = uploadData?.resumeId || uploadData?.id || null;
+          console.log('📋 Latest resume upload found in checkProfileData:', latestResumeId);
+          // If latest upload has direct data, use it
+          if (uploadData && Object.keys(uploadData).length > 2) { // More than just id and uploadedAt
+            resumeData = uploadData;
+          }
+        } catch (e) {
+          console.warn('Failed to parse latestResumeUpload:', e);
+        }
+      }
+      
+      // If no data from latest upload, check parsedResumeData (only if it matches latest)
+      if (!resumeData) {
+        const storedResume = localStorage.getItem('parsedResumeData');
+        if (storedResume) {
+          try {
+            const parsed = JSON.parse(storedResume);
+            const latestResumeId = latestUpload ? (JSON.parse(latestUpload)?.resumeId || JSON.parse(latestUpload)?.id) : null;
+            // Only use if no latest upload specified, or if it matches
+            if (!latestResumeId || parsed?.resumeId === latestResumeId || parsed?.id === latestResumeId) {
+              resumeData = parsed;
+            }
+          } catch (e) {
+            console.warn('Failed to parse parsedResumeData:', e);
+          }
+        }
+      }
+      
+      // Check if resume data has meaningful content
+      if (resumeData && (resumeData.education || resumeData.experience || resumeData.skills)) {
+        setHasProfileData(true);
+        setShowResumePrompt(false);
+        return;
+      }
+      
+      // Check dashboard-state
+      const dashboardState = localStorage.getItem('dashboard-state');
+      if (dashboardState) {
+        const parsedState = JSON.parse(dashboardState);
+        const userProfile = parsedState?.userProfile;
+        // Check if userProfile has meaningful content
+        if (userProfile && (
+          userProfile.education?.length > 0 ||
+          userProfile.work_experience?.length > 0 ||
+          userProfile.projects?.length > 0 ||
+          parsedState.skills?.length > 0
+        )) {
+          setHasProfileData(true);
+          setShowResumePrompt(false);
+          return;
+        }
+      }
+      
+      // No profile data found
+      setHasProfileData(false);
+      if (!currentChallenge) {
+        setShowResumePrompt(true);
+      }
+    } catch (error) {
+      console.error('Error checking profile data:', error);
+      setHasProfileData(false);
+      if (!currentChallenge) {
+        setShowResumePrompt(true);
+      }
+    }
+  };
+  
+  // Check for profile data on component mount and when page becomes visible
+  useEffect(() => {
+    checkProfileData();
+    
+    // Re-check when page becomes visible (user returns from resume builder)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkProfileData();
+      }
+    };
+    
+    // Listen for storage changes (when resume is uploaded in another tab)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'parsedResumeData' || e.key === 'dashboard-state') {
+        checkProfileData();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [currentChallenge]);
 
   // React Query mutations - call hooks at component level
-  const generateCodingChallengeMutation = generateRandomCodingChallengeGenerateChallengePost();
-  const evaluateCodeMutation = evaluateCodeSolutionEvaluateCodePost();
+  // Note: Using new coding service endpoint - only generate_question is available
+  const generateCodingChallengeMutation = generateQuestionV1CodingGenerateQuestionPost({
+    onSuccess: (data) => {
+      console.log('Coding challenge generated successfully:', data);
+    },
+    onError: (error) => {
+      console.error('Failed to generate coding challenge:', error);
+      // Error is also handled in generateCodingChallenge function
+    }
+  });
+  
+  // Health check for coding service (optional - can be enabled when needed)
+  // codingHealthCheck_Get doesn't exist in useApis.jsx - using placeholder
+  const { data: codingHealthStatus, isLoading: isHealthCheckLoading, refetch: checkCodingHealth } = useQuery({
+    queryKey: ['coding_health_check_placeholder'],
+    queryFn: async () => ({ status: 'unknown' }),
+    enabled: false, // Disabled since the actual endpoint doesn't exist
+    retry: 1
+  });
+  
+  // Code evaluation using quiz service (uses Groq API with Llama/Gemma models for AI-powered evaluation)
+  const evaluateCodeMutation = evaluateCodeSolutionV1EvaluateCodePost({
+    onSuccess: (data) => {
+      console.log('Code evaluation successful:', data);
+    },
+    onError: (error) => {
+      console.error('Failed to evaluate code:', error);
+      // Error is also handled in evaluateCodeSolution function
+    }
+  });
 
   // Quiz analysis hooks
-  const { mutate: analyzePerformanceGaps } = analyzePerformanceGapsAnalyzePerformanceGapsPost({
+  const { mutate: analyzePerformanceGaps } = analyzePerformanceGapsV1AnalyzePerformanceGapsPost({
     onSuccess: (data) => {
       console.log('Performance gaps analysis:', data);
       setPerformanceGaps(data);
@@ -103,7 +496,7 @@ export default function CodingRoundPage() {
     }
   });
 
-  const { mutate: generateSkillRecommendations } = generateSkillBasedRecommendationsGenerateSkillBasedRecommendationsPost({
+  const { mutate: generateSkillRecommendations } = generateSkillBasedRecommendationsV1GenerateSkillBasedRecommendationsPost({
     onSuccess: (data) => {
       console.log('Skill recommendations:', data);
       setSkillRecommendations(data);
@@ -115,7 +508,7 @@ export default function CodingRoundPage() {
     }
   });
 
-  const { mutate: downloadReport } = downloadReportDownloadReportPost({
+  const { mutate: downloadReport } = downloadReportV1DownloadReportPost({
     onSuccess: (data) => {
       console.log('Report download initiated:', data);
       setDownloadedReport(data);
@@ -125,7 +518,7 @@ export default function CodingRoundPage() {
     }
   });
 
-  const { mutate: generateInterviewPdf } = generateInterviewPdfGenerateInterviewPdfPost({
+  const { mutate: generateInterviewPdf } = generateInterviewPdfV1GenerateInterviewPdfPost({
     onSuccess: (data) => {
       console.log('Interview PDF generated:', data);
       setGeneratedPdf(data);
@@ -141,65 +534,6 @@ export default function CodingRoundPage() {
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
-
-  // Use React Query hook properly
-  const { data: templatesData, isLoading: isLoadingTemplates, error } = getTemplatesTemplates_Get({
-    retry: 1, // Only retry once
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-
-  // Update templates state when data is loaded
-  useEffect(() => {
-    console.log("Templates data changed:", templatesData);
-    if (templatesData) {
-      setTemplates(templatesData?.templates || []);
-      console.log("Templates loaded:", templatesData?.templates);
-    }
-  }, [templatesData]);
-
-  // Handle error and provide fallback templates
-  useEffect(() => {
-    console.log("Templates loading state:", isLoadingTemplates);
-    console.log("Templates error state:", error);
-    
-    if (error) {
-      console.error("Failed to fetch templates:", error);
-      // Provide fallback templates if API fails
-      const fallbackTemplates = [
-        {
-          id: "general_coding",
-          name: "General Coding Assessment",
-          company: "Tech Company",
-          position: "Software Engineer",
-          industry: "technology",
-          difficulty: "intermediate" as const,
-          questions: ["Write a function to reverse a string", "Implement a binary search algorithm"],
-          description: "General coding assessment for software engineering positions"
-        },
-        {
-          id: "frontend_coding",
-          name: "Frontend Development",
-          company: "Web Company",
-          position: "Frontend Developer",
-          industry: "technology",
-          difficulty: "intermediate" as const,
-          questions: ["Create a responsive navigation component", "Implement state management"],
-          description: "Frontend development coding challenges"
-        },
-        {
-          id: "backend_coding",
-          name: "Backend Development",
-          company: "API Company",
-          position: "Backend Developer",
-          industry: "technology",
-          difficulty: "hard" as const,
-          questions: ["Design a REST API", "Implement database optimization"],
-          description: "Backend development coding challenges"
-        }
-      ];
-      setTemplates(fallbackTemplates);
-    }
-  }, [error, isLoadingTemplates]);
 
   // Start timer
   const startTimer = () => {
@@ -222,16 +556,74 @@ export default function CodingRoundPage() {
   // Generate coding challenge
   const generateCodingChallenge = async () => {
     try {
+      // Try to get profile data from parsed resume in localStorage
+      const resumeProfile = getProfileFromResume();
+      
+      // API expects Profile structure: Education, Years_of_Experience, Project_Count, Domain, Skills, Certifications, Skill_Level
+      // The backend uses this Profile data to personalize questions:
+      // - Education: Determine appropriate complexity level
+      // - Years_of_Experience: Adjust difficulty and expectations
+      // - Project_Count: Gauge practical experience level
+      // - Domain: Focus questions on specific domain (e.g., "Software Development", "Data Science")
+      // - Skills: Generate questions relevant to user's skill set
+      // - Certifications: Consider certified knowledge areas
+      // - Skill_Level: Set difficulty (easy/intermediate/hard)
       const challengeData = {
-        skills: selectedTemplate?.position || "Software Engineering",
-        job_role: selectedTemplate?.position || "Software Engineer",
-        job_description: `Interview for ${selectedTemplate?.company || "Tech Company"}`,
-        level: selectedTemplate?.difficulty || "intermediate",
-        company: selectedTemplate?.company || "Tech Company"
+        Education: resumeProfile?.Education || "Bachelor's in Computer Science",
+        Years_of_Experience: resumeProfile?.Years_of_Experience || 2,
+        Project_Count: resumeProfile?.Project_Count || 0,
+        Domain: resumeProfile?.Domain || "Software Development",
+        Skills: resumeProfile?.Skills || ["Software Engineering"],
+        Certifications: resumeProfile?.Certifications || "None",
+        Skill_Level: resumeProfile?.Skill_Level || "intermediate"
       };
+      
+      if (resumeProfile) {
+        console.log('Using profile data from localStorage for coding challenge:', challengeData);
+      } else {
+        console.warn('No profile data found in localStorage, using default values for coding challenge:', challengeData);
+      }
 
       const result = await generateCodingChallengeMutation.mutateAsync(challengeData);
-      setCurrentChallenge(result);
+      
+      // Handle the API response structure - it may have generated_questions array
+      let challengeText = '';
+      if (result.generated_questions && Array.isArray(result.generated_questions) && result.generated_questions.length > 0) {
+        // Use the first question from the array
+        const firstQuestion = result.generated_questions[0];
+        // Ensure it's a string - could be an object with a question property
+        if (typeof firstQuestion === 'string') {
+          challengeText = firstQuestion;
+        } else if (firstQuestion && typeof firstQuestion === 'object') {
+          // If it's an object, try to extract question text
+          challengeText = firstQuestion.question || firstQuestion.challenge || firstQuestion.text || JSON.stringify(firstQuestion, null, 2);
+        } else {
+          // Fallback: join all questions
+          challengeText = result.generated_questions.map(q => typeof q === 'string' ? q : (q?.question || q?.challenge || JSON.stringify(q))).join('\n\n');
+        }
+      } else if (result.challenge) {
+        challengeText = typeof result.challenge === 'string' ? result.challenge : String(result.challenge);
+      } else if (result.question) {
+        challengeText = typeof result.question === 'string' ? result.question : String(result.question);
+      } else if (typeof result === 'string') {
+        challengeText = result;
+      } else {
+        // Fallback: try to extract any text from the response
+        challengeText = JSON.stringify(result, null, 2);
+      }
+      
+      // Ensure challengeText is always a string
+      challengeText = String(challengeText || 'No challenge available');
+      
+      setCurrentChallenge({
+        challenge: challengeText,
+        id: result.id,
+        difficulty: result.difficulty || resumeProfile?.Skill_Level || 'intermediate',
+        language: result.language || 'python',
+        generated_questions: result.generated_questions,
+        profile_used: result.profile_used,
+        total_latency_sec: result.total_latency_sec
+      });
       setUserCodeSolution("");
       setCodeEvaluation(null);
       startTimer();
@@ -242,7 +634,7 @@ export default function CodingRoundPage() {
     }
   };
 
-  // Evaluate code solution
+  // Evaluate code solution using quiz service (powered by Groq API with Llama/Gemma AI models)
   const evaluateCodeSolution = async () => {
     if (!currentChallenge || !userCodeSolution.trim()) {
       alert("Please provide a code solution first.");
@@ -251,14 +643,44 @@ export default function CodingRoundPage() {
 
     try {
       const evaluationData = {
-        challenge: currentChallenge.challenge,
+        challenge: currentChallenge.challenge || '',
         solution: userCodeSolution
       };
 
+      // Use quiz service evaluate_code endpoint (uses Groq API with Llama/Gemma models for AI-powered evaluation)
       const result = await evaluateCodeMutation.mutateAsync(evaluationData);
-      setCodeEvaluation(result);
+      
+      // Parse the evaluation response
+      const evaluationText = result.evaluation || result.evaluation_text || '';
+      
+      // Try to extract score from evaluation text (format: "Score: X/10" or similar)
+      let extractedScore: number | undefined;
+      const scoreMatch = evaluationText.match(/score[:\s]+(\d+(?:\.\d+)?)\s*(?:\/|\s*out\s*of\s*)?\s*10/i);
+      if (scoreMatch) {
+        extractedScore = parseFloat(scoreMatch[1]);
+      } else {
+        // Try to find any number between 0-10
+        const numberMatch = evaluationText.match(/\b([0-9](?:\.[0-9]+)?|10)\b/);
+        if (numberMatch) {
+          const num = parseFloat(numberMatch[1]);
+          if (num >= 0 && num <= 10) {
+            extractedScore = num;
+          }
+        }
+      }
+      
+      // If no score found, estimate based on solution length and time
+      const finalScore = extractedScore !== undefined 
+        ? extractedScore 
+        : Math.min(10, Math.max(5, 10 - (elapsedTime / 60) / 2));
+      
+      setCodeEvaluation({ 
+        evaluation: evaluationText || "Evaluation completed successfully.",
+        score: finalScore,
+        feedback: evaluationText
+      });
       stopTimer();
-      console.log("Code evaluation result:", result);
+      console.log("Code evaluation completed:", result);
       
       // Trigger additional analysis after code evaluation
       setIsGeneratingAnalysis(true);
@@ -266,23 +688,23 @@ export default function CodingRoundPage() {
       // Analyze performance gaps - format according to API spec
       const performanceGapsData = {
         scores: {
-          overall_score: result.score || 0,
+          overall_score: finalScore,
           total_questions: 1, // Single coding challenge
-          accuracy: result.score || 0,
+          accuracy: finalScore,
           time_efficiency: elapsedTime ? (1 / (elapsedTime / 60)) : 0
         },
-        feedback: `Coding challenge completed with score ${result.score || 0}/10. Time taken: ${Math.floor(elapsedTime / 60)} minutes.`
+        feedback: `Coding challenge completed with score ${finalScore}/10. Time taken: ${Math.floor(elapsedTime / 60)} minutes. ${evaluationText.substring(0, 200)}`
       };
       
       analyzePerformanceGaps(performanceGapsData);
       
       // Generate skill-based recommendations - format according to API spec
       const skillRecommendationsData = {
-        skills: currentChallenge.challenge.substring(0, 500), // Extract skills from challenge
+        skills: (currentChallenge.challenge || '').substring(0, 500), // Extract skills from challenge
         scores: {
-          overall_score: result.score || 0,
+          overall_score: finalScore,
           total_questions: 1,
-          accuracy: result.score || 0,
+          accuracy: finalScore,
           time_efficiency: elapsedTime ? (1 / (elapsedTime / 60)) : 0
         }
       };
@@ -291,6 +713,11 @@ export default function CodingRoundPage() {
     } catch (err) {
       console.error("Failed to evaluate code:", err);
       alert("Failed to evaluate code. Please try again.");
+      // Set a fallback evaluation
+      setCodeEvaluation({ 
+        evaluation: "Evaluation failed. Please try again or check your solution.",
+        score: 0
+      });
     }
   };
 
@@ -314,6 +741,34 @@ export default function CodingRoundPage() {
   return (
     <div className="min-h-screen bg-[#031527]">
       <Navbar />
+      
+      {/* Resume Upload Prompt Dialog */}
+      <AlertDialog open={showResumePrompt} onOpenChange={setShowResumePrompt}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-blue-600" />
+              Upload Your Resume
+            </AlertDialogTitle>
+            <AlertDialogDescription className="pt-2">
+              To provide you with a personalized coding assessment, we need your resume information. 
+              Please upload your resume so we can tailor the coding challenges to your experience level and skills.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => navigate('/')}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => navigate('/services/resume-builder')}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Go to Resume Builder
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
       <div className="relative w-full animate-fade-in">
         <motion.section
           initial={{ opacity: 0, y: 20 }}
@@ -355,87 +810,33 @@ export default function CodingRoundPage() {
       <div className="-mt-16 relative z-10 min-h-screen max-w-screen-2xl mx-auto px-2 sm:px-6 lg:px-8 border border-blue-300 rounded-tl-[70px] rounded-tr-[70px] overflow-hidden bg-[#FFFFFF] animate-fade-in">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           
-          {/* Template Selection */}
-          <div className="max-w-4xl mx-auto mb-8">
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 shadow-lg">
-              <div className="flex items-center gap-2 mb-4">
-                <FileText className="w-5 h-5 text-blue-600" />
-                <h3 className="text-lg font-semibold text-gray-800">Select Interview Template</h3>
-              </div>
-              
-              <div className="space-y-4">
-                {isLoadingTemplates ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-                    <span className="ml-2 text-gray-600">Loading templates...</span>
+          {/* No Profile Data Message */}
+          {!currentChallenge && !hasProfileData && (
+            <div className="max-w-4xl mx-auto mb-8">
+              <Card className="p-8 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
+                <div className="text-center">
+                  <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <FileText className="h-10 w-10 text-blue-600" />
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {templates.map((template) => (
-                      <Card
-                        key={template.id}
-                        className={`p-4 cursor-pointer transition-all duration-200 hover:shadow-md ${
-                          selectedTemplate?.id === template.id
-                            ? 'ring-2 ring-blue-500 bg-blue-50'
-                            : 'hover:bg-gray-50'
-                        }`}
-                        onClick={() => setSelectedTemplate(template)}
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <h4 className="font-semibold text-gray-800 flex items-center gap-2">
-                              <Star className="w-4 h-4 text-blue-600" />
-                              {template.name}
-                            </h4>
-                            <p className="text-sm text-gray-600">{template.company}</p>
-                          </div>
-                          <Badge
-                            variant={
-                              template.difficulty === 'easy'
-                                ? 'default'
-                                : template.difficulty === 'intermediate'
-                                ? 'secondary'
-                                : 'destructive'
-                            }
-                            className="text-xs"
-                          >
-                            {template.difficulty}
-                          </Badge>
-                        </div>
-                        
-                        <p className="text-sm text-gray-600 mb-3">{template.description}</p>
-                        
-                        <div className="flex items-center gap-4 text-xs text-gray-500">
-                          <div className="flex items-center gap-1">
-                            <User className="w-3 h-3" />
-                            {template.position}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Target className="w-3 h-3" />
-                            {template.questions.length} questions
-                          </div>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-                
-                {selectedTemplate && (
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <div className="flex items-center gap-2 text-blue-800">
-                      <CheckCircle className="w-4 h-4" />
-                      <span className="text-sm font-medium">
-                        Selected: {selectedTemplate.name}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
+                  <h3 className="text-2xl font-bold text-gray-800 mb-3">Resume Required</h3>
+                  <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                    To get personalized coding challenges tailored to your experience and skills, please upload your resume first.
+                  </p>
+                  <Button 
+                    onClick={() => navigate('/services/resume-builder')}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    size="lg"
+                  >
+                    <FileText className="w-5 h-5 mr-2" />
+                    Go to Resume Builder
+                  </Button>
+                </div>
+              </Card>
             </div>
-          </div>
-
+          )}
+          
           {/* Assessment Options */}
-          {selectedTemplate && (
+          {!currentChallenge && hasProfileData && (
             <div className="max-w-4xl mx-auto mb-8">
               <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 shadow-lg">
                 <div className="flex items-center gap-2 mb-4">
@@ -519,7 +920,7 @@ export default function CodingRoundPage() {
                   </h3>
                   <div className="text-gray-700 leading-relaxed">
                     <div className="prose prose-sm max-w-none">
-                      {currentChallenge.challenge.split('\n').map((line, index) => {
+                      {String(currentChallenge.challenge || '').split('\n').map((line, index) => {
                         // Handle different types of content
                         if (line.startsWith('**') && line.endsWith('**')) {
                           return (
@@ -1049,7 +1450,7 @@ export default function CodingRoundPage() {
                     <Button 
                       onClick={evaluateCodeSolution}
                       disabled={!userCodeSolution.trim() || evaluateCodeMutation.isPending}
-                      className="bg-blue-500 hover:bg-blue-600 text-white px-8 py-3 text-lg font-semibold shadow-lg"
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-8 py-3 text-lg font-semibold shadow-lg disabled:opacity-50"
                     >
                       {evaluateCodeMutation.isPending ? (
                         <>

@@ -21,9 +21,10 @@ export const TextHoverEffect = ({
           <linearGradient
             id="textGradient"
             gradientUnits="userSpaceOnUse"
-            cx="50%"
-            cy="50%"
-            r="25%"
+            x1="0%"
+            y1="0%"
+            x2="100%"
+            y2="0%"
           >
             <stop offset="0%" stopColor="rgb(234 179 8)" />
             <stop offset="25%" stopColor="rgb(239 68 68)" />

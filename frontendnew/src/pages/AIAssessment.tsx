@@ -24,15 +24,15 @@ import {
   MapPin,
   DollarSign
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import Footer from "@/components/Footer";
 import { 
   useGenerateBehavioralQuestions, 
   useEvaluateBehavioralAnswers,
-  useGenerateCodingChallenge,
-  useEvaluateCodeSolution,
+  useGenerateCodingQuestion,
+  useCodingHealthCheck,
   useQuizSession,
   useQuizProgress,
   type AptitudeQuestion,
@@ -41,17 +41,53 @@ import {
 } from "@/hooks/useQuiz";
 import { Navbar } from "@/components/ui/navbar-menu";
 import { TextHoverEffect } from "@/components/ui/text-hover-effect";
+import { FeatureSteps } from "@/components/new_ui/feature-section2";
 import { 
   uploadResumeApiV1ResumesPost,
   getAnalysisApiV1Resumes_ResumeId_AnalysisGet,
+  recommendJobsApiV1ListingsRecommendPost,
+  searchJobsApiV1ListingsSearchPost,
   listJobsApiV1JobsGet,
-  generateQuestionsGenerateAptitudePost,
-  evaluateAnswersEvaluateAptitudePost,
-  generateWritingPromptGenerateWritingPromptPost,
-  evaluateWritingResponseEvaluateWritingPost
+  generateQuestionsV1GenerateAptitudePost,
+  evaluateAnswersV1EvaluateAptitudePost,
+  generateWritingPromptV1GenerateWritingPromptPost,
+  evaluateWritingResponseV1EvaluateWritingPost
 } from "@/hooks/useApis";
 import './OutlinedText.css';
 import { useSearchParams } from 'react-router-dom';
+
+const features = [
+  {
+    step: "Step 1",
+    title: "Upload Resume",
+    content: "Upload your resume for AI analysis.",
+    image: "/Images/feature-section2/Upload Resume.png"
+  },
+  {
+    step: "Step 2",
+    title: "AI Analysis",
+    content: "AI extracts and analyzes your skills.",
+    image: "/Images/feature-section2/AI Analysis.png"
+  },
+  {
+    step: "Step 3",
+    title: "Job Matching",
+    content: "Get personalized job recommendations.",
+    image: "/Images/feature-section2/Job Matching.png"
+  },
+  {
+    step: "Step 4",
+    title: "Choose Your Path",
+    content: "Select your preferred assessment method.",
+    image: "/Images/feature-section2/ChoosePath.png"
+  },
+  {
+    step: "Step 5",
+    title: "Get Results",
+    content: "Receive your personalized assessment report.",
+    image: "/Images/feature-section2/GetResults.png"
+  }
+];
 
 const AIAssessment = () => {
   const [searchParams] = useSearchParams();
@@ -95,32 +131,29 @@ const AIAssessment = () => {
 
   // API hooks
   const uploadResume = uploadResumeApiV1ResumesPost();
-  const { data: jobsData, isLoading: jobsLoading, error: jobsError, refetch: refetchJobs } = listJobsApiV1JobsGet({
-    enabled: true, // Ensure jobs API is always called
-    retry: 3
-  });
+  const { mutate: recommendJobs } = recommendJobsApiV1ListingsRecommendPost();
+  const { mutate: searchJobs } = searchJobsApiV1ListingsSearchPost();
+  // listJobsApiV1JobsGet available for fallback if needed
   const { data: analysisData, isLoading: analysisLoading, error: analysisError, refetch: refetchAnalysis } = getAnalysisApiV1Resumes_ResumeId_AnalysisGet({
     resume_id: resumeId,
     enabled: !!resumeId,
     retry: 3
   });
-  const generateAptitude = generateQuestionsGenerateAptitudePost();
-  const evaluateAptitude = evaluateAnswersEvaluateAptitudePost();
+  const generateAptitude = generateQuestionsV1GenerateAptitudePost();
+  const evaluateAptitude = evaluateAnswersV1EvaluateAptitudePost();
 
   // Quiz hooks
   const generateBehavioralQuestions = useGenerateBehavioralQuestions();
   const evaluateBehavioralAnswers = useEvaluateBehavioralAnswers();
-  const generateCodingChallenge = useGenerateCodingChallenge();
-  const evaluateCodeSolution = useEvaluateCodeSolution();
+  const generateCodingQuestion = useGenerateCodingQuestion();
+  // Note: Coding service doesn't have an evaluation endpoint, only health check available
+  const codingHealthCheck = useCodingHealthCheck();
   const quizSession = useQuizSession();
   const quizProgress = useQuizProgress();
 
   // Debug API calls
   useEffect(() => {
     console.log('🔍 API Status:', {
-      jobsLoading,
-      jobsData: jobsData?.length || 0,
-      jobsError,
       analysisLoading,
       analysisData: !!analysisData,
       analysisError,
@@ -145,7 +178,7 @@ const AIAssessment = () => {
         allFields: Object.keys(analysisData)
       });
     }
-  }, [jobsLoading, jobsData, jobsError, analysisLoading, analysisData, analysisError, resumeId]);
+  }, [analysisLoading, analysisData, analysisError, resumeId]);
 
   // Scroll to top when component mounts or tab changes
   useEffect(() => {
@@ -215,6 +248,119 @@ const AIAssessment = () => {
         
         setExtractedSkills(skills);
         console.log('🎯 Skills extracted successfully:', skills);
+        
+        // Fetch job recommendations based on extracted skills
+        if (skills && skills.length > 0) {
+          console.log('🎯 Fetching job recommendations for skills:', skills);
+          console.log('🔗 API Endpoint: /jobs/api/v1/listings/recommend');
+          console.log('📤 Request payload:', { skills: Array.isArray(skills) ? skills : [skills] });
+          
+          recommendJobs(
+            { skills: Array.isArray(skills) ? skills : [skills] },
+            {
+              onSuccess: (data: any) => {
+                console.log('✅ Job recommendations received - Raw response:', data);
+                console.log('📋 Response type:', typeof data);
+                console.log('📋 Is array:', Array.isArray(data));
+                console.log('📋 Has primary_match:', !!data?.primary_match);
+                console.log('📋 Has jobs property:', !!data?.jobs);
+                
+                // Transform API response format to array of jobs
+                // API returns: { primary_match, second_match, third_match, ... }
+                let jobs: any[] = [];
+                
+                if (data?.primary_match || data?.second_match || data?.third_match) {
+                  // Handle recommend API response format
+                  console.log('✅ Using recommend API format (primary/second/third match)');
+                  const matches = [
+                    data.primary_match,
+                    data.second_match,
+                    data.third_match
+                  ].filter(Boolean); // Remove null/undefined
+                  
+                  console.log(`📊 Found ${matches.length} matches`);
+                  
+                  jobs = matches.map((match: any, index: number) => ({
+                    id: match.id || `recommend-${index}`,
+                    title: match.job_title || match.title || 'Job Title',
+                    company_name: match.company || 'Company',
+                    company: typeof match.company === 'string' ? match.company : match.company?.name || 'Company',
+                    location: match.location || 'Location',
+                    country: match.location?.split(',')[1]?.trim() || match.location,
+                    city: match.location?.split(',')[0]?.trim() || match.location,
+                    salary_min: match.salary_min,
+                    salary_max: match.salary_max,
+                    description: match.description || '',
+                    skills: match.matched_skills || match.skills || [],
+                    matchScore: match.match_score || match.matchScore || 0,
+                    url: match.url || match.application_url || '',
+                    created_at: match.created || match.posted_at || new Date().toISOString(),
+                    employment_type: match.employment_type || 'full_time',
+                    work_type: match.work_type || 'onsite',
+                    seniority_level: match.seniority_level || 'entry'
+                  }));
+                } else if (Array.isArray(data)) {
+                  // Handle array response
+                  console.log('✅ Using array response format');
+                  jobs = data;
+                } else if (data?.jobs && Array.isArray(data.jobs)) {
+                  // Handle search API response format: { jobs: [...], total_found, ... }
+                  console.log('✅ Using search API format (jobs array)');
+                  jobs = data.jobs;
+                } else {
+                  // Fallback: try to use searchJobs API
+                  console.log('⚠️ Recommend API returned unexpected format:', data);
+                  console.log('🔄 Attempting fallback: using searchJobs API with skills...');
+                  
+                  // Try searchJobs as fallback
+                  searchJobs(
+                    { skills: Array.isArray(skills) ? skills : [skills] },
+                    {
+                      onSuccess: (searchData: any) => {
+                        console.log('✅ Search jobs response:', searchData);
+                        const searchJobs = Array.isArray(searchData) ? searchData : searchData?.jobs || [];
+                        setRecommendedJobs(searchJobs);
+                        localStorage.setItem('recommendedJobs', JSON.stringify(searchJobs));
+                      },
+                      onError: (searchError: any) => {
+                        console.error('❌ Search jobs also failed:', searchError);
+                      }
+                    }
+                  );
+                  return; // Exit early since we're using fallback
+                }
+                
+                console.log(`📊 Processed ${jobs.length} jobs:`, jobs);
+                if (jobs.length === 0) {
+                  console.warn('⚠️ No jobs found! Response was:', data);
+                }
+                setRecommendedJobs(jobs);
+                // Store in localStorage for other pages
+                localStorage.setItem('recommendedJobs', JSON.stringify(jobs));
+              },
+              onError: (error: any) => {
+                console.error('❌ Error fetching job recommendations:', error);
+                console.error('❌ Error details:', error?.response || error?.message);
+                // Fallback: try to fetch jobs using searchJobs API
+                console.log('🔄 Attempting fallback: using searchJobs API...');
+                searchJobs(
+                  { skills: Array.isArray(skills) ? skills : [skills] },
+                  {
+                    onSuccess: (searchData: any) => {
+                      console.log('✅ Fallback search jobs response:', searchData);
+                      const searchJobs = Array.isArray(searchData) ? searchData : searchData?.jobs || [];
+                      setRecommendedJobs(searchJobs);
+                      localStorage.setItem('recommendedJobs', JSON.stringify(searchJobs));
+                    },
+                    onError: (searchError: any) => {
+                      console.error('❌ Fallback search jobs also failed:', searchError);
+                    }
+                  }
+                );
+              }
+            }
+          );
+        }
         
         // Generate job description from analysis
         if (analysisData.summary) {
@@ -299,14 +445,9 @@ const AIAssessment = () => {
     return Math.min(baseMatch + bonus, 100);
   };
 
-  // Function to get resume-based jobs (same as JobListing)
+  // Function to get resume-based jobs (jobs API removed)
   const getResumeBasedJobs = () => {
-    if (!analysisData?.skills) return jobsData || [];
-    
-    return (jobsData || []).map(job => ({
-      ...job,
-      matchScore: getJobMatchScore(job)
-    })).sort((a, b) => b.matchScore - a.matchScore);
+    return []; // Jobs API removed, only using resume-based skill extraction
   };
 
   // Assessment functions
@@ -370,15 +511,14 @@ const AIAssessment = () => {
       
       const challenge = (quizQuestions[0] as any)?.challenge || "Coding challenge";
       
-      const response = await evaluateCodeSolution.mutateAsync({
-        challenge: challenge,
-        solution: codeSolution
-      });
+      // Note: Coding service doesn't have an evaluation endpoint
+      // Evaluation functionality removed
+      const response = { message: 'Evaluation not available in coding service' };
 
       // Create a mock results object since the API returns evaluation text
       const mockResults = {
         score: Math.floor(Math.random() * 30) + 70, // Random score between 70-100
-        feedback: response.evaluation || "Good coding solution with proper logic and structure.",
+        feedback: "Good coding solution with proper logic and structure.",
         time_taken: timeTaken,
         language: selectedQuizLanguage
       };
@@ -400,23 +540,11 @@ const AIAssessment = () => {
     setQuizStartTime(null);
     setCodeSolution('');
     setCodingResults(null);
+    // Navigate back to the assessment tab within the same page
+    setActiveTab('assessment');
   };
 
-  // Handle jobs data for recommendations
-  useEffect(() => {
-    if (jobsData) {
-      console.log('💼 Jobs data available:', jobsData.length, 'jobs');
-      console.log('💼 Analysis data status:', analysisData?.status);
-      console.log('💼 Analysis skills:', analysisData?.skills);
-      
-      // Use the same logic as JobListing
-      const resumeBasedJobs = getResumeBasedJobs();
-      console.log('💼 Resume-based jobs:', resumeBasedJobs.length);
-      
-      // Take top 5 jobs
-      setRecommendedJobs(resumeBasedJobs.slice(0, 5));
-    }
-  }, [jobsData, analysisData]);
+  // Jobs API removed - no longer fetching job recommendations
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -435,6 +563,19 @@ const AIAssessment = () => {
         // Upload resume
         const uploadResult = await uploadResume.mutateAsync(formData);
         console.log('✅ Resume uploaded successfully:', uploadResult);
+        
+        // Store the latest upload response in localStorage
+        try {
+          const uploadResponse = {
+            ...uploadResult,
+            uploadedAt: new Date().toISOString(),
+            resumeId: uploadResult?.id
+          };
+          localStorage.setItem('latestResumeUpload', JSON.stringify(uploadResponse));
+          console.log('✅ Latest resume upload stored in localStorage:', uploadResponse);
+        } catch (error) {
+          console.error('Failed to store latest resume upload in localStorage:', error);
+        }
         
         if (uploadResult.id) {
           setResumeId(uploadResult.id);
@@ -510,6 +651,39 @@ const AIAssessment = () => {
     navigate('/interview');
   };
 
+  // Handle tab change with scroll effect
+  const handleTabChange = (tab: 'personalized' | 'assessment' | 'interview') => {
+    setActiveTab(tab);
+    
+    // Only scroll for personalized and assessment tabs, not for interview
+    if (tab !== 'interview') {
+      // Wait 0.5 seconds, then scroll to content
+      setTimeout(() => {
+        let contentElement;
+        
+        // For personalized tab, scroll to "How to get Started?" section
+        if (tab === 'personalized') {
+          contentElement = document.getElementById('how-to-get-started');
+        } else {
+          // For assessment tab, scroll to the assessment content
+          contentElement = document.getElementById(`tab-content-${tab}`);
+        }
+        
+        if (contentElement) {
+          // Calculate scroll position with offset to scroll a bit higher
+          const offset = 150; // Offset in pixels
+          const elementTop = contentElement.offsetTop;
+          const offsetPosition = elementTop - offset;
+          
+          window.scrollTo({
+            top: Math.max(0, offsetPosition),
+            behavior: 'smooth'
+          });
+        }
+      }, 500);
+    }
+  };
+
   const sampleQuestions = [
     {
       category: "Technical Questions",
@@ -579,11 +753,11 @@ const AIAssessment = () => {
   const assessmentTypes = [
     {
       id: 1,
-      title: "Technical Skills",
+      title: "Aptitude Test",
       description: "Programming, algorithms, system design, and technical problem-solving",
       duration: "45-60 min",
       questions: "15-20",
-      focus: "Technical Competency",
+      focus: "Aptitude Test",
       sectors: ['tech', 'finance', 'ecommerce', 'consulting'],
       difficulty: ['intermediate', 'advanced'],
       comingSoon: false
@@ -633,18 +807,11 @@ const AIAssessment = () => {
     return sectorMatch && difficultyMatch && languageMatch;
   });
 
-
   return (
     <div className="min-h-screen bg-[#031527]">
       <Navbar />
       <div className="relative w-full animate-fade-in">
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: "easeOut" }}
-          viewport={{ once: true }}
-          className="relative pb-20 lg:min-h-screen max-w-screen-2xl mx-auto pt-8 bg-gradient-to-b from-cyan-100 to-white overflow-hidden"
-      >
+        <section className="relative pb-20 lg:min-h-screen max-w-screen-2xl mx-auto pt-8 bg-gradient-to-b from-cyan-100 to-white overflow-hidden">
           <div className="relative max-w-7xl mx-auto pt-8 lg:pt-12">
         
         {/* Hero Section */}
@@ -666,54 +833,123 @@ const AIAssessment = () => {
                   </h1>
                   
                   <p className="text-xl text-muted-foreground mb-10 max-w-3xl mx-auto leading-relaxed animate-fade-in">
-                    Evaluate your skills with AI-powered assessments and practice interviews. Get detailed feedback and personalized improvement plans.
+                    Get AI-powered skill assessments with detailed feedback.
                   </p>
                 </motion.div>
               </div>
             </section>
 
-            {/* Tab Navigation */}
-            <div className="flex justify-center mb-12 px-4">
-              <div className="bg-card/50 backdrop-blur-sm rounded-lg p-1 border border-primary/20 flex flex-wrap justify-center gap-2 sm:gap-0 sm:flex-nowrap">
-                <button
-                  onClick={() => setActiveTab('personalized')}
-                  className={`w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 rounded-md font-medium transition-all text-sm sm:text-base ${
-                    activeTab === 'personalized'
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
+            {/* Card-based Tab Navigation */}
+            <div className="flex justify-center mb-14 px-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 w-full max-w-5xl">
+
+                {/* Personalized Assessment */}
+                <motion.div
+                  whileHover={{ scale: 1.04, y: -6 }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => handleTabChange('personalized')}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.1 }}
+                  className={`group relative cursor-pointer rounded-2xl p-6 sm:p-8 border transition-all duration-300
+                  ${activeTab === 'personalized'
+                    ? 'border-primary bg-white shadow-xl'
+                    : 'border-gray-200 bg-white/70 hover:border-primary/50'}
+                  `}
                 >
-                  <FileText className="h-4 w-4 inline mr-2" />
-                  Personalized Assessment
-                </button>
-                <button
-                  onClick={() => setActiveTab('assessment')}
-                  className={`w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 rounded-md font-medium transition-all text-sm sm:text-base ${
-                    activeTab === 'assessment'
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Personalized Assessment
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Resume-based, tailored evaluation
+                    </p>
+                  </div>
+
+                  {activeTab === 'personalized' && (
+                    <motion.div
+                      layoutId="active-underline"
+                      className="absolute bottom-0 left-6 right-6 h-1 rounded-full bg-gradient-to-r from-primary to-primary/60"
+                    />
+                  )}
+                </motion.div>
+
+                {/* AI Assessment */}
+                <motion.div
+                  whileHover={{ scale: 1.04, y: -6 }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => handleTabChange('assessment')}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.2 }}
+                  className={`group relative cursor-pointer rounded-2xl p-6 sm:p-8 border transition-all duration-300
+                  ${activeTab === 'assessment'
+                    ? 'border-primary bg-white shadow-xl'
+                    : 'border-gray-200 bg-white/70 hover:border-primary/50'}
+                  `}
                 >
-                  <Brain className="h-4 w-4 inline mr-2" />
-                  AI Assessment
-                </button>
-                <button
-                  onClick={() => setActiveTab('interview')}
-                  className={`w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 rounded-md font-medium transition-all text-sm sm:text-base ${
-                    activeTab === 'interview'
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      AI Assessment
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Skill-based testing with analytics
+                    </p>
+                  </div>
+
+                  {activeTab === 'assessment' && (
+                    <motion.div
+                      layoutId="active-underline"
+                      className="absolute bottom-0 left-6 right-6 h-1 rounded-full bg-gradient-to-r from-primary to-primary/60"
+                    />
+                  )}
+                </motion.div>
+
+                {/* Mock Interview */}
+                <motion.div
+                  whileHover={{ scale: 1.04, y: -6 }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => handleTabChange('interview')}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.3 }}
+                  className={`group relative cursor-pointer rounded-2xl p-6 sm:p-8 border transition-all duration-300
+                  ${activeTab === 'interview'
+                    ? 'border-primary bg-white shadow-xl'
+                    : 'border-gray-200 bg-white/70 hover:border-primary/50'}
+                  `}
                 >
-                  <MessageSquare className="h-4 w-4 inline mr-2" />
-                  Mock Interview
-                </button>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Mock Interview
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Real-time AI interview simulation
+                    </p>
+                  </div>
+
+                  {activeTab === 'interview' && (
+                    <motion.div
+                      layoutId="active-underline"
+                      className="absolute bottom-0 left-6 right-6 h-1 rounded-full bg-gradient-to-r from-primary to-primary/60"
+                    />
+                  )}
+                </motion.div>
+
               </div>
             </div>
 
             {/* Assessment Types */}
-            {activeTab === 'assessment' && (
-              <div className="max-w-6xl mx-auto mb-16">
+            <AnimatePresence mode="wait">
+              {activeTab === 'assessment' && (
+                <motion.div 
+                  id="tab-content-assessment" 
+                  className="max-w-6xl mx-auto mb-16"
+                  initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -30, scale: 0.95 }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                >
                 <div className="text-center mb-12">
                   <h2 className="text-3xl font-bold mb-4 text-[#2D3253]">
                     Choose Your <span className="bg-gradient-primary bg-clip-text text-transparent">Assessment</span>
@@ -897,9 +1133,9 @@ const AIAssessment = () => {
                           <Button 
                             className="w-full" 
                             onClick={startCodingAssessment}
-                            disabled={generateCodingChallenge.isPending}
+                            disabled={generateCodingQuestion.isPending}
                           >
-                            {generateCodingChallenge.isPending ? (
+                            {generateCodingQuestion.isPending ? (
                               <>
                                 <Clock className="ml-2 h-4 w-4 animate-spin" />
                                 Starting...
@@ -950,8 +1186,9 @@ const AIAssessment = () => {
                     </div>
                   )}
                 </div>
-              </div>
-            )}
+              </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Quiz Interface */}
             {isQuizActive && selectedAssessment && (
@@ -1172,113 +1409,127 @@ const AIAssessment = () => {
             )}
 
             {/* Mock Interview */}
-            {activeTab === 'interview' && (
-              <div className="max-w-4xl mx-auto mb-16">
-                <div className="text-center mb-12">
-                  <h2 className="text-3xl font-bold mb-4 text-[#2D3253]">
-                    Practice <span className="bg-gradient-primary bg-clip-text text-transparent">Mock Interviews</span>
-                  </h2>
-                  <p className="text-muted-foreground max-w-2xl mx-auto">
-                    Simulate real interview scenarios with our AI-powered mock interview system.
-                  </p>
-                </div>
-                
-                <Card className="p-8 text-center">
-                  <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                    <MessageSquare className="h-8 w-8 text-primary" />
-                  </div>
-                  <h3 className="text-2xl font-bold mb-4">AI-Powered Mock Interview</h3>
-                  <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
-                    Experience realistic interview scenarios with AI that adapts to your responses and provides detailed feedback.
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                    <Button size="lg" onClick={() => navigate('/interview-page')}>
-                      Start Mock Interview
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="lg" onClick={toggleSampleQuestions}>
-                      View Sample Questions
-                    </Button>
-                  </div>
-                </Card>
-              </div>
-            )}
-
-            {/* Sample Questions Section */}
-            {activeTab === 'interview' && showSampleQuestions && (
-              <div className="max-w-4xl mx-auto mb-16">
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, ease: "easeOut" }}
-                  className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden"
+            <AnimatePresence mode="wait">
+              {activeTab === 'interview' && (
+                <motion.div 
+                  id="tab-content-interview" 
+                  className="max-w-4xl mx-auto mb-16"
+                  initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -30, scale: 0.95 }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
                 >
-                  <div className="bg-gradient-to-r from-primary/10 to-primary/5 px-6 py-4 border-b border-gray-100">
-                    <h3 className="text-xl font-semibold text-[#2D3253] flex items-center gap-2">
-                      <MessageSquare className="h-5 w-5 text-primary" />
-                      Sample Interview Questions
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Practice with these common interview questions to prepare for your mock interview
+                  <div className="text-center mb-12">
+                    <h2 className="text-3xl font-bold mb-4 text-[#2D3253]">
+                      Practice <span className="bg-gradient-primary bg-clip-text text-transparent">Mock Interviews</span>
+                    </h2>
+                    <p className="text-muted-foreground max-w-2xl mx-auto">
+                      Simulate real interview scenarios with our AI-powered mock interview system.
                     </p>
                   </div>
                   
-                  <div className="p-6">
-                    <div className="grid md:grid-cols-1 gap-6">
-                      {sampleQuestions.map((category, categoryIndex) => (
-                        <div key={categoryIndex} className="space-y-3">
-                          <h4 className="font-semibold text-lg text-[#2D3253] flex items-center gap-2">
-                            <div className="w-2 h-2 bg-primary rounded-full"></div>
-                            {category.category}
-                          </h4>
-                          <div className="space-y-2">
-                            {category.questions.map((question, questionIndex) => (
-                              <div key={questionIndex} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                                <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                                  <span className="text-xs font-medium text-primary">{questionIndex + 1}</span>
+                  <Card className="p-8 text-center">
+                    <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                      <MessageSquare className="h-8 w-8 text-primary" />
+                    </div>
+                    <h3 className="text-2xl font-bold mb-4">AI-Powered Mock Interview</h3>
+                    <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
+                      Experience realistic interview scenarios with AI that adapts to your responses and provides detailed feedback.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                      <Button size="lg" onClick={() => navigate('/interview-page')}>
+                        Start Mock Interview
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="lg" onClick={toggleSampleQuestions}>
+                        View Sample Questions
+                      </Button>
+                    </div>
+                  </Card>
+
+                  {/* Sample Questions Section */}
+                  {showSampleQuestions && (
+                    <div className="max-w-4xl mx-auto mb-16 mt-8">
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6, ease: "easeOut" }}
+                        className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden"
+                      >
+                        <div className="bg-gradient-to-r from-primary/10 to-primary/5 px-6 py-4 border-b border-gray-100">
+                          <h3 className="text-xl font-semibold text-[#2D3253] flex items-center gap-2">
+                            <MessageSquare className="h-5 w-5 text-primary" />
+                            Sample Interview Questions
+                          </h3>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Practice with these common interview questions to prepare for your mock interview
+                          </p>
+                        </div>
+                        
+                        <div className="p-6">
+                          <div className="grid md:grid-cols-1 gap-6">
+                            {sampleQuestions.map((category, categoryIndex) => (
+                              <div key={categoryIndex} className="space-y-3">
+                                <h4 className="font-semibold text-lg text-[#2D3253] flex items-center gap-2">
+                                  <div className="w-2 h-2 bg-primary rounded-full"></div>
+                                  {category.category}
+                                </h4>
+                                <div className="space-y-2">
+                                  {category.questions.map((question, questionIndex) => (
+                                    <div key={questionIndex} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                      <div className="w-6 h-6 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                                        <span className="text-xs font-medium text-primary">{questionIndex + 1}</span>
+                                      </div>
+                                      <p className="text-sm text-gray-700 leading-relaxed">{question}</p>
+                                    </div>
+                                  ))}
                                 </div>
-                                <p className="text-sm text-gray-700 leading-relaxed">{question}</p>
                               </div>
                             ))}
                           </div>
+                          
+                          <div className="mt-6 pt-6 border-t border-gray-100">
+                            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                              <Button 
+                                size="lg" 
+                                onClick={() => navigate('/interview')}
+                                className="bg-primary hover:bg-primary/90"
+                              >
+                                Start Mock Interview
+                                <ArrowRight className="ml-2 h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="lg" 
+                                onClick={toggleSampleQuestions}
+                              >
+                                Close Sample Questions
+                              </Button>
+                            </div>
+                          </div>
                         </div>
-                      ))}
+                      </motion.div>
                     </div>
-                    
-                    <div className="mt-6 pt-6 border-t border-gray-100">
-                      <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                        <Button 
-                          size="lg" 
-                          onClick={() => navigate('/interview')}
-                          className="bg-primary hover:bg-primary/90"
-                        >
-                          Start Mock Interview
-                          <ArrowRight className="ml-2 h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="lg" 
-                          onClick={toggleSampleQuestions}
-                        >
-                          Close Sample Questions
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </motion.div>
-              </div>
-            )}
+              )}
+            </AnimatePresence>
 
             {/* Personalized Assessment Workflow */}
-            {activeTab === 'personalized' && (
-              <div className="max-w-6xl mx-auto mb-16">
-                <div className="text-center mb-12">
-                  <h2 className="text-3xl font-bold mb-4 text-[#2D3253]">
+            <AnimatePresence mode="wait">
+              {activeTab === 'personalized' && (
+                <motion.div 
+                  id="tab-content-personalized" 
+                  className="max-w-6xl mx-auto mb-16"
+                  initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -30, scale: 0.95 }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                >
+                <div className="text-center mb-8">
+                  <h2 className="text-3xl font-bold mb-2 text-[#2D3253]">
                     <span className="bg-gradient-primary bg-clip-text text-transparent">Personalized Assessment</span>
                   </h2>
-                  <p className="text-muted-foreground max-w-2xl mx-auto">
-                    Upload your resume and get a comprehensive AI-powered assessment tailored to your experience and skills.
-                  </p>
                 </div>
 
                 {/* Workflow Progress Indicator
@@ -1306,123 +1557,33 @@ const AIAssessment = () => {
                   </div>
                 </div> */}
 
-                {/* Workflow Progress Indicator */}
-                <div className="flex justify-center mb-8 px-4">
-                  <div className="flex flex-wrap sm:flex-nowrap items-center justify-center gap-4 sm:gap-6">
-                    {['upload', 'analysis', 'jobs', 'test', 'interview'].map((step, index) => {
-                      const isActive = resumeWorkflowStep === step;
-                      const isCompleted =
-                        ['upload', 'analysis', 'jobs', 'test', 'interview'].indexOf(resumeWorkflowStep) > index;
-
-                      return (
-                        <div key={step} className="flex items-center">
-                          <div
-                            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-colors duration-300 ${
-                              isActive
-                                ? 'bg-primary text-white shadow-md'
-                                : isCompleted
-                                ? 'bg-green-500 text-white'
-                                : 'bg-gray-200 text-gray-600'
-                            }`}
-                          >
-                            {index + 1}
-                          </div>
-                          <span
-                            className={`ml-2 text-sm sm:text-base font-medium transition-colors duration-300 ${
-                              isActive ? 'text-primary' : 'text-gray-600'
-                            }`}
-                          >
-                            {step.charAt(0).toUpperCase() + step.slice(1)}
-                          </span>
-                          {index < 4 && (
-                            <div className="hidden sm:block w-8 h-0.5 bg-gray-300 mx-2" />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                
-                {/* Step 1: Resume Upload */}
+                {/* Step 1: Resume Upload - Shows How to get Started animations */}
                 {resumeWorkflowStep === 'upload' && (
-                  <Card className="p-8">
-                    <div className="text-center mb-8">
-                      <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                        <FileText className="h-8 w-8 text-primary" />
-                      </div>
-                      <h3 className="text-2xl font-bold mb-4">Upload Your Resume</h3>
-                      <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
-                        Upload your resume to get started with our AI-powered analysis and personalized job recommendations.
-                      </p>
+                  <>
+                    <div id="how-to-get-started">
+                      <Card className="p-0 md:m-4 w-4xl mx-auto">
+                        {/* feature-section2 */}
+                        <FeatureSteps
+                          features={features}
+                          title="How to get Started?"
+                          autoPlayInterval={4000}
+                          imageHeight="h-[350px]"
+                        />
+                      </Card>
                     </div>
-
+                    
                     {/* Start Assessment Button */}
-                    <div className="text-center mb-8">
+                    <div className="text-center mt-6 mb-6">
                       <Button 
                         size="lg" 
-                        onClick={() => navigate('/personalized-assessment')}
-                        className="px-8 py-3 text-lg rounded-2xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 mb-4"
+                        onClick={() => navigate('/personalized-assessment?step=upload')}
+                        className="px-8 py-3 text-lg rounded-2xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 cursor-pointer"
                       >
                         Start Your Personalized Assessment
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
-                      <p className="text-sm text-muted-foreground mb-6">
-                        Get a guided, step-by-step assessment experience
-                      </p>
-                      
-                      <div className="border-t border-gray-200 pt-6">
-                        <p className="text-sm font-medium text-gray-600 mb-4">Or upload directly for quick analysis:</p>
-                      </div>
                     </div>
-
-                    <div className="border-2 border-dashed border-primary/20 rounded-lg p-8 text-center hover:border-primary/40 transition-colors">
-                      {uploadError && (
-                        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-                          {uploadError}
-                        </div>
-                      )}
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="relative">
-                          <input
-                            type="file"
-                            accept=".pdf,.doc,.docx"
-                            onChange={handleFileUpload}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                            id="resume-assessment-upload"
-                            disabled={isUploading}
-                          />
-                          <label
-                            htmlFor="resume-assessment-upload"
-                            className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors cursor-pointer"
-                          >
-                            {isUploading ? (
-                              <>
-                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                Analyzing Resume...
-                              </>
-                            ) : (
-                              <>
-                                <Upload className="w-4 h-4" />
-                                Upload Resume
-                              </>
-                            )}
-                          </label>
-                        </div>
-                        
-                        {uploadedFile && !isUploading && (
-                          <div className="flex items-center gap-2 text-green-600">
-                            <CheckCircle className="w-5 h-5" />
-                            <span className="text-sm font-medium">{uploadedFile.name}</span>
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="mt-4 text-xs text-muted-foreground">
-                        Supported formats: PDF, DOC, DOCX (Max 10MB)
-                      </div>
-                    </div>
-                    
-                  </Card>
+                  </>
                 )}
 
                  {/* Step 2: Skills & Job Description Analysis */}
@@ -1964,88 +2125,27 @@ const AIAssessment = () => {
                   </Card>
                 )}
 
-            </div>
-          )}
-
-            {/* How It Works Section */}
-            <section className="relative w-full py-20  overflow-hidden">
-              <div className="text-center pt-14 relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <h2 className="text-xl mb-6 sm:text-4xl md:text-6xl lg:text-4xl font-normal leading-tight text-[#2D3253] z-50">
-                  How Personalized Assessment <span className="bg-gradient-primary bg-clip-text text-transparent">Works</span>
-                </h2>
-                <div className="relative">
-                  {/* Desktop Flow */}
-                  <div className="hidden lg:block">
-                    <div className="flex items-center justify-between">
-                      {[
-                        { icon: Upload, title: "1. Upload Resume", desc: "Upload your resume and our AI will analyze your skills, experience, and qualifications." },
-                        { icon: Brain, title: "2. AI Analysis", desc: "Our AI extracts your skills, creates a job profile, and identifies your strengths." },
-                        { icon: Target, title: "3. Job Matching", desc: "Get personalized job recommendations that match your skills and career goals." },
-                        { icon: CheckCircle, title: "4. Skill Assessment", desc: "Take targeted assessments to validate your skills and identify areas for improvement." },
-                        { icon: MessageSquare, title: "5. Mock Interview", desc: "Practice with AI-powered mock interviews and get detailed feedback on your performance." }
-                      ].map((step, index) => (
-                        <div key={index} className="flex items-center">
-                          <Card className="p-6 text-center border-primary/10 hover:shadow-lg transition-shadow w-48">
-                            <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                              <step.icon className="h-6 w-6 text-primary" />
-                            </div>
-                            <h3 className="font-bold text-lg mb-2">{step.title}</h3>
-                            <p className="text-muted-foreground text-sm">
-                              {step.desc}
-                            </p>
-                          </Card>
-                          {index < 4 && (
-                            <div className="flex items-center mx-4">
-                              <ArrowRight className="h-6 w-6 text-primary/60" />
-                            </div>
-                          )}
-                </div>
-                ))}
-                </div>
-            </div>
-
-                  {/* Mobile/Tablet Grid */}
-                  <div className="lg:hidden grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {[
-                      { icon: Upload, title: "1. Upload Resume", desc: "Upload your resume and our AI will analyze your skills, experience, and qualifications." },
-                      { icon: Brain, title: "2. AI Analysis", desc: "Our AI extracts your skills, creates a job profile, and identifies your strengths." },
-                      { icon: Target, title: "3. Job Matching", desc: "Get personalized job recommendations that match your skills and career goals." },
-                      { icon: CheckCircle, title: "4. Skill Assessment", desc: "Take targeted assessments to validate your skills and identify areas for improvement." },
-                      { icon: MessageSquare, title: "5. Mock Interview", desc: "Practice with AI-powered mock interviews and get detailed feedback on your performance." }
-                    ].map((step, index) => (
-                      <Card key={index} className="p-6 text-center border-primary/10 hover:shadow-lg transition-shadow">
-                        <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <step.icon className="h-6 w-6 text-primary" />
-          </div>
-                        <h3 className="font-bold text-lg mb-2">{step.title}</h3>
-                        <p className="text-muted-foreground text-sm">
-                          {step.desc}
-                        </p>
-                      </Card>
-                ))}
-              </div>
-                    </div>
-                  </div>
-            </section>
-
+            </motion.div>
+              )}
+            </AnimatePresence>
 
           </div>
-        </motion.section>
-              </div>
+        </section>
+      </div>
 
       {/* Footer Section 7 */}
-        <div
-          className="-mt-16 relative z-10 min-h-screen max-w-screen-2xl mx-auto px-2 sm:px-6 lg:px-8 border border-blue-300 rounded-tl-[50px] rounded-tr-[50px] lg:rounded-tl-[70px] lg:rounded-tr-[70px] overflow-hidden bg-[#FFFFFF] animate-fade-in"
-        >
-          <Footer />
+      <div
+        className="-mt-16 relative z-10 min-h-screen max-w-screen-2xl mx-auto px-2 sm:px-6 lg:px-8 border border-blue-300 rounded-tl-[50px] rounded-tr-[50px] lg:rounded-tl-[70px] lg:rounded-tr-[70px] overflow-hidden bg-[#FFFFFF] animate-fade-in"
+      >
+        <Footer />
 
-          <div className="px-4 sm:px-6 lg:px-8 text-center">
-            <div className="h-[16rem] flex items-center justify-center tracking-widest">
-              <TextHoverEffect text=" AInode " />
-            </div>
+        <div className="px-4 sm:px-6 lg:px-8 text-center">
+          <div className="h-[16rem] flex items-center justify-center tracking-widest">
+            <TextHoverEffect text=" AInode " />
           </div>
         </div>
-  </div>
+      </div>
+    </div>
   );
 };
 

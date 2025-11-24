@@ -1,18 +1,16 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
-  generateQuestionsGenerateAptitudePost,
-  evaluateAnswersEvaluateAptitudePost,
-  generateRandomCodingChallengeGenerateChallengePost,
-  evaluateCodeSolutionEvaluateCodePost,
-  generateMcqQuestionsGenerateMcqPost,
-  generateBehavioralQuestionsGenerateBehavioralQuestionsPost,
-  evaluateBehavioralResponseEvaluateBehavioralPost,
-  getCompanyRoundsCompanyRoundsGet,
-  generateCompanyQuestionGenerateCompanyQuestionPost,
-  evaluateCompanyAnswerEvaluateCompanyAnswerPost,
+  generateQuestionsV1GenerateAptitudePost,
+  evaluateAnswersV1EvaluateAptitudePost,
+  generateQuestionV1CodingGenerateQuestionPost,
+  generateMcqQuestionsV1GenerateMcqPost,
+  generateBehavioralQuestionsV1GenerateBehavioralQuestionsPost,
+  evaluateBehavioralResponseV1EvaluateBehavioralPost,
+  generateCompanyQuestionV1GenerateCompanyQuestionPost,
+  evaluateCompanyAnswerV1EvaluateCompanyAnswerPost,
   quizRoot_Get,
-  QuizHealthCheckHealthGet
+  quizHealthCheckV1HealthGet
 } from './useApis';
 
 // Quiz Types and Interfaces
@@ -208,7 +206,7 @@ export const quizKeys = {
 
 // Hook for generating aptitude questions
 export const useGenerateAptitudeQuestions = () => {
-  return generateQuestionsGenerateAptitudePost({
+  return generateQuestionsV1GenerateAptitudePost({
     onSuccess: (data) => {
       console.log('Aptitude questions generated:', data);
     },
@@ -220,7 +218,7 @@ export const useGenerateAptitudeQuestions = () => {
 
 // Hook for evaluating aptitude answers
 export const useEvaluateAptitudeAnswers = () => {
-  return evaluateAnswersEvaluateAptitudePost({
+  return evaluateAnswersV1EvaluateAptitudePost({
     onSuccess: (data) => {
       console.log('Aptitude answers evaluated:', data);
     },
@@ -230,33 +228,34 @@ export const useEvaluateAptitudeAnswers = () => {
   });
 };
 
-// Hook for generating coding challenges
-export const useGenerateCodingChallenge = () => {
-  return generateRandomCodingChallengeGenerateChallengePost({
+// Hook for generating coding questions
+export const useGenerateCodingQuestion = () => {
+  return generateQuestionV1CodingGenerateQuestionPost({
     onSuccess: (data) => {
-      console.log('Coding challenge generated:', data);
+      console.log('Coding question generated:', data);
     },
     onError: (error) => {
-      console.error('Failed to generate coding challenge:', error);
+      console.error('Failed to generate coding question:', error);
     },
   });
 };
 
-// Hook for evaluating code solutions
-export const useEvaluateCodeSolution = () => {
-  return evaluateCodeSolutionEvaluateCodePost({
-    onSuccess: (data) => {
-      console.log('Code solution evaluated:', data);
-    },
-    onError: (error) => {
-      console.error('Failed to evaluate code solution:', error);
-    },
+// Hook for coding service health check - COMMENTED OUT: Function doesn't exist in useApis.jsx
+// Using quiz health check as a placeholder since coding service health check is not available
+export const useCodingHealthCheck = () => {
+  // Use quiz health check as a fallback since codingHealthCheck_Get doesn't exist
+  return quizHealthCheckV1HealthGet({
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 60 * 1000, // 1 minute
+    retry: 3,
+    retryDelay: 1000,
+    enabled: false, // Disabled by default since it's not the actual coding health check
   });
 };
 
 // Hook for generating MCQ questions
 export const useGenerateMCQQuestions = () => {
-  return generateMcqQuestionsGenerateMcqPost({
+  return generateMcqQuestionsV1GenerateMcqPost({
     onSuccess: (data) => {
       console.log('MCQ questions generated:', data);
     },
@@ -268,7 +267,7 @@ export const useGenerateMCQQuestions = () => {
 
 // Hook for generating behavioral questions
 export const useGenerateBehavioralQuestions = () => {
-  return generateBehavioralQuestionsGenerateBehavioralQuestionsPost({
+  return generateBehavioralQuestionsV1GenerateBehavioralQuestionsPost({
     onSuccess: (data) => {
       console.log('Behavioral questions generated:', data);
     },
@@ -280,7 +279,7 @@ export const useGenerateBehavioralQuestions = () => {
 
 // Hook for evaluating behavioral answers
 export const useEvaluateBehavioralAnswers = () => {
-  return evaluateBehavioralResponseEvaluateBehavioralPost({
+  return evaluateBehavioralResponseV1EvaluateBehavioralPost({
     onSuccess: (data) => {
       console.log('Behavioral answers evaluated:', data);
     },
@@ -290,17 +289,24 @@ export const useEvaluateBehavioralAnswers = () => {
   });
 };
 
-// Hook for getting company rounds
+// Hook for getting company rounds - PLACEHOLDER: Function doesn't exist in useApis.jsx
+// Returns empty array as placeholder since the endpoint is not available
 export const useGetCompanyRounds = () => {
-  return getCompanyRoundsCompanyRoundsGet({
+  return useQuery({
+    queryKey: ['company_rounds_placeholder'],
+    queryFn: async () => {
+      // Return empty array as placeholder
+      return [];
+    },
     staleTime: 30 * 60 * 1000, // 30 minutes
     gcTime: 60 * 60 * 1000, // 1 hour
+    enabled: false, // Disabled since the actual endpoint doesn't exist
   });
 };
 
 // Hook for generating company-specific questions
 export const useGenerateCompanyQuestion = () => {
-  return generateCompanyQuestionGenerateCompanyQuestionPost({
+  return generateCompanyQuestionV1GenerateCompanyQuestionPost({
     onSuccess: (data) => {
       console.log('Company question generated:', data);
     },
@@ -312,7 +318,7 @@ export const useGenerateCompanyQuestion = () => {
 
 // Hook for evaluating company answers
 export const useEvaluateCompanyAnswer = () => {
-  return evaluateCompanyAnswerEvaluateCompanyAnswerPost({
+  return evaluateCompanyAnswerV1EvaluateCompanyAnswerPost({
     onSuccess: (data) => {
       console.log('Company answer evaluated:', data);
     },
@@ -324,7 +330,7 @@ export const useEvaluateCompanyAnswer = () => {
 
 // Hook for quiz health check
 export const useQuizHealthCheck = () => {
-  return QuizHealthCheckHealthGet({
+  return quizHealthCheckV1HealthGet({
     staleTime: 30 * 1000, // 30 seconds
     gcTime: 60 * 1000, // 1 minute
     retry: 3,

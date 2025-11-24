@@ -86,11 +86,39 @@ const AssessmentAnalysis = () => {
         const aptitudeTestData = localStorage.getItem('aptitudeTestData');
         const behavioralTestData = localStorage.getItem('behavioralTestData');
         const codingTestData = localStorage.getItem('codingTestData');
+        
+        // Check for latest resume upload first
+        const latestUpload = localStorage.getItem('latestResumeUpload');
+        let latestResumeId: string | null = null;
+        if (latestUpload) {
+          try {
+            const uploadData = JSON.parse(latestUpload);
+            latestResumeId = uploadData?.resumeId || uploadData?.id || null;
+            console.log('📋 Latest resume upload found in AssessmentAnalysis:', latestResumeId);
+          } catch (e) {
+            console.warn('Failed to parse latestResumeUpload:', e);
+          }
+        }
+        
+        // Get resumeAnalysis (prioritize if it matches latest upload)
         const resumeAnalysisData = localStorage.getItem('resumeAnalysis');
+        let resumeAnalysis = null;
+        if (resumeAnalysisData) {
+          try {
+            const parsed = JSON.parse(resumeAnalysisData);
+            // Only use if no latest upload specified, or if it matches
+            if (!latestResumeId || parsed?.resume_id === latestResumeId || parsed?.id === latestResumeId) {
+              resumeAnalysis = parsed;
+            }
+          } catch (e) {
+            console.warn('Failed to parse resumeAnalysis:', e);
+          }
+        }
+        
         const jobSuggestionsData = localStorage.getItem('jobSuggestions');
 
         let allResults = {
-          resumeAnalysis: resumeAnalysisData ? JSON.parse(resumeAnalysisData) : null,
+          resumeAnalysis: resumeAnalysis,
           jobSuggestions: jobSuggestionsData ? JSON.parse(jobSuggestionsData) : null,
           aptitudeResults: null,
           behavioralResults: null,
@@ -419,7 +447,7 @@ const AssessmentAnalysis = () => {
             </motion.div>
             )}
 
-            {/* Behavioral Assessment */}
+            {/* Scenario-Based Assessment */}
             {results.behavioralResults && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -434,7 +462,7 @@ const AssessmentAnalysis = () => {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div>
-                        <h3 className="text-xl font-bold text-primary">Behavioral Assessment</h3>
+                        <h3 className="text-xl font-bold text-primary">Scenario-Based Assessment</h3>
                         <p className="text-muted-foreground">Leadership & communication skills</p>
                       </div>
                     </div>

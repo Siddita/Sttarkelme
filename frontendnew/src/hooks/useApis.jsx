@@ -4,7 +4,8 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 
 // --- API Client Configuration ---
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zettanix.in';
+// Import from centralized config
+import { API_BASE_URL } from '../config/api';
 
 /**
  * A generic API client that handles different content types.
@@ -66,9 +67,42 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @typedef {object} AnalysisStatus
  */
 /**
+ * @typedef {object} Body_parse_resume_builder_api_v1_resumes_builder_parse_post
+ * @property {string} file
+ */
+/**
  * @typedef {object} Body_upload_resume_api_v1_resumes_post
  * @property {string} file
  * @property {object} callback_url
+ */
+/**
+ * @typedef {object} CertificationSchema
+ * @property {object} name
+ * @property {object} issuer
+ * @property {object} date
+ * @property {object} url
+ */
+/**
+ * @typedef {object} EducationSchema
+ * @property {object} institution
+ * @property {object} degree
+ * @property {object} field
+ * @property {object} start_date
+ * @property {object} end_date
+ * @property {object} gpa
+ */
+/**
+ * @typedef {object} ExperienceSchema
+ * @property {object} company
+ * @property {object} position
+ * @property {object} start_date
+ * @property {object} end_date
+ * @property {object} description
+ * @property {string[]} achievements
+ */
+/**
+ * @typedef {object} ExportRequestSchema
+ * @property {ResumeDataSchema} data
  */
 /**
  * @typedef {object} HTTPValidationError
@@ -86,11 +120,58 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {string} status
  */
 /**
+ * @typedef {object} PersonalInfoSchema
+ * @property {object} name
+ * @property {object} email
+ * @property {object} phone
+ * @property {object} location
+ * @property {object} linkedin
+ * @property {object} github
+ * @property {object} website
+ */
+/**
+ * @typedef {object} ProjectSchema
+ * @property {object} name
+ * @property {object} description
+ * @property {string[]} technologies
+ * @property {object} url
+ */
+/**
  * @typedef {object} ResumeAnalysis
  * @property {integer} id
  * @property {AnalysisStatus} status
- * @property {object} analysis
+ * @property {string[]} skills
+ * @property {object} extracted_text
+ * @property {object} ai_model
  * @property {object} error_message
+ */
+/**
+ * @typedef {object} ResumeDataSchema
+ * @property {object} template
+ * @property {PersonalInfoSchema} personal_info
+ * @property {object} summary
+ * @property {string[]} skills
+ * @property {ExperienceSchema[]} experience
+ * @property {EducationSchema[]} education
+ * @property {ProjectSchema[]} projects
+ * @property {CertificationSchema[]} certifications
+ * @property {string[]} hobbies
+ */
+/**
+ * @typedef {object} ResumeGenerateRequestSchema
+ * @property {ResumeDataSchema} data
+ * @property {object} job_description
+ */
+/**
+ * @typedef {object} ResumeGenerateResponseSchema
+ * @property {boolean} success
+ * @property {string} generated_resume
+ */
+/**
+ * @typedef {object} ResumeParseResponseSchema
+ * @property {boolean} success
+ * @property {ResumeDataSchema} data
+ * @property {string} extracted_text
  */
 /**
  * @typedef {object} ResumeRead
@@ -127,10 +208,6 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {string} evaluation
  */
 /**
- * @typedef {object} BehavioralQuestionsResponse
- * @property {string[]} questions
- */
-/**
  * @typedef {object} BehavioralRequest
  * @property {string} skills
  * @property {string} level
@@ -158,6 +235,28 @@ async function apiClient(method, path, data = null, contentType = 'application/j
 /**
  * @typedef {object} CodeEvaluationResponse
  * @property {string} evaluation
+ */
+/**
+ * @typedef {object} CodingProfile
+ * @property {string} Education
+ * @property {integer} Years_of_Experience
+ * @property {integer} Project_Count
+ * @property {string} Domain
+ * @property {object} Skills
+ * @property {string} Certifications
+ * @property {string} Skill_Level
+ */
+/**
+ * @typedef {object} CodingQuestionResult
+ * @property {string} question
+ * @property {number} reward
+ * @property {string[]} rationale
+ */
+/**
+ * @typedef {object} CodingQuestionsResponse
+ * @property {object} profile_used
+ * @property {CodingQuestionResult[]} generated_questions
+ * @property {number} total_latency_sec
  */
 /**
  * @typedef {object} CompanyAnswerEvaluationResponse
@@ -188,9 +287,17 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {string} question
  */
 /**
- * @typedef {object} EvaluateRequest
- * @property {Question[]} questions
- * @property {string[]} answers
+ * @typedef {object} CoursesResources
+ * @property {string[]} online_courses
+ * @property {string[]} tutorials_guides
+ * @property {string[]} books
+ * @property {string[]} workshops_conferences
+ * @property {string[]} communities_forums
+ */
+/**
+ * @typedef {object} EvaluateByIdsRequest
+ * @property {integer[]} question_ids
+ * @property {string[]} selected_options
  */
 /**
  * @typedef {object} EvaluateResponse
@@ -210,7 +317,7 @@ async function apiClient(method, path, data = null, contentType = 'application/j
 /**
  * @typedef {object} GenerateResponse
  * @property {integer} seed
- * @property {Question[]} questions
+ * @property {PublicMCQ[]} questions
  */
 /**
  * @typedef {object} InterviewPDFRequest
@@ -223,13 +330,19 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  */
 /**
  * @typedef {object} InterviewPDFResponse
- * @property {string} pdf
+ * @property {string} assessment
+ */
+/**
+ * @typedef {object} MCQOption
+ * @property {string} label
+ * @property {string} text
  */
 /**
  * @typedef {object} MCQQuestion
- * @property {string} question
- * @property {string[]} options
- * @property {string} answer
+ * @property {integer} id
+ * @property {string} text
+ * @property {MCQOption[]} options
+ * @property {string} correct_label
  */
 /**
  * @typedef {object} MCQRequest
@@ -244,18 +357,38 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {MCQQuestion[]} questions
  */
 /**
+ * @typedef {object} PerformanceGapsLearningResources
+ * @property {string[]} online_courses
+ * @property {string[]} books_articles
+ * @property {string[]} workshops_conferences
+ * @property {string[]} communities_forums
+ */
+/**
+ * @typedef {object} PerformanceGapsPriorityItem
+ * @property {string} name
+ * @property {string} priority
+ */
+/**
  * @typedef {object} PerformanceGapsRequest
  * @property {object} scores
  * @property {string} feedback
  */
 /**
  * @typedef {object} PerformanceGapsResponse
- * @property {object} analysis
+ * @property {string[]} strengths
+ * @property {string[]} areas_for_improvement
+ * @property {object} action_items
+ * @property {PerformanceGapsLearningResources} learning_resources
+ * @property {Timeline} timeline
+ * @property {PerformanceGapsPriorityItem[]} priority_ranking
  */
 /**
- * @typedef {object} Question
+ * @typedef {object} PublicMCQ
+ * @property {integer} id
  * @property {string} question
- * @property {string} answer
+ * @property {string[]} options
+ * @property {string} topic
+ * @property {string} difficulty
  */
 /**
  * @typedef {object} ReportRequest
@@ -273,7 +406,18 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  */
 /**
  * @typedef {object} SkillRecommendationsResponse
- * @property {object} recommendations
+ * @property {string} assessment_summary
+ * @property {string[]} learning_paths
+ * @property {CoursesResources} courses_resources
+ * @property {string[]} practice_projects
+ * @property {Timeline} timeline
+ * @property {string[]} career_advancement
+ */
+/**
+ * @typedef {object} Timeline
+ * @property {string} short_term
+ * @property {string} medium_term
+ * @property {string} long_term
  */
 /**
  * @typedef {object} WritingEvaluationRequest
@@ -332,6 +476,11 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {string[]} roles
  */
 /**
+ * @typedef {object} CityCount
+ * @property {string} city
+ * @property {integer} count
+ */
+/**
  * @typedef {object} CompanyCreate
  * @property {string} name
  * @property {object} website
@@ -372,6 +521,11 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  */
 /**
  * @typedef {object} EmploymentType
+ */
+/**
+ * @typedef {object} IndustryCount
+ * @property {string} industry
+ * @property {integer} count
  */
 /**
  * @typedef {object} JobCreate
@@ -438,6 +592,25 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {object} company
  */
 /**
+ * @typedef {object} JobRecommendation
+ * @property {string} job_title
+ * @property {string} company
+ * @property {string} location
+ * @property {string} url
+ * @property {number} match_score
+ * @property {object} salary_min
+ * @property {object} salary_max
+ * @property {object} created
+ * @property {string} description
+ * @property {string[]} matched_skills
+ */
+/**
+ * @typedef {object} JobStats
+ * @property {StatusCount[]} by_status
+ * @property {IndustryCount[]} by_industry
+ * @property {CityCount[]} by_city
+ */
+/**
  * @typedef {object} JobStatus
  */
 /**
@@ -470,10 +643,52 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {JobStatus} status
  */
 /**
+ * @typedef {object} PopulateRequest
+ * @property {object} search_terms - Comma-separated skills/keywords to search for
+ */
+/**
+ * @typedef {object} PopulateResponse
+ * @property {string} status
+ * @property {integer} total_fetched
+ * @property {integer} new_jobs_added
+ * @property {integer} existing_jobs_updated
+ * @property {string} message
+ */
+/**
+ * @typedef {object} RecommendRequest
+ * @property {string[]} skills - List of user skills to match against jobs
+ */
+/**
+ * @typedef {object} RecommendResponse
+ * @property {object} primary_match
+ * @property {object} second_match
+ * @property {object} third_match
+ * @property {integer} total_jobs_found
+ * @property {string[]} skills_searched
+ */
+/**
  * @typedef {object} SalaryPeriod
  */
 /**
+ * @typedef {object} SearchRequest
+ * @property {string[]} skills - List of user skills to match against jobs
+ * @property {object} location - Location to filter jobs (searches city, state, country)
+ * @property {object} salary_min - Minimum salary filter
+ * @property {object} salary_max - Maximum salary filter
+ */
+/**
+ * @typedef {object} SearchResponse
+ * @property {JobRecommendation[]} jobs
+ * @property {integer} total_found
+ * @property {object} search_criteria
+ */
+/**
  * @typedef {object} SeniorityLevel
+ */
+/**
+ * @typedef {object} StatusCount
+ * @property {string} status
+ * @property {integer} count
  */
 /**
  * @typedef {object} WorkType
@@ -545,6 +760,43 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {object} notes
  * @property {integer} id
  * @property {integer} mentee_id
+ * @property {string} status
+ */
+/**
+ * @typedef {object} GoalStatusDecisionIn
+ * @property {boolean} approve
+ * @property {object} comment
+ */
+/**
+ * @typedef {object} GoalStatusRequestIn
+ * @property {string} requested_status
+ * @property {object} notes
+ */
+/**
+ * @typedef {object} GoalStatusRequestOut
+ * @property {integer} id
+ * @property {integer} goal_id
+ * @property {integer} mentee_id
+ * @property {string} requested_status
+ * @property {object} notes
+ * @property {string} state
+ * @property {object} decided_by
+ * @property {object} decided_comment
+ * @property {object} decided_at
+ */
+/**
+ * @typedef {object} MentorScoreIn
+ * @property {integer} score
+ * @property {object} notes
+ */
+/**
+ * @typedef {object} MentorScoreOut
+ * @property {integer} id
+ * @property {integer} session_id
+ * @property {integer} mentor_id
+ * @property {integer} mentee_id
+ * @property {integer} score
+ * @property {object} notes
  */
 /**
  * @typedef {object} MentorSkillIn
@@ -561,28 +813,44 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  */
 /**
  * @typedef {object} ProfileOut
+ * @property {object} name
+ * @property {object} email
+ * @property {object} phone_number
+ * @property {object} specialization
+ * @property {object} graduation_year
+ * @property {object} job_type_preference
+ * @property {object} preferred_locations
+ * @property {object} aspiring_companies
+ * @property {object} career_goal
+ * @property {integer} id
  * @property {integer} auth_user_id
- * @property {object} full_name
- * @property {object} headline
- * @property {object} bio
- * @property {object} timezone
- * @property {object} languages
- * @property {object} avatar_url
- * @property {boolean} is_mentor
- * @property {boolean} is_mentee
- * @property {object} years_experience
+ * @property {string} created_at
+ * @property {string} updated_at
+ * @property {SkillOut[]} skills
+ * @property {AssessmentOut[]} latest_assessments
+ * @property {AssessmentOut[]} top_assessments
+ * @property {object} idp
+ * @property {object} learning_paths
  */
 /**
  * @typedef {object} ProfileUpdate
- * @property {object} full_name
- * @property {object} headline
- * @property {object} bio
- * @property {object} timezone
- * @property {object} languages
- * @property {object} avatar_url
- * @property {object} is_mentor
- * @property {object} is_mentee
- * @property {object} years_experience
+ * @property {object} name
+ * @property {object} email
+ * @property {object} phone_number
+ * @property {object} specialization
+ * @property {object} graduation_year
+ * @property {object} job_type_preference
+ * @property {object} preferred_locations
+ * @property {object} aspiring_companies
+ * @property {object} career_goal
+ */
+/**
+ * @typedef {object} RatingsSummaryOut
+ * @property {integer} target_id
+ * @property {string} kind
+ * @property {number} average
+ * @property {integer} count
+ * @property {object} distribution
  */
 /**
  * @typedef {object} ReviewIn
@@ -607,110 +875,34 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {string} status
  */
 /**
+ * @typedef {object} SessionStatusUpdateIn
+ * @property {string} status
+ */
+/**
+ * @typedef {object} SessionStatusUpdateOut
+ * @property {integer} id
+ * @property {string} status
+ */
+/**
  * @typedef {object} SkillBase
  * @property {string} name
  * @property {object} category
  */
 /**
  * @typedef {object} SkillOut
- * @property {string} name
- * @property {object} category
+ * @property {string} skill
+ * @property {object} score
+ * @property {object} source
  * @property {integer} id
+ * @property {object} last_updated
  */
 /**
- * @typedef {object} Body_parse_resume_legacy_parse_resume_post
- * @property {string} file
- */
-/**
- * @typedef {object} Body_parse_resume_resume_parse_post
- * @property {string} file
- */
-/**
- * @typedef {object} CertificationSchema
- * @property {object} name
- * @property {object} issuer
- * @property {object} date
- * @property {object} url
- */
-/**
- * @typedef {object} EducationSchema
- * @property {object} institution
- * @property {object} degree
- * @property {object} field
- * @property {object} start_date
- * @property {object} end_date
- * @property {object} gpa
- */
-/**
- * @typedef {object} ExperienceSchema
- * @property {object} company
- * @property {object} position
- * @property {object} start_date
- * @property {object} end_date
- * @property {object} description
- * @property {string[]} achievements
- */
-/**
- * @typedef {object} ExportRequestSchema
- * @property {ResumeDataSchema} data
- */
-/**
- * @typedef {object} HealthResponseSchema
- * @property {string} status
- * @property {string} gemini_api
- * @property {string} tesseract
- */
-/**
- * @typedef {object} PersonalInfoSchema
- * @property {object} name
- * @property {object} email
- * @property {object} phone
- * @property {object} location
- * @property {object} linkedin
- * @property {object} github
- * @property {object} website
- */
-/**
- * @typedef {object} ProjectSchema
- * @property {object} name
- * @property {object} description
- * @property {string[]} technologies
- * @property {object} url
- */
-/**
- * @typedef {object} ResumeDataSchema
- * @property {PersonalInfoSchema} personal_info
- * @property {object} summary
- * @property {string[]} skills
- * @property {ExperienceSchema[]} experience
- * @property {EducationSchema[]} education
- * @property {ProjectSchema[]} projects
- * @property {CertificationSchema[]} certifications
- * @property {string[]} hobbies
- */
-/**
- * @typedef {object} ResumeGenerateRequestSchema
- * @property {ResumeDataSchema} data
- * @property {object} job_description
- */
-/**
- * @typedef {object} ResumeGenerateResponseSchema
- * @property {boolean} success
- * @property {string} generated_resume
- */
-/**
- * @typedef {object} ResumeParseResponseSchema
- * @property {boolean} success
- * @property {ResumeDataSchema} data
- * @property {string} extracted_text
- */
-/**
- * @typedef {object} Body_record_audio_audio_record_post
+ * @typedef {object} Body_record_audio_v1_audio_record_post
  * @property {string} audio
  * @property {number} duration
  */
 /**
- * @typedef {object} Body_transcribe_audio_file_audio_transcribe_post
+ * @typedef {object} Body_transcribe_audio_file_v1_audio_transcribe_post
  * @property {string} file
  */
 /**
@@ -722,6 +914,7 @@ async function apiClient(method, path, data = null, contentType = 'application/j
 /**
  * @typedef {object} FrameAnalysisRequest
  * @property {string} frame_data
+ * @property {object} session_id
  */
 /**
  * @typedef {object} FrameAnalysisResponse
@@ -772,6 +965,7 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {object} company_template
  * @property {object} custom_instructions
  * @property {object} user_id
+ * @property {ResumeDataSchema} resume_data
  */
 /**
  * @typedef {object} InterviewStartResponse
@@ -783,6 +977,173 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  */
 /**
  * @typedef {object} InterviewType
+ */
+/**
+ * @typedef {object} RoleSuggestion
+ * @property {string} role
+ * @property {string} description
+ * @property {string} match_reason
+ */
+/**
+ * @typedef {object} RoleSuggestionsRequest
+ * @property {ResumeDataSchema} resume_data
+ */
+/**
+ * @typedef {object} RoleSuggestionsResponse
+ * @property {boolean} success
+ * @property {RoleSuggestion[]} roles
+ */
+/**
+ * @typedef {object} AssessmentIn
+ * @property {object} assessment_id
+ * @property {object} assessment_type
+ * @property {object} score
+ * @property {object} taken_at
+ * @property {object} summary
+ */
+/**
+ * @typedef {object} AssessmentOut
+ * @property {object} assessment_id
+ * @property {object} assessment_type
+ * @property {object} score
+ * @property {object} taken_at
+ * @property {object} summary
+ * @property {integer} id
+ * @property {string} created_at
+ */
+/**
+ * @typedef {object} IDPBenchmarkRow
+ * @property {string} group
+ * @property {number} avg_overall
+ * @property {integer} count
+ */
+/**
+ * @typedef {object} IDPEvent
+ * @property {string} type
+ * @property {number} value
+ * @property {object} taken_at
+ * @property {object} meta
+ */
+/**
+ * @typedef {object} IDPOut
+ * @property {object} completion_percentage
+ * @property {object} recommended_courses_completion
+ * @property {object} mentor_rating
+ * @property {object} collaboration_score
+ * @property {object} projects_score
+ * @property {integer} id
+ * @property {integer} auth_user_id
+ * @property {string} updated_at
+ */
+/**
+ * @typedef {object} IDPPatch
+ * @property {object} completion_percentage
+ * @property {object} recommended_courses_completion
+ * @property {object} mentor_rating
+ * @property {object} collaboration_score
+ * @property {object} projects_score
+ */
+/**
+ * @typedef {object} IDPPut
+ * @property {object} completion_percentage
+ * @property {object} recommended_courses_completion
+ * @property {object} mentor_rating
+ * @property {object} collaboration_score
+ * @property {object} projects_score
+ */
+/**
+ * @typedef {object} IDPSummaryOut
+ * @property {object} completion_percentage
+ * @property {object} recommended_courses_completion
+ * @property {object} mentor_rating
+ * @property {object} collaboration_score
+ * @property {object} projects_score
+ * @property {object} overall_score
+ */
+/**
+ * @typedef {object} IDPWeightsOut
+ * @property {number} mentor
+ * @property {number} projects
+ * @property {number} collab
+ * @property {number} courses
+ */
+/**
+ * @typedef {object} LPSkillIn
+ * @property {string} skill
+ * @property {object} progress_percent
+ * @property {object} target_percent
+ * @property {object} source
+ * @property {object} started_at
+ */
+/**
+ * @typedef {object} LPSkillOut
+ * @property {integer} id
+ * @property {integer} path_id
+ * @property {string} skill
+ * @property {number} progress_percent
+ * @property {number} target_percent
+ * @property {object} source
+ * @property {object} started_at
+ * @property {string} updated_at
+ */
+/**
+ * @typedef {object} LPSkillPatch
+ * @property {object} progress_percent
+ * @property {object} target_percent
+ * @property {object} source
+ * @property {object} started_at
+ */
+/**
+ * @typedef {object} LPSnapshotOut
+ * @property {app__schemas__LearningPathOut__2} path
+ * @property {LPSkillOut[]} skills_in_progress
+ */
+/**
+ * @typedef {object} LearningPathCreate
+ * @property {string} name
+ * @property {object} description
+ * @property {object} is_active
+ */
+/**
+ * @typedef {object} LearningPathUpdate
+ * @property {object} name
+ * @property {object} description
+ * @property {object} is_active
+ */
+/**
+ * @typedef {object} ProfileCreate
+ * @property {object} name
+ * @property {object} email
+ * @property {object} phone_number
+ * @property {object} specialization
+ * @property {object} graduation_year
+ * @property {object} job_type_preference
+ * @property {object} preferred_locations
+ * @property {object} aspiring_companies
+ * @property {object} career_goal
+ */
+/**
+ * @typedef {object} SkillIn
+ * @property {string} skill
+ * @property {object} score
+ * @property {object} source
+ */
+/**
+ * @typedef {object} app__schemas__LearningPathOut__1
+ * @property {integer} id
+ * @property {string} title
+ * @property {object} description
+ */
+/**
+ * @typedef {object} app__schemas__LearningPathOut__2
+ * @property {integer} id
+ * @property {integer} auth_user_id
+ * @property {string} name
+ * @property {object} description
+ * @property {boolean} is_active
+ * @property {string} created_at
+ * @property {string} updated_at
+ * @property {object} completion_percentage
  */
 
 // --- Generated React Query Hooks ---
@@ -830,7 +1191,7 @@ export const getResumeApiV1Resumes_ResumeId_Get = (options) => {
 /**
  * @description Hook for /resumes/api/v1/resumes/{resume_id} [DELETE]
  * @param {void} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, void>}
+ * @returns {import('@tanstack/react-query').MutationResult<HTTPValidationError, unknown, void>}
  */
 export const deleteResumeApiV1Resumes_ResumeId_Delete = (options) => {
   return useMutation({
@@ -855,6 +1216,18 @@ export const getAnalysisApiV1Resumes_ResumeId_AnalysisGet = (options) => {
 };
 
 /**
+ * @description Hook for /resumes/api/v1/resumes/{resume_id}/re-analyze [POST]
+ * @param {void} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<ResumeAnalysis, unknown, void>}
+ */
+export const reanalyzeApiV1Resumes_ResumeId_ReAnalyzePost = (options) => {
+  return useMutation({
+    mutationFn: ({ resume_id, ...data }) => apiClient('post', `/resumes/api/v1/resumes/${resume_id}/re-analyze`, data),
+    ...options,
+  });
+};
+
+/**
  * @description Hook for /resumes/api/v1/resumes/admin/all [GET]
  * @returns {import('@tanstack/react-query').QueryResult<ResumeRead[]>}
  */
@@ -868,11 +1241,59 @@ export const adminListAllApiV1ResumesAdminAllGet = (options) => {
 };
 
 /**
+ * @description Hook for /resumes/api/v1/resumes/builder/parse [POST]
+ * @param {Body_parse_resume_builder_api_v1_resumes_builder_parse_post} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<ResumeParseResponseSchema, unknown, Body_parse_resume_builder_api_v1_resumes_builder_parse_post>}
+ */
+export const parseResumeBuilderApiV1ResumesBuilderParsePost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/resumes/api/v1/resumes/builder/parse', data, 'multipart/form-data'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /resumes/api/v1/resumes/builder/generate [POST]
+ * @param {ResumeGenerateRequestSchema} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<ResumeGenerateResponseSchema, unknown, ResumeGenerateRequestSchema>}
+ */
+export const generateResumeBuilderApiV1ResumesBuilderGeneratePost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/resumes/api/v1/resumes/builder/generate', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /resumes/api/v1/resumes/builder/export/pdf [POST]
+ * @param {ExportRequestSchema} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<object, unknown, ExportRequestSchema>}
+ */
+export const exportPdfBuilderApiV1ResumesBuilderExportPdfPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/resumes/api/v1/resumes/builder/export/pdf', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /resumes/api/v1/resumes/builder/export/docx [POST]
+ * @param {ExportRequestSchema} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<object, unknown, ExportRequestSchema>}
+ */
+export const exportDocxBuilderApiV1ResumesBuilderExportDocxPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/resumes/api/v1/resumes/builder/export/docx', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
  * @description Hook for /resumes/ [GET]
  * @returns {import('@tanstack/react-query').QueryResult<RootModel>}
  */
-export const resumeRoot_Get = (options) => {
-  const queryKey = ['resume_root__get'];
+export const resumesRoot_Get = (options) => {
+  const queryKey = ['resumes_root__get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/resumes/'),
@@ -884,8 +1305,8 @@ export const resumeRoot_Get = (options) => {
  * @description Hook for /resumes/health [GET]
  * @returns {import('@tanstack/react-query').QueryResult<HealthModel>}
  */
-export const resumeHealthCheckHealthGet = (options) => {
-  const queryKey = ['resume_health_check_health_get'];
+export const resumesHealthCheckHealthGet = (options) => {
+  const queryKey = ['resumes_health_check_health_get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/resumes/health'),
@@ -897,8 +1318,8 @@ export const resumeHealthCheckHealthGet = (options) => {
  * @description Hook for /resumes/healthz [GET]
  * @returns {import('@tanstack/react-query').QueryResult<HealthZModel>}
  */
-export const healthzHealthzGet = (options) => {
-  const queryKey = ['healthz_healthz_get'];
+export const resumesHealthzHealthzGet = (options) => {
+  const queryKey = ['resumes_healthz_healthz_get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/resumes/healthz'),
@@ -907,201 +1328,200 @@ export const healthzHealthzGet = (options) => {
 };
 
 /**
- * @description Hook for /quiz/generate_aptitude [POST]
+ * @description Hook for /quiz/v1/generate_aptitude [POST]
  * @param {void} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<GenerateResponse, unknown, void>}
  */
-export const generateQuestionsGenerateAptitudePost = (options) => {
+export const generateQuestionsV1GenerateAptitudePost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/quiz/generate_aptitude', data),
+    mutationFn: (data) => apiClient('post', '/quiz/v1/generate_aptitude', data),
     ...options,
   });
 };
 
 /**
- * @description Hook for /quiz/evaluate_aptitude [POST]
- * @param {EvaluateRequest} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<EvaluateResponse, unknown, EvaluateRequest>}
+ * @description Hook for /quiz/v1/evaluate_aptitude [POST]
+ * @param {EvaluateByIdsRequest} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<EvaluateResponse, unknown, EvaluateByIdsRequest>}
  */
-export const evaluateAnswersEvaluateAptitudePost = (options) => {
+export const evaluateAnswersV1EvaluateAptitudePost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/quiz/evaluate_aptitude', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/quiz/v1/evaluate_aptitude', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /quiz/generate_challenge [POST]
+ * @description Hook for /quiz/v1/generate_challenge [POST]
  * @param {ChallengeRequest} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<ChallengeResponse, unknown, ChallengeRequest>}
  */
-export const generateRandomCodingChallengeGenerateChallengePost = (options) => {
+export const generateRandomCodingChallengeV1GenerateChallengePost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/quiz/generate_challenge', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/quiz/v1/generate_challenge', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /quiz/evaluate_code [POST]
+ * @description Hook for /quiz/v1/evaluate_code [POST]
  * @param {CodeEvaluationRequest} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<CodeEvaluationResponse, unknown, CodeEvaluationRequest>}
  */
-export const evaluateCodeSolutionEvaluateCodePost = (options) => {
+export const evaluateCodeSolutionV1EvaluateCodePost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/quiz/evaluate_code', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/quiz/v1/evaluate_code', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /quiz/generate_mcq [POST]
+ * @description Hook for /quiz/v1/generate_mcq [POST]
  * @param {MCQRequest} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<MCQResponse, unknown, MCQRequest>}
  */
-export const generateMcqQuestionsGenerateMcqPost = (options) => {
+export const generateMcqQuestionsV1GenerateMcqPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/quiz/generate_mcq', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/quiz/v1/generate_mcq', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /quiz/generate_behavioral_questions [POST]
+ * @description Hook for /quiz/v1/generate_behavioral_questions [POST]
  * @param {BehavioralRequest} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<BehavioralQuestionsResponse, unknown, BehavioralRequest>}
+ * @returns {import('@tanstack/react-query').MutationResult<MCQResponse, unknown, BehavioralRequest>}
  */
-export const generateBehavioralQuestionsGenerateBehavioralQuestionsPost = (options) => {
+export const generateBehavioralQuestionsV1GenerateBehavioralQuestionsPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/quiz/generate_behavioral_questions', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/quiz/v1/generate_behavioral_questions', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /quiz/evaluate_behavioral [POST]
+ * @description Hook for /quiz/v1/evaluate_behavioral [POST]
  * @param {BehavioralEvaluationRequest} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<BehavioralEvaluationResult, unknown, BehavioralEvaluationRequest>}
  */
-export const evaluateBehavioralResponseEvaluateBehavioralPost = (options) => {
+export const evaluateBehavioralResponseV1EvaluateBehavioralPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/quiz/evaluate_behavioral', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/quiz/v1/evaluate_behavioral', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /quiz/generate_writing_prompt [POST]
+ * @description Hook for /quiz/v1/generate_writing_prompt [POST]
  * @param {WritingRequest} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<WritingPromptResponse, unknown, WritingRequest>}
  */
-export const generateWritingPromptGenerateWritingPromptPost = (options) => {
+export const generateWritingPromptV1GenerateWritingPromptPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/quiz/generate_writing_prompt', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/quiz/v1/generate_writing_prompt', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /quiz/evaluate_writing [POST]
+ * @description Hook for /quiz/v1/evaluate_writing [POST]
  * @param {WritingEvaluationRequest} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<WritingEvaluationResult, unknown, WritingEvaluationRequest>}
  */
-export const evaluateWritingResponseEvaluateWritingPost = (options) => {
+export const evaluateWritingResponseV1EvaluateWritingPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/quiz/evaluate_writing', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/quiz/v1/evaluate_writing', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /quiz/analyze_performance_gaps [POST]
+ * @description Hook for /quiz/v1/analyze_performance_gaps [POST]
  * @param {PerformanceGapsRequest} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<PerformanceGapsResponse, unknown, PerformanceGapsRequest>}
  */
-export const analyzePerformanceGapsAnalyzePerformanceGapsPost = (options) => {
+export const analyzePerformanceGapsV1AnalyzePerformanceGapsPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/quiz/analyze_performance_gaps', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/quiz/v1/analyze_performance_gaps', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /quiz/generate_skill_based_recommendations [POST]
+ * @description Hook for /quiz/v1/generate_skill_based_recommendations [POST]
  * @param {SkillRecommendationsRequest} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<SkillRecommendationsResponse, unknown, SkillRecommendationsRequest>}
  */
-export const generateSkillBasedRecommendationsGenerateSkillBasedRecommendationsPost = (options) => {
+export const generateSkillBasedRecommendationsV1GenerateSkillBasedRecommendationsPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/quiz/generate_skill_based_recommendations', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/quiz/v1/generate_skill_based_recommendations', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /quiz/download-report [POST]
+ * @description Hook for /quiz/v1/download-report [POST]
  * @param {ReportRequest} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<ReportResponse, unknown, ReportRequest>}
  */
-export const downloadReportDownloadReportPost = (options) => {
+export const downloadReportV1DownloadReportPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/quiz/download-report', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/quiz/v1/download-report', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /quiz/generate_interview_pdf [POST]
+ * @description Hook for /quiz/v1/generate_interview_pdf [POST]
  * @param {InterviewPDFRequest} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<InterviewPDFResponse, unknown, InterviewPDFRequest>}
  */
-export const generateInterviewPdfGenerateInterviewPdfPost = (options) => {
+export const generateInterviewPdfV1GenerateInterviewPdfPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/quiz/generate_interview_pdf', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/quiz/v1/generate_interview_pdf', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /quiz/company-rounds [GET]
- * @returns {import('@tanstack/react-query').QueryResult<object>}
- */
-export const getCompanyRoundsCompanyRoundsGet = (options) => {
-  const queryKey = ['get_company_rounds_company_rounds_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/quiz/company-rounds'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /quiz/generate_company_question [POST]
+ * @description Hook for /quiz/v1/generate_company_question [POST]
  * @param {CompanyQuestionRequest} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<CompanyQuestionResponse, unknown, CompanyQuestionRequest>}
  */
-export const generateCompanyQuestionGenerateCompanyQuestionPost = (options) => {
+export const generateCompanyQuestionV1GenerateCompanyQuestionPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/quiz/generate_company_question', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/quiz/v1/generate_company_question', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /quiz/evaluate_company_answer [POST]
+ * @description Hook for /quiz/v1/evaluate_company_answer [POST]
  * @param {CompanyAnswerRequest} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<CompanyAnswerEvaluationResponse, unknown, CompanyAnswerRequest>}
  */
-export const evaluateCompanyAnswerEvaluateCompanyAnswerPost = (options) => {
+export const evaluateCompanyAnswerV1EvaluateCompanyAnswerPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/quiz/evaluate_company_answer', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/quiz/v1/evaluate_company_answer', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /quiz/v1/coding/generate_question [POST]
+ * @param {CodingProfile} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<CodingQuestionsResponse, unknown, CodingProfile>}
+ */
+export const generateQuestionV1CodingGenerateQuestionPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/quiz/v1/coding/generate_question', data, 'application/json'),
     ...options,
   });
 };
 
 /**
  * @description Hook for /quiz/ [GET]
- * @returns {import('@tanstack/react-query').QueryResult<object>}
+ * @returns {import('@tanstack/react-query').QueryResult<RootModel>}
  */
 export const quizRoot_Get = (options) => {
   const queryKey = ['quiz_root__get'];
@@ -1113,14 +1533,27 @@ export const quizRoot_Get = (options) => {
 };
 
 /**
- * @description Hook for /quiz/health [GET]
- * @returns {import('@tanstack/react-query').QueryResult<object>}
+ * @description Hook for /quiz/v1/health [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<HealthModel>}
  */
-export const QuizHealthCheckHealthGet = (options) => {
-  const queryKey = ['Quiz_health_check_health_get'];
+export const quizHealthCheckV1HealthGet = (options) => {
+  const queryKey = ['quiz_health_check_v1_health_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/quiz/health'),
+    queryFn: () => apiClient('get', '/quiz/v1/health'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /quiz/v1/healthz [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<HealthZModel>}
+ */
+export const quizHealthzV1HealthzGet = (options) => {
+  const queryKey = ['quiz_healthz_v1_healthz_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/quiz/v1/healthz'),
     ...options,
   });
 };
@@ -1165,8 +1598,8 @@ export const refreshTokenRefreshPost = (options) => {
  * @description Hook for /auth/me [GET]
  * @returns {import('@tanstack/react-query').QueryResult<UserOut>}
  */
-export const meMeGet = (options) => {
-  const queryKey = ['me_me_get'];
+export const authMeMeGet = (options) => {
+  const queryKey = ['auth_me_me_get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/auth/me'),
@@ -1277,6 +1710,19 @@ export const deleteCompanyApiV1Companies_CompanyId_Delete = (options) => {
 };
 
 /**
+ * @description Hook for /jobs/api/v1/jobs/stats [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<JobStats>}
+ */
+export const jobsStatsApiV1JobsStatsGet = (options) => {
+  const queryKey = ['jobs_stats_api_v1_jobs_stats_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/jobs/api/v1/jobs/stats'),
+    ...options,
+  });
+};
+
+/**
  * @description Hook for /jobs/api/v1/jobs [GET]
  * @returns {import('@tanstack/react-query').QueryResult<JobOut[]>}
  */
@@ -1380,14 +1826,37 @@ export const hardDeleteJobApiV1Jobs_JobId_HardDeleteDelete = (options) => {
 };
 
 /**
- * @description Hook for /jobs/api/v1/jobs/stats [GET]
- * @returns {import('@tanstack/react-query').QueryResult<object>}
+ * @description Hook for /jobs/api/v1/listings/recommend [POST]
+ * @param {RecommendRequest} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<RecommendResponse, unknown, RecommendRequest>}
  */
-export const jobsStatsApiV1JobsStatsGet = (options) => {
-  const queryKey = ['jobs_stats_api_v1_jobs_stats_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/jobs/api/v1/jobs/stats'),
+export const recommendJobsApiV1ListingsRecommendPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/jobs/api/v1/listings/recommend', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /jobs/api/v1/listings/search [POST]
+ * @param {SearchRequest} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<SearchResponse, unknown, SearchRequest>}
+ */
+export const searchJobsApiV1ListingsSearchPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/jobs/api/v1/listings/search', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /jobs/api/v1/listings/populate [POST]
+ * @param {PopulateRequest} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<PopulateResponse, unknown, PopulateRequest>}
+ */
+export const populateDatabaseApiV1ListingsPopulatePost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/jobs/api/v1/listings/populate', data, 'application/json'),
     ...options,
   });
 };
@@ -1574,212 +2043,287 @@ export const newsHealthzHealthzGet = (options) => {
 };
 
 /**
- * @description Hook for /mentorship/me [GET]
+ * @description Hook for /mentorship/v1/me [GET]
  * @returns {import('@tanstack/react-query').QueryResult<ProfileOut>}
  */
-export const mentorshipMeGet = (options) => {
-  const queryKey = ['mentorship_me_get'];
+export const meV1MeGet = (options) => {
+  const queryKey = ['me_v1_me_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/mentorship/me'),
+    queryFn: () => apiClient('get', '/mentorship/v1/me'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/me [PATCH]
+ * @description Hook for /mentorship/v1/me [PATCH]
  * @param {ProfileUpdate} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<ProfileOut, unknown, ProfileUpdate>}
  */
-export const updateMeMePatch = (options) => {
+export const updateMeV1MePatch = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('patch', '/mentorship/me', data, 'application/json'),
+    mutationFn: (data) => apiClient('patch', '/mentorship/v1/me', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/skills [GET]
+ * @description Hook for /mentorship/v1/skills [GET]
  * @returns {import('@tanstack/react-query').QueryResult<SkillOut[]>}
  */
-export const listSkillsSkillsGet = (options) => {
-  const queryKey = ['list_skills_skills_get'];
+export const listSkillsV1SkillsGet = (options) => {
+  const queryKey = ['list_skills_v1_skills_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/mentorship/skills'),
+    queryFn: () => apiClient('get', '/mentorship/v1/skills'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/skills [POST]
+ * @description Hook for /mentorship/v1/skills [POST]
  * @param {SkillBase} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<SkillOut, unknown, SkillBase>}
  */
-export const createSkillSkillsPost = (options) => {
+export const createSkillV1SkillsPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/mentorship/skills', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/mentorship/v1/skills', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/me/mentor/skills [GET]
+ * @description Hook for /mentorship/v1/me/mentor/skills [GET]
  * @returns {import('@tanstack/react-query').QueryResult<MentorSkillOut[]>}
  */
-export const myMentorSkillsMeMentorSkillsGet = (options) => {
-  const queryKey = ['my_mentor_skills_me_mentor_skills_get'];
+export const myMentorSkillsV1MeMentorSkillsGet = (options) => {
+  const queryKey = ['my_mentor_skills_v1_me_mentor_skills_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/mentorship/me/mentor/skills'),
+    queryFn: () => apiClient('get', '/mentorship/v1/me/mentor/skills'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/me/mentor/skills [POST]
+ * @description Hook for /mentorship/v1/me/mentor/skills [POST]
  * @param {MentorSkillIn} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<MentorSkillOut, unknown, MentorSkillIn>}
  */
-export const addMentorSkillMeMentorSkillsPost = (options) => {
+export const addMentorSkillV1MeMentorSkillsPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/mentorship/me/mentor/skills', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/mentorship/v1/me/mentor/skills', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/me/mentor/skills/{skill_id} [DELETE]
+ * @description Hook for /mentorship/v1/me/mentor/skills/{skill_id} [DELETE]
  * @param {void} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<HTTPValidationError, unknown, void>}
  */
-export const deleteMentorSkillMeMentorSkills_SkillId_Delete = (options) => {
+export const deleteMentorSkillV1MeMentorSkills_SkillId_Delete = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('delete', '/mentorship/me/mentor/skills/{skill_id}', data),
+    mutationFn: (data) => apiClient('delete', '/mentorship/v1/me/mentor/skills/{skill_id}', data),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/me/mentee/goals [GET]
+ * @description Hook for /mentorship/v1/me/mentee/goals [GET]
  * @returns {import('@tanstack/react-query').QueryResult<GoalOut[]>}
  */
-export const myGoalsMeMenteeGoalsGet = (options) => {
-  const queryKey = ['my_goals_me_mentee_goals_get'];
+export const myGoalsV1MeMenteeGoalsGet = (options) => {
+  const queryKey = ['my_goals_v1_me_mentee_goals_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/mentorship/me/mentee/goals'),
+    queryFn: () => apiClient('get', '/mentorship/v1/me/mentee/goals'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/me/mentee/goals [POST]
+ * @description Hook for /mentorship/v1/me/mentee/goals [POST]
  * @param {GoalIn} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<GoalOut, unknown, GoalIn>}
  */
-export const addGoalMeMenteeGoalsPost = (options) => {
+export const addGoalV1MeMenteeGoalsPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/mentorship/me/mentee/goals', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/mentorship/v1/me/mentee/goals', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/me/mentee/goals/{goal_id} [DELETE]
+ * @description Hook for /mentorship/v1/me/mentee/goals/{goal_id} [DELETE]
  * @param {void} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<HTTPValidationError, unknown, void>}
  */
-export const deleteGoalMeMenteeGoals_GoalId_Delete = (options) => {
+export const deleteGoalV1MeMenteeGoals_GoalId_Delete = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('delete', '/mentorship/me/mentee/goals/{goal_id}', data),
+    mutationFn: (data) => apiClient('delete', '/mentorship/v1/me/mentee/goals/{goal_id}', data),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/mentors/search [GET]
- * @returns {import('@tanstack/react-query').QueryResult<ProfileOut[]>}
+ * @description Hook for /mentorship/v1/me/mentee/goals/{goal_id}/request-status [POST]
+ * @param {GoalStatusRequestIn} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<GoalStatusRequestOut, unknown, GoalStatusRequestIn>}
  */
-export const mentorSearchMentorsSearchGet = (options) => {
-  const queryKey = ['mentor_search_mentors_search_get'];
+export const requestGoalStatusChangeV1MeMenteeGoals_GoalId_RequestStatusPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/mentorship/v1/me/mentee/goals/{goal_id}/request-status', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /mentorship/v1/goals/status-requests/pending [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<GoalStatusRequestOut[]>}
+ */
+export const listPendingGoalStatusRequestsV1GoalsStatusRequestsPendingGet = (options) => {
+  const queryKey = ['list_pending_goal_status_requests_v1_goals_status_requests_pending_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/mentorship/mentors/search'),
+    queryFn: () => apiClient('get', '/mentorship/v1/goals/status-requests/pending'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/mentors/{mentor_id}/availability [GET]
+ * @description Hook for /mentorship/v1/goals/{goal_id}/status-requests/{request_id}/decision [POST]
+ * @param {GoalStatusDecisionIn} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<GoalStatusRequestOut, unknown, GoalStatusDecisionIn>}
+ */
+export const decideGoalStatusRequestV1Goals_GoalId_StatusRequests_RequestId_DecisionPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/mentorship/v1/goals/{goal_id}/status-requests/{request_id}/decision', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /mentorship/v1/mentors/search [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<object>}
+ */
+export const mentorSearchV1MentorsSearchGet = (options) => {
+  const queryKey = ['mentor_search_v1_mentors_search_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/mentorship/v1/mentors/search'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /mentorship/v1/mentors/{mentor_id}/availability [GET]
  * @returns {import('@tanstack/react-query').QueryResult<AvailabilityOut[]>}
  */
-export const listAvailabilityMentors_MentorId_AvailabilityGet = (options) => {
-  const queryKey = ['list_availability_mentors__mentor_id__availability_get'];
+export const listAvailabilityV1Mentors_MentorId_AvailabilityGet = (options) => {
+  const queryKey = ['list_availability_v1_mentors__mentor_id__availability_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/mentorship/mentors/{mentor_id}/availability'),
+    queryFn: () => apiClient('get', '/mentorship/v1/mentors/{mentor_id}/availability'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/me/mentor/availability [POST]
+ * @description Hook for /mentorship/v1/me/mentor/availability [POST]
  * @param {AvailabilityIn} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<AvailabilityOut, unknown, AvailabilityIn>}
  */
-export const createAvailabilityMeMentorAvailabilityPost = (options) => {
+export const createAvailabilityV1MeMentorAvailabilityPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/mentorship/me/mentor/availability', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/mentorship/v1/me/mentor/availability', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/sessions [GET]
+ * @description Hook for /mentorship/v1/sessions [GET]
  * @returns {import('@tanstack/react-query').QueryResult<SessionOut[]>}
  */
-export const listSessionsSessionsGet = (options) => {
-  const queryKey = ['list_sessions_sessions_get'];
+export const listSessionsV1SessionsGet = (options) => {
+  const queryKey = ['list_sessions_v1_sessions_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/mentorship/sessions'),
+    queryFn: () => apiClient('get', '/mentorship/v1/sessions'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/sessions [POST]
+ * @description Hook for /mentorship/v1/sessions [POST]
  * @param {SessionIn} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<SessionOut, unknown, SessionIn>}
  */
-export const bookSessionSessionsPost = (options) => {
+export const bookSessionV1SessionsPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/mentorship/sessions', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/mentorship/v1/sessions', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/sessions/{session_id} [PATCH]
- * @param {void} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, void>}
+ * @description Hook for /mentorship/v1/sessions/{session_id} [PATCH]
+ * @param {SessionStatusUpdateIn} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<SessionStatusUpdateOut, unknown, SessionStatusUpdateIn>}
  */
-export const updateSessionSessions_SessionId_Patch = (options) => {
+export const updateSessionV1Sessions_SessionId_Patch = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('patch', '/mentorship/sessions/{session_id}', data),
+    mutationFn: (data) => apiClient('patch', '/mentorship/v1/sessions/{session_id}', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/sessions/{session_id}/review [POST]
+ * @description Hook for /mentorship/v1/sessions/{session_id}/review [POST]
  * @param {ReviewIn} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<object, unknown, ReviewIn>}
  */
-export const createReviewSessions_SessionId_ReviewPost = (options) => {
+export const createReviewV1Sessions_SessionId_ReviewPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/mentorship/sessions/{session_id}/review', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/mentorship/v1/sessions/{session_id}/review', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /mentorship/v1/sessions/{session_id}/mentor-score [POST]
+ * @param {MentorScoreIn} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<MentorScoreOut, unknown, MentorScoreIn>}
+ */
+export const mentorScoreV1Sessions_SessionId_MentorScorePost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/mentorship/v1/sessions/{session_id}/mentor-score', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /mentorship/v1/mentors/{mentor_id}/ratings [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<RatingsSummaryOut>}
+ */
+export const mentorRatingsV1Mentors_MentorId_RatingsGet = (options) => {
+  const queryKey = ['mentor_ratings_v1_mentors__mentor_id__ratings_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/mentorship/v1/mentors/{mentor_id}/ratings'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /mentorship/v1/mentees/{mentee_id}/scores [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<RatingsSummaryOut>}
+ */
+export const menteeScoresV1Mentees_MenteeId_ScoresGet = (options) => {
+  const queryKey = ['mentee_scores_v1_mentees__mentee_id__scores_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/mentorship/v1/mentees/{mentee_id}/scores'),
     ...options,
   });
 };
@@ -1798,416 +2342,605 @@ export const mentorshipRoot_Get = (options) => {
 };
 
 /**
- * @description Hook for /mentorship/health [GET]
+ * @description Hook for /mentorship/v1/health [GET]
  * @returns {import('@tanstack/react-query').QueryResult<HealthModel>}
  */
-export const mentorshipHealthCheckHealthGet = (options) => {
-  const queryKey = ['mentorship_health_check_health_get'];
+export const mentorshipHealthCheckV1HealthGet = (options) => {
+  const queryKey = ['mentorship_health_check_v1_health_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/mentorship/health'),
+    queryFn: () => apiClient('get', '/mentorship/v1/health'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /mentorship/healthz [GET]
+ * @description Hook for /mentorship/v1/healthz [GET]
  * @returns {import('@tanstack/react-query').QueryResult<HealthZModel>}
  */
-export const mentorshipHealthzHealthzGet = (options) => {
-  const queryKey = ['mentorship_healthz_healthz_get'];
+export const mentorshipHealthzV1HealthzGet = (options) => {
+  const queryKey = ['mentorship_healthz_v1_healthz_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/mentorship/healthz'),
+    queryFn: () => apiClient('get', '/mentorship/v1/healthz'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /resume_builder/health [GET]
- * @returns {import('@tanstack/react-query').QueryResult<HealthModel>}
+ * @description Hook for /interview/v1/interview/suggest-roles [POST]
+ * @param {RoleSuggestionsRequest} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<RoleSuggestionsResponse, unknown, RoleSuggestionsRequest>}
  */
-export const resumebuilderHealthCheckHealthGet = (options) => {
-  const queryKey = ['resumebuilder_health_check_health_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/resume_builder/health'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /resume_builder/resume/parse [POST]
- * @param {Body_parse_resume_resume_parse_post} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<ResumeParseResponseSchema, unknown, Body_parse_resume_resume_parse_post>}
- */
-export const parseResumeResumeParsePost = (options) => {
+export const suggestRolesV1InterviewSuggestRolesPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/resume_builder/resume/parse', data, 'multipart/form-data'),
+    mutationFn: (data) => apiClient('post', '/interview/v1/interview/suggest-roles', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /resume_builder/resume/generate [POST]
- * @param {ResumeGenerateRequestSchema} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<ResumeGenerateResponseSchema, unknown, ResumeGenerateRequestSchema>}
- */
-export const generateResumeResumeGeneratePost = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/resume_builder/resume/generate', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /resume_builder/resume/export/pdf/ [POST]
- * @param {ExportRequestSchema} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, ExportRequestSchema>}
- */
-export const exportPdfResumeExportPdf_Post = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/resume_builder/resume/export/pdf/', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /resume_builder/resume/export/docx/ [POST]
- * @param {ExportRequestSchema} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, ExportRequestSchema>}
- */
-export const exportDocxResumeExportDocx_Post = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/resume_builder/resume/export/docx/', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /resume_builder/parse-resume [POST]
- * @param {Body_parse_resume_legacy_parse_resume_post} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, Body_parse_resume_legacy_parse_resume_post>}
- */
-export const parseResumeLegacyParseResumePost = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/resume_builder/parse-resume', data, 'multipart/form-data'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /resume_builder/generate-resume [POST]
- * @param {object} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, object>}
- */
-export const generateResumeLegacyGenerateResumePost = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/resume_builder/generate-resume', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /resume_builder/api/export/pdf/ [POST]
- * @param {object} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, object>}
- */
-export const exportPdfLegacyApiExportPdf_Post = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/resume_builder/api/export/pdf/', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /resume_builder/api/export/docx/ [POST]
- * @param {object} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, object>}
- */
-export const exportDocxLegacyApiExportDocx_Post = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/resume_builder/api/export/docx/', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /resume_builder/ [GET]
- * @returns {import('@tanstack/react-query').QueryResult<RootModel>}
- */
-export const root_Get = (options) => {
-  const queryKey = ['root__get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/resume_builder/'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /resume_builder/healthz [GET]
- * @returns {import('@tanstack/react-query').QueryResult<HealthZModel>}
- */
-export const resumebuilderHealthzHealthzGet = (options) => {
-  const queryKey = ['resumebuilder_healthz_healthz_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/resume_builder/healthz'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /interview/interview/start [POST]
+ * @description Hook for /interview/v1/interview/start [POST]
  * @param {InterviewStartRequest} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<InterviewStartResponse, unknown, InterviewStartRequest>}
  */
-export const startInterviewInterviewStartPost = (options) => {
+export const startInterviewV1InterviewStartPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/interview/interview/start', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/interview/v1/interview/start', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /interview/interview/{session_id}/history [GET]
+ * @description Hook for /interview/v1/interview/{session_id}/history [GET]
  * @returns {import('@tanstack/react-query').QueryResult<object>}
  */
-export const getConversationHistoryInterview_SessionId_HistoryGet = (options) => {
-  const queryKey = ['get_conversation_history_interview__session_id__history_get'];
+export const getConversationHistoryV1Interview_SessionId_HistoryGet = (options) => {
+  const queryKey = ['get_conversation_history_v1_interview__session_id__history_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/interview/interview/{session_id}/history'),
+    queryFn: () => apiClient('get', '/interview/v1/interview/{session_id}/history'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /interview/interview/reply [POST]
+ * @description Hook for /interview/v1/interview/reply [POST]
  * @param {InterviewReplyRequest} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<InterviewReplyResponse, unknown, InterviewReplyRequest>}
  */
-export const submitReplyInterviewReplyPost = (options) => {
+export const submitReplyV1InterviewReplyPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/interview/interview/reply', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/interview/v1/interview/reply', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /interview/interview/analysis/{session_id} [GET]
+ * @description Hook for /interview/v1/interview/analysis/{session_id} [GET]
  * @returns {import('@tanstack/react-query').QueryResult<object>}
  */
-export const getInterviewAnalysisInterviewAnalysis_SessionId_Get = (options) => {
-  const queryKey = ['get_interview_analysis_interview_analysis__session_id__get'];
+export const getInterviewAnalysisV1InterviewAnalysis_SessionId_Get = (options) => {
+  const queryKey = ['get_interview_analysis_v1_interview_analysis__session_id__get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/interview/interview/analysis/{session_id}'),
+    queryFn: () => apiClient('get', '/interview/v1/interview/analysis/{session_id}'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /interview/analyze/health [GET]
+ * @description Hook for /interview/v1/analyze/health [GET]
  * @returns {import('@tanstack/react-query').QueryResult<object>}
  */
-export const aiInterviewAnalysisHealthAnalyzeHealthGet = (options) => {
-  const queryKey = ['ai_interview_analysis_health_analyze_health_get'];
+export const analysisHealthV1AnalyzeHealthGet = (options) => {
+  const queryKey = ['analysis_health_v1_analyze_health_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/interview/analyze/health'),
+    queryFn: () => apiClient('get', '/interview/v1/analyze/health'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /interview/analyze/frame [POST]
+ * @description Hook for /interview/v1/analyze/frame [POST]
  * @param {FrameAnalysisRequest} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<FrameAnalysisResponse, unknown, FrameAnalysisRequest>}
  */
-export const analyzeFrameAnalyzeFramePost = (options) => {
+export const analyzeFrameV1AnalyzeFramePost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/interview/analyze/frame', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/interview/v1/analyze/frame', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /interview/analyze/session/{session_id}/metrics [GET]
+ * @description Hook for /interview/v1/analyze/session/{session_id}/metrics [GET]
  * @returns {import('@tanstack/react-query').QueryResult<object>}
  */
-export const getSessionMetricsAnalyzeSession_SessionId_MetricsGet = (options) => {
-  const queryKey = ['get_session_metrics_analyze_session__session_id__metrics_get'];
+export const getSessionMetricsV1AnalyzeSession_SessionId_MetricsGet = (options) => {
+  const queryKey = ['get_session_metrics_v1_analyze_session__session_id__metrics_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/interview/analyze/session/{session_id}/metrics'),
+    queryFn: () => apiClient('get', '/interview/v1/analyze/session/{session_id}/metrics'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /interview/analyze/session/{session_id}/trends [GET]
+ * @description Hook for /interview/v1/analyze/session/{session_id}/trends [GET]
  * @returns {import('@tanstack/react-query').QueryResult<object>}
  */
-export const getPerformanceTrendsAnalyzeSession_SessionId_TrendsGet = (options) => {
-  const queryKey = ['get_performance_trends_analyze_session__session_id__trends_get'];
+export const getPerformanceTrendsV1AnalyzeSession_SessionId_TrendsGet = (options) => {
+  const queryKey = ['get_performance_trends_v1_analyze_session__session_id__trends_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/interview/analyze/session/{session_id}/trends'),
+    queryFn: () => apiClient('get', '/interview/v1/analyze/session/{session_id}/trends'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /interview/user/{user_id}/profile [GET]
+ * @description Hook for /interview/v1/user/{user_id}/profile [GET]
  * @returns {import('@tanstack/react-query').QueryResult<object>}
  */
-export const getUserProfileUser_UserId_ProfileGet = (options) => {
-  const queryKey = ['get_user_profile_user__user_id__profile_get'];
+export const getUserProfileV1User_UserId_ProfileGet = (options) => {
+  const queryKey = ['get_user_profile_v1_user__user_id__profile_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/interview/user/{user_id}/profile'),
+    queryFn: () => apiClient('get', '/interview/v1/user/{user_id}/profile'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /interview/user/{user_id}/profile [POST]
+ * @description Hook for /interview/v1/user/{user_id}/profile [POST]
  * @param {object} data The request body based on the OpenAPI specification.
  * @returns {import('@tanstack/react-query').MutationResult<object, unknown, object>}
  */
-export const updateUserProfileUser_UserId_ProfilePost = (options) => {
+export const updateUserProfileV1User_UserId_ProfilePost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/interview/user/{user_id}/profile', data, 'application/json'),
+    mutationFn: (data) => apiClient('post', '/interview/v1/user/{user_id}/profile', data, 'application/json'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /interview/user/{user_id}/progress [GET]
+ * @description Hook for /interview/v1/user/{user_id}/progress [GET]
  * @returns {import('@tanstack/react-query').QueryResult<object>}
  */
-export const getUserProgressUser_UserId_ProgressGet = (options) => {
-  const queryKey = ['get_user_progress_user__user_id__progress_get'];
+export const getUserProgressV1User_UserId_ProgressGet = (options) => {
+  const queryKey = ['get_user_progress_v1_user__user_id__progress_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/interview/user/{user_id}/progress'),
+    queryFn: () => apiClient('get', '/interview/v1/user/{user_id}/progress'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /interview/user/{user_id}/recommendations [GET]
+ * @description Hook for /interview/v1/user/{user_id}/recommendations [GET]
  * @returns {import('@tanstack/react-query').QueryResult<object>}
  */
-export const getUserRecommendationsUser_UserId_RecommendationsGet = (options) => {
-  const queryKey = ['get_user_recommendations_user__user_id__recommendations_get'];
+export const getUserRecommendationsV1User_UserId_RecommendationsGet = (options) => {
+  const queryKey = ['get_user_recommendations_v1_user__user_id__recommendations_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/interview/user/{user_id}/recommendations'),
+    queryFn: () => apiClient('get', '/interview/v1/user/{user_id}/recommendations'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /interview/user/{user_id}/history [GET]
+ * @description Hook for /interview/v1/user/{user_id}/history [GET]
  * @returns {import('@tanstack/react-query').QueryResult<object>}
  */
-export const getUserHistoryUser_UserId_HistoryGet = (options) => {
-  const queryKey = ['get_user_history_user__user_id__history_get'];
+export const getUserHistoryV1User_UserId_HistoryGet = (options) => {
+  const queryKey = ['get_user_history_v1_user__user_id__history_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/interview/user/{user_id}/history'),
+    queryFn: () => apiClient('get', '/interview/v1/user/{user_id}/history'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /interview/audio/devices [GET]
+ * @description Hook for /interview/v1/audio/devices [GET]
  * @returns {import('@tanstack/react-query').QueryResult<object>}
  */
-export const getAudioDevicesAudioDevicesGet = (options) => {
-  const queryKey = ['get_audio_devices_audio_devices_get'];
+export const getAudioDevicesV1AudioDevicesGet = (options) => {
+  const queryKey = ['get_audio_devices_v1_audio_devices_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/interview/audio/devices'),
+    queryFn: () => apiClient('get', '/interview/v1/audio/devices'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /interview/audio/record [POST]
- * @param {Body_record_audio_audio_record_post} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, Body_record_audio_audio_record_post>}
+ * @description Hook for /interview/v1/audio/record [POST]
+ * @param {Body_record_audio_v1_audio_record_post} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<object, unknown, Body_record_audio_v1_audio_record_post>}
  */
-export const recordAudioAudioRecordPost = (options) => {
+export const recordAudioV1AudioRecordPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/interview/audio/record', data, 'multipart/form-data'),
+    mutationFn: (data) => apiClient('post', '/interview/v1/audio/record', data, 'multipart/form-data'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /interview/audio/transcribe [POST]
- * @param {Body_transcribe_audio_file_audio_transcribe_post} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, Body_transcribe_audio_file_audio_transcribe_post>}
+ * @description Hook for /interview/v1/audio/transcribe [POST]
+ * @param {Body_transcribe_audio_file_v1_audio_transcribe_post} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<object, unknown, Body_transcribe_audio_file_v1_audio_transcribe_post>}
  */
-export const transcribeAudioFileAudioTranscribePost = (options) => {
+export const transcribeAudioFileV1AudioTranscribePost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/interview/audio/transcribe', data, 'multipart/form-data'),
+    mutationFn: (data) => apiClient('post', '/interview/v1/audio/transcribe', data, 'multipart/form-data'),
     ...options,
   });
 };
 
 /**
- * @description Hook for /interview/templates/ [GET]
- * @returns {import('@tanstack/react-query').QueryResult<object>}
- */
-export const getTemplatesTemplates_Get = (options) => {
-  const queryKey = ['get_templates_templates__get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/interview/templates/'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /interview/templates/{template_id} [GET]
- * @returns {import('@tanstack/react-query').QueryResult<object>}
- */
-export const getTemplateTemplates_TemplateId_Get = (options) => {
-  const queryKey = ['get_template_templates__template_id__get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/interview/templates/{template_id}'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /interview/templates/recommendations [GET]
- * @returns {import('@tanstack/react-query').QueryResult<object>}
- */
-export const getTemplateRecommendationsTemplatesRecommendationsGet = (options) => {
-  const queryKey = ['get_template_recommendations_templates_recommendations_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/interview/templates/recommendations'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /interview/health [GET]
+ * @description Hook for /interview/v1/health [GET]
  * @returns {import('@tanstack/react-query').QueryResult<HealthResponse>}
  */
-export const aiInterviewHealthCheckHealthGet = (options) => {
-  const queryKey = ['ai_interview_health_check_health_get'];
+export const healthCheckV1HealthGet = (options) => {
+  const queryKey = ['health_check_v1_health_get'];
   return useQuery({
     queryKey,
-    queryFn: () => apiClient('get', '/interview/health'),
+    queryFn: () => apiClient('get', '/interview/v1/health'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/profiles/me [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<ProfileOut>}
+ */
+export const getMeV1ProfilesMeGet = (options) => {
+  const queryKey = ['get_me_v1_profiles_me_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/profile/v1/profiles/me'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/profiles [POST]
+ * @param {ProfileCreate} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<ProfileOut, unknown, ProfileCreate>}
+ */
+export const upsertProfileV1ProfilesPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/profile/v1/profiles', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/profiles [PATCH]
+ * @param {ProfileUpdate} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<ProfileOut, unknown, ProfileUpdate>}
+ */
+export const patchProfileV1ProfilesPatch = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('patch', '/profile/v1/profiles', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/skills [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<SkillOut[]>}
+ */
+export const profileListSkillsV1SkillsGet = (options) => {
+  const queryKey = ['profile_list_skills_v1_skills_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/profile/v1/skills'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/skills [PUT]
+ * @param {SkillIn[]} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<SkillOut[], unknown, SkillIn[]>}
+ */
+export const bulkUpsertSkillsV1SkillsPut = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('put', '/profile/v1/skills', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/assessments [POST]
+ * @param {AssessmentIn} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<AssessmentOut, unknown, AssessmentIn>}
+ */
+export const addAssessmentV1AssessmentsPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/profile/v1/assessments', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/assessments/latest [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<AssessmentOut[]>}
+ */
+export const latestV1AssessmentsLatestGet = (options) => {
+  const queryKey = ['latest_v1_assessments_latest_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/profile/v1/assessments/latest'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/assessments/top [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<AssessmentOut[]>}
+ */
+export const topV1AssessmentsTopGet = (options) => {
+  const queryKey = ['top_v1_assessments_top_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/profile/v1/assessments/top'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/idp/weights [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<IDPWeightsOut>}
+ */
+export const getWeightsV1IdpWeightsGet = (options) => {
+  const queryKey = ['get_weights_v1_idp_weights_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/profile/v1/idp/weights'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/idp/me [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<IDPOut>}
+ */
+export const getMyIdpV1IdpMeGet = (options) => {
+  const queryKey = ['get_my_idp_v1_idp_me_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/profile/v1/idp/me'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/idp/{auth_user_id} [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<IDPOut>}
+ */
+export const getIdpForUserV1Idp_AuthUserId_Get = (options) => {
+  const queryKey = ['get_idp_for_user_v1_idp__auth_user_id__get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/profile/v1/idp/{auth_user_id}'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/idp [PUT]
+ * @param {IDPPut} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<IDPOut, unknown, IDPPut>}
+ */
+export const putIdpV1IdpPut = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('put', '/profile/v1/idp', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/idp [PATCH]
+ * @param {IDPPatch} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<IDPOut, unknown, IDPPatch>}
+ */
+export const patchIdpV1IdpPatch = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('patch', '/profile/v1/idp', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/idp/events [POST]
+ * @param {IDPEvent} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<IDPOut, unknown, IDPEvent>}
+ */
+export const applyEventV1IdpEventsPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/profile/v1/idp/events', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/idp/benchmarks [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<IDPBenchmarkRow[]>}
+ */
+export const benchmarksV1IdpBenchmarksGet = (options) => {
+  const queryKey = ['benchmarks_v1_idp_benchmarks_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/profile/v1/idp/benchmarks'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/learning-paths [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<app__schemas__LearningPathOut__2[]>}
+ */
+export const listPathsV1LearningPathsGet = (options) => {
+  const queryKey = ['list_paths_v1_learning_paths_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/profile/v1/learning-paths'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/learning-paths [POST]
+ * @param {LearningPathCreate} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<app__schemas__LearningPathOut__2, unknown, LearningPathCreate>}
+ */
+export const createPathV1LearningPathsPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/profile/v1/learning-paths', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/learning-paths/{path_id} [PATCH]
+ * @param {LearningPathUpdate} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<app__schemas__LearningPathOut__2, unknown, LearningPathUpdate>}
+ */
+export const updatePathV1LearningPaths_PathId_Patch = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('patch', '/profile/v1/learning-paths/{path_id}', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/learning-paths/{path_id}/skills [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<LPSkillOut[]>}
+ */
+export const listSkillsV1LearningPaths_PathId_SkillsGet = (options) => {
+  const queryKey = ['list_skills_v1_learning_paths__path_id__skills_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/profile/v1/learning-paths/{path_id}/skills'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/learning-paths/{path_id}/skills [POST]
+ * @param {LPSkillIn} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<LPSkillOut, unknown, LPSkillIn>}
+ */
+export const addSkillV1LearningPaths_PathId_SkillsPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/profile/v1/learning-paths/{path_id}/skills', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/learning-paths/{path_id}/skills [PUT]
+ * @param {LPSkillIn[]} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<LPSkillOut[], unknown, LPSkillIn[]>}
+ */
+export const bulkUpsertSkillsV1LearningPaths_PathId_SkillsPut = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('put', '/profile/v1/learning-paths/{path_id}/skills', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/learning-paths/{path_id}/skills/{skill_id} [DELETE]
+ * @param {void} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<object, unknown, void>}
+ */
+export const removeSkillV1LearningPaths_PathId_Skills_SkillId_Delete = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('delete', '/profile/v1/learning-paths/{path_id}/skills/{skill_id}', data),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/learning-paths/{path_id}/skills/{skill_id} [PATCH]
+ * @param {LPSkillPatch} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<LPSkillOut, unknown, LPSkillPatch>}
+ */
+export const patchSkillV1LearningPaths_PathId_Skills_SkillId_Patch = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('patch', '/profile/v1/learning-paths/{path_id}/skills/{skill_id}', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/learning-paths/me/default/snapshot [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<LPSnapshotOut>}
+ */
+export const myDefaultSnapshotV1LearningPathsMeDefaultSnapshotGet = (options) => {
+  const queryKey = ['my_default_snapshot_v1_learning_paths_me_default_snapshot_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/profile/v1/learning-paths/me/default/snapshot'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/learning-paths/{path_id}/summary [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<object>}
+ */
+export const pathSummaryV1LearningPaths_PathId_SummaryGet = (options) => {
+  const queryKey = ['path_summary_v1_learning_paths__path_id__summary_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/profile/v1/learning-paths/{path_id}/summary'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/ [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<RootModel>}
+ */
+export const profileRoot_Get = (options) => {
+  const queryKey = ['profile_root__get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/profile/'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/health [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<HealthModel>}
+ */
+export const profileHealthCheckV1HealthGet = (options) => {
+  const queryKey = ['profile_health_check_v1_health_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/profile/v1/health'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /profile/v1/healthz [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<HealthZModel>}
+ */
+export const profileHealthzV1HealthzGet = (options) => {
+  const queryKey = ['profile_healthz_v1_healthz_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/profile/v1/healthz'),
     ...options,
   });
 };

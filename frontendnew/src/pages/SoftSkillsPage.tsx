@@ -41,11 +41,11 @@ interface QuizResults {
   api_score_used: boolean;
 }
 import { 
-  evaluateBehavioralResponseEvaluateBehavioralPost,
-  analyzePerformanceGapsAnalyzePerformanceGapsPost,
-  generateSkillBasedRecommendationsGenerateSkillBasedRecommendationsPost,
-  downloadReportDownloadReportPost,
-  generateInterviewPdfGenerateInterviewPdfPost
+  evaluateBehavioralResponseV1EvaluateBehavioralPost,
+  analyzePerformanceGapsV1AnalyzePerformanceGapsPost,
+  generateSkillBasedRecommendationsV1GenerateSkillBasedRecommendationsPost,
+  downloadReportV1DownloadReportPost,
+  generateInterviewPdfV1GenerateInterviewPdfPost
 } from "@/hooks/useApis";
 
 const SoftSkillsPage = () => {
@@ -62,7 +62,7 @@ const SoftSkillsPage = () => {
 
   // API hooks
   const generateBehavioralQuestions = useGenerateBehavioralQuestions();
-  const evaluateBehavioralResponse = evaluateBehavioralResponseEvaluateBehavioralPost();
+  const evaluateBehavioralResponse = evaluateBehavioralResponseV1EvaluateBehavioralPost();
   
   // New analysis results state
   const [performanceGaps, setPerformanceGaps] = useState<any>(null);
@@ -72,7 +72,7 @@ const SoftSkillsPage = () => {
   const [generatedPdf, setGeneratedPdf] = useState<any>(null);
 
   // Quiz analysis hooks
-  const { mutate: analyzePerformanceGaps } = analyzePerformanceGapsAnalyzePerformanceGapsPost({
+  const { mutate: analyzePerformanceGaps } = analyzePerformanceGapsV1AnalyzePerformanceGapsPost({
     onSuccess: (data) => {
       console.log('Performance gaps analysis:', data);
       setPerformanceGaps(data);
@@ -84,7 +84,7 @@ const SoftSkillsPage = () => {
     }
   });
 
-  const { mutate: generateSkillRecommendations } = generateSkillBasedRecommendationsGenerateSkillBasedRecommendationsPost({
+  const { mutate: generateSkillRecommendations } = generateSkillBasedRecommendationsV1GenerateSkillBasedRecommendationsPost({
     onSuccess: (data) => {
       console.log('Skill recommendations:', data);
       setSkillRecommendations(data);
@@ -96,7 +96,7 @@ const SoftSkillsPage = () => {
     }
   });
 
-  const { mutate: downloadReport } = downloadReportDownloadReportPost({
+  const { mutate: downloadReport } = downloadReportV1DownloadReportPost({
     onSuccess: (data) => {
       console.log('Report download initiated:', data);
       setDownloadedReport(data);
@@ -106,7 +106,7 @@ const SoftSkillsPage = () => {
     }
   });
 
-  const { mutate: generateInterviewPdf } = generateInterviewPdfGenerateInterviewPdfPost({
+  const { mutate: generateInterviewPdf } = generateInterviewPdfV1GenerateInterviewPdfPost({
     onSuccess: (data) => {
       console.log('Interview PDF generated:', data);
       setGeneratedPdf(data);

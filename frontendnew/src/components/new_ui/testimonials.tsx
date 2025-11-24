@@ -1,6 +1,5 @@
 import { TestimonialsColumn } from "@/components/new_ui/testimonials-columns-1";
 import { motion } from "motion/react";
-import { Badge } from "@/components/ui/badge";
 
 const testimonialsData = [
   {
@@ -80,13 +79,6 @@ export const Testimonials = () => {
               Testimonials
             </div>
           </div> */}
-          <Badge
-          variant="outline"
-          // className="w-fit mx-auto lg:mx-0 bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 text-white"
-          className="w-fit mx-auto lg:mx-0 bg-gradient-to-r from-slate-50 to-slate-200 text-black"
-          >
-            Success Stories
-          </Badge>
 
           <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-bold tracking-tighter mt-5 text-slate-800">
             SUCCESS STORIES

@@ -49,9 +49,10 @@ export const TextHoverEffect = ({
         <linearGradient
           id="textGradient"
           gradientUnits="userSpaceOnUse"
-          cx="50%"
-          cy="50%"
-          r="25%"
+          x1="0%"
+          y1="0%"
+          x2="100%"
+          y2="0%"
         >
           {hovered && (
             <>

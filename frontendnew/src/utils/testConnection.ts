@@ -1,7 +1,7 @@
 // Utility to test backend connection
+import { API_BASE_URL } from '../config/api';
 
 export const testBackendConnection = async () => {
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zettanix.in';
   
   try {
     console.log('🔍 Testing backend connection...');
@@ -43,7 +43,6 @@ export const testBackendConnection = async () => {
 // Function to check if backend is running
 export const isBackendRunning = async (): Promise<boolean> => {
   try {
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zettanix.in';
     const response = await fetch(`${API_BASE_URL}/health`, { 
       method: 'GET',
       signal: AbortSignal.timeout(5000) // 5 second timeout
