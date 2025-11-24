@@ -85,13 +85,13 @@ const Services = () => {
     {
       id: "quiz-center",
       title: "Quiz Center",
-      description: "Test your knowledge with our comprehensive quiz collection. From aptitude tests to coding challenges and scenario-based assessments.",
+      description: "Test your knowledge with our comprehensive quiz collection. From aptitude tests to coding challenges and behavioral assessments.",
       icon: Brain,
       features: [
         "Aptitude & logical reasoning",
         "Coding challenges & algorithms",
         "Multiple choice questions",
-        "Scenario-based assessments",
+        "Behavioral assessments",
         "Company-specific quizzes",
         "Real-time scoring & feedback"
       ],

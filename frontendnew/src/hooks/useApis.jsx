@@ -4,8 +4,7 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 
 // --- API Client Configuration ---
-// Import from centralized config
-import { API_BASE_URL } from '../config/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zettanix.in';
 
 /**
  * A generic API client that handles different content types.
@@ -41,13 +40,6 @@ async function apiClient(method, path, data = null, contentType = 'application/j
       };
       options.body = JSON.stringify(data);
     }
-  } else if (method.toUpperCase() === 'PATCH' || method.toUpperCase() === 'PUT') {
-    // Ensure PATCH/PUT requests always have a Content-Type header and body
-    options.headers = {
-      ...options.headers,
-      'Content-Type': contentType,
-    };
-    options.body = JSON.stringify({});
   }
 
   const response = await fetch(url, options);
@@ -56,23 +48,8 @@ async function apiClient(method, path, data = null, contentType = 'application/j
     const error = new Error(`API request failed with status ${response.status}`);
     try {
       error.response = await response.json();
-      console.error('API Error Response:', {
-        status: response.status,
-        statusText: response.statusText,
-        url: url,
-        body: error.response,
-        requestBody: options.body,
-        fullError: JSON.stringify(error.response, null, 2)
-      });
     } catch (e) {
       error.response = await response.text();
-      console.error('API Error Response (text):', {
-        status: response.status,
-        statusText: response.statusText,
-        url: url,
-        body: error.response,
-        requestBody: options.body
-      });
     }
     throw error;
   }
@@ -568,43 +545,6 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {object} notes
  * @property {integer} id
  * @property {integer} mentee_id
- * @property {string} status
- */
-/**
- * @typedef {object} GoalStatusDecisionIn
- * @property {boolean} approve
- * @property {object} comment
- */
-/**
- * @typedef {object} GoalStatusRequestIn
- * @property {string} requested_status
- * @property {object} notes
- */
-/**
- * @typedef {object} GoalStatusRequestOut
- * @property {integer} id
- * @property {integer} goal_id
- * @property {integer} mentee_id
- * @property {string} requested_status
- * @property {object} notes
- * @property {string} state
- * @property {object} decided_by
- * @property {object} decided_comment
- * @property {object} decided_at
- */
-/**
- * @typedef {object} MentorScoreIn
- * @property {integer} score
- * @property {object} notes
- */
-/**
- * @typedef {object} MentorScoreOut
- * @property {integer} id
- * @property {integer} session_id
- * @property {integer} mentor_id
- * @property {integer} mentee_id
- * @property {integer} score
- * @property {object} notes
  */
 /**
  * @typedef {object} MentorSkillIn
@@ -621,43 +561,28 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  */
 /**
  * @typedef {object} ProfileOut
- * @property {object} name
- * @property {object} email
- * @property {object} phone_number
- * @property {object} specialization
- * @property {object} graduation_year
- * @property {object} job_type_preference
- * @property {object} preferred_locations
- * @property {object} aspiring_companies
- * @property {object} career_goal
- * @property {integer} id
  * @property {integer} auth_user_id
- * @property {string} created_at
- * @property {string} updated_at
- * @property {SkillOut[]} skills
- * @property {AssessmentOut[]} latest_assessments
- * @property {AssessmentOut[]} top_assessments
- * @property {object} idp
+ * @property {object} full_name
+ * @property {object} headline
+ * @property {object} bio
+ * @property {object} timezone
+ * @property {object} languages
+ * @property {object} avatar_url
+ * @property {boolean} is_mentor
+ * @property {boolean} is_mentee
+ * @property {object} years_experience
  */
 /**
  * @typedef {object} ProfileUpdate
- * @property {object} name
- * @property {object} email
- * @property {object} phone_number
- * @property {object} specialization
- * @property {object} graduation_year
- * @property {object} job_type_preference
- * @property {object} preferred_locations
- * @property {object} aspiring_companies
- * @property {object} career_goal
- */
-/**
- * @typedef {object} RatingsSummaryOut
- * @property {integer} target_id
- * @property {string} kind
- * @property {number} average
- * @property {integer} count
- * @property {object} distribution
+ * @property {object} full_name
+ * @property {object} headline
+ * @property {object} bio
+ * @property {object} timezone
+ * @property {object} languages
+ * @property {object} avatar_url
+ * @property {object} is_mentor
+ * @property {object} is_mentee
+ * @property {object} years_experience
  */
 /**
  * @typedef {object} ReviewIn
@@ -682,26 +607,15 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {string} status
  */
 /**
- * @typedef {object} SessionStatusUpdateIn
- * @property {string} status
- */
-/**
- * @typedef {object} SessionStatusUpdateOut
- * @property {integer} id
- * @property {string} status
- */
-/**
  * @typedef {object} SkillBase
  * @property {string} name
  * @property {object} category
  */
 /**
  * @typedef {object} SkillOut
- * @property {string} skill
- * @property {object} score
- * @property {object} source
+ * @property {string} name
+ * @property {object} category
  * @property {integer} id
- * @property {object} last_updated
  */
 /**
  * @typedef {object} Body_parse_resume_legacy_parse_resume_post
@@ -870,162 +784,6 @@ async function apiClient(method, path, data = null, contentType = 'application/j
 /**
  * @typedef {object} InterviewType
  */
-/**
- * @typedef {object} AssessmentIn
- * @property {object} assessment_id
- * @property {object} assessment_type
- * @property {object} score
- * @property {object} taken_at
- * @property {object} summary
- */
-/**
- * @typedef {object} AssessmentOut
- * @property {object} assessment_id
- * @property {object} assessment_type
- * @property {object} score
- * @property {object} taken_at
- * @property {object} summary
- * @property {integer} id
- * @property {string} created_at
- */
-/**
- * @typedef {object} IDPBenchmarkRow
- * @property {string} group
- * @property {number} avg_overall
- * @property {integer} count
- */
-/**
- * @typedef {object} IDPEvent
- * @property {string} type
- * @property {number} value
- * @property {object} taken_at
- * @property {object} meta
- */
-/**
- * @typedef {object} IDPOut
- * @property {object} completion_percentage
- * @property {object} recommended_courses_completion
- * @property {object} mentor_rating
- * @property {object} collaboration_score
- * @property {object} projects_score
- * @property {integer} id
- * @property {integer} auth_user_id
- * @property {string} updated_at
- */
-/**
- * @typedef {object} IDPPatch
- * @property {object} completion_percentage
- * @property {object} recommended_courses_completion
- * @property {object} mentor_rating
- * @property {object} collaboration_score
- * @property {object} projects_score
- */
-/**
- * @typedef {object} IDPPut
- * @property {object} completion_percentage
- * @property {object} recommended_courses_completion
- * @property {object} mentor_rating
- * @property {object} collaboration_score
- * @property {object} projects_score
- */
-/**
- * @typedef {object} IDPSummaryOut
- * @property {object} completion_percentage
- * @property {object} recommended_courses_completion
- * @property {object} mentor_rating
- * @property {object} collaboration_score
- * @property {object} projects_score
- * @property {object} overall_score
- */
-/**
- * @typedef {object} IDPWeightsOut
- * @property {number} mentor
- * @property {number} projects
- * @property {number} collab
- * @property {number} courses
- */
-/**
- * @typedef {object} LPSkillIn
- * @property {string} skill
- * @property {object} progress_percent
- * @property {object} target_percent
- * @property {object} source
- * @property {object} started_at
- */
-/**
- * @typedef {object} LPSkillOut
- * @property {integer} id
- * @property {integer} path_id
- * @property {string} skill
- * @property {number} progress_percent
- * @property {number} target_percent
- * @property {object} source
- * @property {object} started_at
- * @property {string} updated_at
- */
-/**
- * @typedef {object} LPSkillPatch
- * @property {object} progress_percent
- * @property {object} target_percent
- * @property {object} source
- * @property {object} started_at
- */
-/**
- * @typedef {object} LPSnapshotOut
- * @property {LearningPathOut} path
- * @property {LPSkillOut[]} skills_in_progress
- */
-/**
- * @typedef {object} LearningPathCreate
- * @property {string} name
- * @property {object} description
- * @property {object} is_active
- */
-/**
- * @typedef {object} LearningPathOut
- * @property {integer} id
- * @property {integer} auth_user_id
- * @property {string} name
- * @property {object} description
- * @property {boolean} is_active
- * @property {string} created_at
- * @property {string} updated_at
- * @property {object} completion_percentage
- */
-/**
- * @typedef {object} LearningPathUpdate
- * @property {object} name
- * @property {object} description
- * @property {object} is_active
- */
-/**
- * @typedef {object} ProfileCreate
- * @property {object} name
- * @property {object} email
- * @property {object} phone_number
- * @property {object} specialization
- * @property {object} graduation_year
- * @property {object} job_type_preference
- * @property {object} preferred_locations
- * @property {object} aspiring_companies
- * @property {object} career_goal
- */
-/**
- * @typedef {object} SkillIn
- * @property {string} skill
- * @property {object} score
- * @property {object} source
- */
-/**
- * @typedef {object} Profile
- * @property {string} Education
- * @property {integer} Years_of_Experience
- * @property {integer} Project_Count
- * @property {string} Domain
- * @property {string[]} Skills
- * @property {string} Certifications
- * @property {string} Skill_Level
- */
 
 // --- Generated React Query Hooks ---
 
@@ -1139,8 +897,8 @@ export const resumeHealthCheckHealthGet = (options) => {
  * @description Hook for /resumes/healthz [GET]
  * @returns {import('@tanstack/react-query').QueryResult<HealthZModel>}
  */
-export const resumeHealthzHealthzGet = (options) => {
-  const queryKey = ['resume_healthz_healthz_get'];
+export const healthzHealthzGet = (options) => {
+  const queryKey = ['healthz_healthz_get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/resumes/healthz'),
@@ -1407,8 +1165,8 @@ export const refreshTokenRefreshPost = (options) => {
  * @description Hook for /auth/me [GET]
  * @returns {import('@tanstack/react-query').QueryResult<UserOut>}
  */
-export const authMeMeGet = (options) => {
-  const queryKey = ['auth_me_me_get'];
+export const meMeGet = (options) => {
+  const queryKey = ['me_me_get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/auth/me'),
@@ -1819,8 +1577,8 @@ export const newsHealthzHealthzGet = (options) => {
  * @description Hook for /mentorship/me [GET]
  * @returns {import('@tanstack/react-query').QueryResult<ProfileOut>}
  */
-export const mentorshipMeMeGet = (options) => {
-  const queryKey = ['mentorship_me_me_get'];
+export const mentorshipMeGet = (options) => {
+  const queryKey = ['mentorship_me_get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/mentorship/me'),
@@ -1940,45 +1698,8 @@ export const deleteGoalMeMenteeGoals_GoalId_Delete = (options) => {
 };
 
 /**
- * @description Hook for /mentorship/me/mentee/goals/{goal_id}/request-status [POST]
- * @param {GoalStatusRequestIn} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<GoalStatusRequestOut, unknown, GoalStatusRequestIn>}
- */
-export const requestGoalStatusChangeMeMenteeGoals_GoalId_RequestStatusPost = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/mentorship/me/mentee/goals/{goal_id}/request-status', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /mentorship/goals/status-requests/pending [GET]
- * @returns {import('@tanstack/react-query').QueryResult<GoalStatusRequestOut[]>}
- */
-export const listPendingGoalStatusRequestsGoalsStatusRequestsPendingGet = (options) => {
-  const queryKey = ['list_pending_goal_status_requests_goals_status_requests_pending_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/mentorship/goals/status-requests/pending'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /mentorship/goals/{goal_id}/status-requests/{request_id}/decision [POST]
- * @param {GoalStatusDecisionIn} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<GoalStatusRequestOut, unknown, GoalStatusDecisionIn>}
- */
-export const decideGoalStatusRequestGoals_GoalId_StatusRequests_RequestId_DecisionPost = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/mentorship/goals/{goal_id}/status-requests/{request_id}/decision', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
  * @description Hook for /mentorship/mentors/search [GET]
- * @returns {import('@tanstack/react-query').QueryResult<object>}
+ * @returns {import('@tanstack/react-query').QueryResult<ProfileOut[]>}
  */
 export const mentorSearchMentorsSearchGet = (options) => {
   const queryKey = ['mentor_search_mentors_search_get'];
@@ -2041,26 +1762,12 @@ export const bookSessionSessionsPost = (options) => {
 
 /**
  * @description Hook for /mentorship/sessions/{session_id} [PATCH]
- * @param {SessionStatusUpdateIn} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<SessionStatusUpdateOut, unknown, SessionStatusUpdateIn>}
+ * @param {void} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<object, unknown, void>}
  */
 export const updateSessionSessions_SessionId_Patch = (options) => {
   return useMutation({
-    mutationFn: ({ session_id, ...data }) => {
-      // Ensure session_id is a number
-      const sessionId = typeof session_id === 'string' ? parseInt(session_id, 10) : session_id;
-      console.log('Update session request:', { session_id: sessionId, body: data, session_id_type: typeof sessionId });
-      return apiClient('patch', `/mentorship/sessions/${sessionId}`, data, 'application/json').catch(error => {
-        console.error('Update session error details:', {
-          session_id: sessionId,
-          requestBody: data,
-          errorResponse: error.response,
-          errorDetail: error.response?.detail,
-          fullErrorBody: error.response
-        });
-        throw error;
-      });
-    },
+    mutationFn: (data) => apiClient('patch', '/mentorship/sessions/{session_id}', data),
     ...options,
   });
 };
@@ -2073,44 +1780,6 @@ export const updateSessionSessions_SessionId_Patch = (options) => {
 export const createReviewSessions_SessionId_ReviewPost = (options) => {
   return useMutation({
     mutationFn: (data) => apiClient('post', '/mentorship/sessions/{session_id}/review', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /mentorship/sessions/{session_id}/mentor-score [POST]
- * @param {MentorScoreIn} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<MentorScoreOut, unknown, MentorScoreIn>}
- */
-export const mentorScoreSessions_SessionId_MentorScorePost = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/mentorship/sessions/{session_id}/mentor-score', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /mentorship/mentors/{mentor_id}/ratings [GET]
- * @returns {import('@tanstack/react-query').QueryResult<RatingsSummaryOut>}
- */
-export const mentorRatingsMentors_MentorId_RatingsGet = (options) => {
-  const queryKey = ['mentor_ratings_mentors__mentor_id__ratings_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/mentorship/mentors/{mentor_id}/ratings'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /mentorship/mentees/{mentee_id}/scores [GET]
- * @returns {import('@tanstack/react-query').QueryResult<RatingsSummaryOut>}
- */
-export const menteeScoresMentees_MenteeId_ScoresGet = (options) => {
-  const queryKey = ['mentee_scores_mentees__mentee_id__scores_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/mentorship/mentees/{mentee_id}/scores'),
     ...options,
   });
 };
@@ -2132,8 +1801,8 @@ export const mentorshipRoot_Get = (options) => {
  * @description Hook for /mentorship/health [GET]
  * @returns {import('@tanstack/react-query').QueryResult<HealthModel>}
  */
-export const healthCheckHealthGet = (options) => {
-  const queryKey = ['health_check_health_get'];
+export const mentorshipHealthCheckHealthGet = (options) => {
+  const queryKey = ['mentorship_health_check_health_get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/mentorship/health'),
@@ -2267,8 +1936,8 @@ export const exportDocxLegacyApiExportDocx_Post = (options) => {
  * @description Hook for /resume_builder/ [GET]
  * @returns {import('@tanstack/react-query').QueryResult<RootModel>}
  */
-export const resumebuilderRoot_Get = (options) => {
-  const queryKey = ['resumebuilder_root__get'];
+export const root_Get = (options) => {
+  const queryKey = ['root__get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/resume_builder/'),
@@ -2539,444 +2208,6 @@ export const aiInterviewHealthCheckHealthGet = (options) => {
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/interview/health'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /microservice_job/recommend [POST]
- * @param {object} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, object>}
- */
-export const recommendJobsRecommendPost = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/microservice_job/recommend', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /microservice_job/search [POST]
- * @param {object} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, object>}
- */
-export const searchJobsSearchPost = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/microservice_job/search', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /microservice_job/populate [POST]
- * @param {object} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, object>}
- */
-export const populateDatabasePopulatePost = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/microservice_job/populate', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /microservice_job/ [GET]
- * @returns {import('@tanstack/react-query').QueryResult<object>}
- */
-export const jobListingsroot_Get = (options) => {
-  const queryKey = ['job_listingsroot__get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/microservice_job/'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /microservice_job/health [GET]
- * @returns {import('@tanstack/react-query').QueryResult<object>}
- */
-export const jobListingsHealthCheckHealthGet = (options) => {
-  const queryKey = ['job_listings_health_check_health_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/microservice_job/health'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/profiles/me [GET]
- * @returns {import('@tanstack/react-query').QueryResult<ProfileOut>}
- */
-export const getMeProfilesMeGet = (options) => {
-  const queryKey = ['get_me_profiles_me_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/profile/profiles/me'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/profiles [POST]
- * @param {ProfileCreate} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<ProfileOut, unknown, ProfileCreate>}
- */
-export const upsertProfileProfilesPost = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/profile/profiles', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/profiles [PATCH]
- * @param {ProfileUpdate} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<ProfileOut, unknown, ProfileUpdate>}
- */
-export const patchProfileProfilesPatch = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('patch', '/profile/profiles', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/skills [GET]
- * @returns {import('@tanstack/react-query').QueryResult<SkillOut[]>}
- */
-export const profileListSkillsSkillsGet = (options) => {
-  const queryKey = ['profile_list_skills_skills_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/profile/skills'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/skills [PUT]
- * @param {SkillIn[]} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<SkillOut[], unknown, SkillIn[]>}
- */
-export const bulkUpsertSkillsSkillsPut = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('put', '/profile/skills', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/assessments [POST]
- * @param {AssessmentIn} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<AssessmentOut, unknown, AssessmentIn>}
- */
-export const addAssessmentAssessmentsPost = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/profile/assessments', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/assessments/latest [GET]
- * @returns {import('@tanstack/react-query').QueryResult<AssessmentOut[]>}
- */
-export const latestAssessmentsLatestGet = (options) => {
-  const queryKey = ['latest_assessments_latest_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/profile/assessments/latest'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/assessments/top [GET]
- * @returns {import('@tanstack/react-query').QueryResult<AssessmentOut[]>}
- */
-export const topAssessmentsTopGet = (options) => {
-  const queryKey = ['top_assessments_top_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/profile/assessments/top'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/idp/weights [GET]
- * @returns {import('@tanstack/react-query').QueryResult<IDPWeightsOut>}
- */
-export const getWeightsIdpWeightsGet = (options) => {
-  const queryKey = ['get_weights_idp_weights_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/profile/idp/weights'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/idp/me [GET]
- * @returns {import('@tanstack/react-query').QueryResult<IDPOut>}
- */
-export const getMyIdpIdpMeGet = (options) => {
-  const queryKey = ['get_my_idp_idp_me_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/profile/idp/me'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/idp/{auth_user_id} [GET]
- * @returns {import('@tanstack/react-query').QueryResult<IDPOut>}
- */
-export const getIdpForUserIdp_AuthUserId_Get = (options) => {
-  const queryKey = ['get_idp_for_user_idp__auth_user_id__get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/profile/idp/{auth_user_id}'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/idp [PUT]
- * @param {IDPPut} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<IDPOut, unknown, IDPPut>}
- */
-export const putIdpIdpPut = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('put', '/profile/idp', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/idp [PATCH]
- * @param {IDPPatch} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<IDPOut, unknown, IDPPatch>}
- */
-export const patchIdpIdpPatch = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('patch', '/profile/idp', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/idp/events [POST]
- * @param {IDPEvent} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<IDPOut, unknown, IDPEvent>}
- */
-export const applyEventIdpEventsPost = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/profile/idp/events', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/idp/benchmarks [GET]
- * @returns {import('@tanstack/react-query').QueryResult<IDPBenchmarkRow[]>}
- */
-export const benchmarksIdpBenchmarksGet = (options) => {
-  const queryKey = ['benchmarks_idp_benchmarks_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/profile/idp/benchmarks'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/learning-paths [GET]
- * @returns {import('@tanstack/react-query').QueryResult<LearningPathOut[]>}
- */
-export const listPathsLearningPathsGet = (options) => {
-  const queryKey = ['list_paths_learning_paths_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/profile/learning-paths'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/learning-paths [POST]
- * @param {LearningPathCreate} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<LearningPathOut, unknown, LearningPathCreate>}
- */
-export const createPathLearningPathsPost = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/profile/learning-paths', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/learning-paths/{path_id} [PATCH]
- * @param {LearningPathUpdate} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<LearningPathOut, unknown, LearningPathUpdate>}
- */
-export const updatePathLearningPaths_PathId_Patch = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('patch', '/profile/learning-paths/{path_id}', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/learning-paths/{path_id}/skills [GET]
- * @returns {import('@tanstack/react-query').QueryResult<LPSkillOut[]>}
- */
-export const listSkillsLearningPaths_PathId_SkillsGet = (options) => {
-  const queryKey = ['list_skills_learning_paths__path_id__skills_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/profile/learning-paths/{path_id}/skills'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/learning-paths/{path_id}/skills [POST]
- * @param {LPSkillIn} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<LPSkillOut, unknown, LPSkillIn>}
- */
-export const addSkillLearningPaths_PathId_SkillsPost = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/profile/learning-paths/{path_id}/skills', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/learning-paths/{path_id}/skills [PUT]
- * @param {LPSkillIn[]} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<LPSkillOut[], unknown, LPSkillIn[]>}
- */
-export const bulkUpsertSkillsLearningPaths_PathId_SkillsPut = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('put', '/profile/learning-paths/{path_id}/skills', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/learning-paths/{path_id}/skills/{skill_id} [DELETE]
- * @param {void} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, void>}
- */
-export const removeSkillLearningPaths_PathId_Skills_SkillId_Delete = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('delete', '/profile/learning-paths/{path_id}/skills/{skill_id}', data),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/learning-paths/{path_id}/skills/{skill_id} [PATCH]
- * @param {LPSkillPatch} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<LPSkillOut, unknown, LPSkillPatch>}
- */
-export const patchSkillLearningPaths_PathId_Skills_SkillId_Patch = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('patch', '/profile/learning-paths/{path_id}/skills/{skill_id}', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/learning-paths/me/default/snapshot [GET]
- * @returns {import('@tanstack/react-query').QueryResult<LPSnapshotOut>}
- */
-export const myDefaultSnapshotLearningPathsMeDefaultSnapshotGet = (options) => {
-  const queryKey = ['my_default_snapshot_learning_paths_me_default_snapshot_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/profile/learning-paths/me/default/snapshot'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/learning-paths/{path_id}/summary [GET]
- * @returns {import('@tanstack/react-query').QueryResult<object>}
- */
-export const pathSummaryLearningPaths_PathId_SummaryGet = (options) => {
-  const queryKey = ['path_summary_learning_paths__path_id__summary_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/profile/learning-paths/{path_id}/summary'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/ [GET]
- * @returns {import('@tanstack/react-query').QueryResult<RootModel>}
- */
-export const profileRoot_Get = (options) => {
-  const queryKey = ['profile_root__get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/profile/'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/health [GET]
- * @returns {import('@tanstack/react-query').QueryResult<HealthModel>}
- */
-export const profileHealthCheckHealthGet = (options) => {
-  const queryKey = ['profile_health_check_health_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/profile/health'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /profile/healthz [GET]
- * @returns {import('@tanstack/react-query').QueryResult<HealthZModel>}
- */
-export const profileHealthzHealthzGet = (options) => {
-  const queryKey = ['profile_healthz_healthz_get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/profile/healthz'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /coding/coding/generate_question/ [POST]
- * @param {Profile} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<object, unknown, Profile>}
- */
-export const generateQuestionCodingGenerateQuestion_Post = (options) => {
-  return useMutation({
-    mutationFn: (data) => apiClient('post', '/coding/coding/generate_question/', data, 'application/json'),
-    ...options,
-  });
-};
-
-/**
- * @description Hook for /coding/ [GET]
- * @returns {import('@tanstack/react-query').QueryResult<object>}
- */
-export const codingHealthCheck_Get = (options) => {
-  const queryKey = ['coding_health_check__get'];
-  return useQuery({
-    queryKey,
-    queryFn: () => apiClient('get', '/coding/'),
     ...options,
   });
 };

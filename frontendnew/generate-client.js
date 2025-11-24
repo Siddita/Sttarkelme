@@ -63,8 +63,7 @@ function generateClientCode(spec) {
 import { useQuery, useMutation } from '@tanstack/react-query';
 
 // --- API Client Configuration ---
-// Import from centralized config
-import { API_BASE_URL } from '../config/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zettanix.in';
 
 /**
  * A generic API client that handles different content types.

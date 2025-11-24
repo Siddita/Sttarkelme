@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   generateQuestionsGenerateAptitudePost,
   evaluateAnswersEvaluateAptitudePost,
-  generateQuestionCodingGenerateQuestion_Post,
-  codingHealthCheck_Get,
+  generateRandomCodingChallengeGenerateChallengePost,
+  evaluateCodeSolutionEvaluateCodePost,
   generateMcqQuestionsGenerateMcqPost,
   generateBehavioralQuestionsGenerateBehavioralQuestionsPost,
   evaluateBehavioralResponseEvaluateBehavioralPost,
@@ -230,25 +230,27 @@ export const useEvaluateAptitudeAnswers = () => {
   });
 };
 
-// Hook for generating coding questions
-export const useGenerateCodingQuestion = () => {
-  return generateQuestionCodingGenerateQuestion_Post({
+// Hook for generating coding challenges
+export const useGenerateCodingChallenge = () => {
+  return generateRandomCodingChallengeGenerateChallengePost({
     onSuccess: (data) => {
-      console.log('Coding question generated:', data);
+      console.log('Coding challenge generated:', data);
     },
     onError: (error) => {
-      console.error('Failed to generate coding question:', error);
+      console.error('Failed to generate coding challenge:', error);
     },
   });
 };
 
-// Hook for coding service health check
-export const useCodingHealthCheck = () => {
-  return codingHealthCheck_Get({
-    staleTime: 30 * 1000, // 30 seconds
-    gcTime: 60 * 1000, // 1 minute
-    retry: 3,
-    retryDelay: 1000,
+// Hook for evaluating code solutions
+export const useEvaluateCodeSolution = () => {
+  return evaluateCodeSolutionEvaluateCodePost({
+    onSuccess: (data) => {
+      console.log('Code solution evaluated:', data);
+    },
+    onError: (error) => {
+      console.error('Failed to evaluate code solution:', error);
+    },
   });
 };
 

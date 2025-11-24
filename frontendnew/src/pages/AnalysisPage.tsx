@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -34,10 +33,8 @@ import {
   History,
   Settings
 } from "lucide-react";
-import { generateInterviewPdfGenerateInterviewPdfPost, downloadReportDownloadReportPost } from "@/hooks/useApis";
-import { API_BASE_URL } from "@/config/api";
 
-const API_BASE = API_BASE_URL;
+const API_BASE = "https://zettanix.in";
 
 async function apiClient(
   method: "GET" | "POST",
@@ -199,7 +196,6 @@ interface AnalysisPageProps {
 }
 
 export default function AnalysisPage({ sessionId, onBack }: AnalysisPageProps) {
-  const navigate = useNavigate();
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
@@ -208,222 +204,9 @@ export default function AnalysisPage({ sessionId, onBack }: AnalysisPageProps) {
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Tabs removed; show analysis only
+  const [activeTab, setActiveTab] = useState<'analysis' | 'profile' | 'progress' | 'recommendations' | 'history'>('analysis');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editingProfile, setEditingProfile] = useState<UserProfile | null>(null);
-  const { mutate: generateInterviewPdf } = generateInterviewPdfGenerateInterviewPdfPost({
-    onSuccess: (data: any) => {
-      try {
-        console.log('generateInterviewPdf success payload:', data);
-
-        const resolvePdfHref = (payload: any): string | null => {
-          // Case 1: known keys
-          if (payload?.pdf_url && typeof payload.pdf_url === 'string') return payload.pdf_url;
-          if (payload?.pdf && typeof payload.pdf === 'string') return `data:application/pdf;base64,${payload.pdf}`;
-          if (payload?.pdf_data && typeof payload.pdf_data === 'string') {
-            const blob = new Blob([payload.pdf_data], { type: 'application/pdf' });
-            return window.URL.createObjectURL(blob);
-          }
-          // Case 2: plain string response
-          if (typeof payload === 'string') {
-            const str = payload.trim();
-            if (/^https?:\/\//i.test(str)) return str; // URL
-            // heuristic: base64-like
-            if (/^[A-Za-z0-9+/=\s]+$/.test(str) && str.length > 100) {
-              return `data:application/pdf;base64,${str}`;
-            }
-          }
-          // Case 3: search for any string property containing 'pdf'
-          if (payload && typeof payload === 'object') {
-            for (const [k, v] of Object.entries(payload)) {
-              if (typeof v === 'string' && /pdf/i.test(k)) {
-                if (/^https?:\/\//i.test(v)) return v;
-                if (v.length > 100 && /^[A-Za-z0-9+/=\s]+$/.test(v)) {
-                  return `data:application/pdf;base64,${v}`;
-                }
-              }
-            }
-          }
-          return null;
-        };
-
-        const href = resolvePdfHref(data);
-        if (!href) {
-          console.warn('Server PDF not found; generating on client from analysisData.');
-          if (analysisData) {
-            const markdown = buildAnalysisMarkdown(analysisData);
-            void downloadReportAsPdf(markdown, `interview-analysis-${sessionId}.pdf`);
-          } else {
-            alert('Could not generate PDF: unexpected response from server.');
-          }
-        } else {
-          const link = document.createElement('a');
-          link.href = href;
-          link.download = `interview-analysis-${sessionId}.pdf`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          if (link.href.startsWith('blob:')) {
-            window.URL.revokeObjectURL(link.href);
-          }
-        }
-      } catch (e) {
-        console.error('Error handling PDF download:', e);
-        alert('Failed to download PDF.');
-      }
-    },
-    onError: (error: any) => {
-      console.error('Failed to generate interview PDF:', error);
-      alert('Failed to generate PDF. Please try again.');
-    }
-  });
-
-  // Minimal helpers to build a PDF from markdown (reused approach from PersonalizedAssessment)
-  const loadJsPdf = (): Promise<any> => {
-    return new Promise((resolve, reject) => {
-      if ((window as any).jspdf?.jsPDF) {
-        resolve((window as any).jspdf.jsPDF);
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
-      script.async = true;
-      script.onload = () => {
-        if ((window as any).jspdf?.jsPDF) {
-          resolve((window as any).jspdf.jsPDF);
-        } else {
-          reject(new Error('jsPDF failed to load'));
-        }
-      };
-      script.onerror = () => reject(new Error('Failed to load jsPDF'));
-      document.body.appendChild(script);
-    });
-  };
-
-  const markdownToPlainText = (markdown: string): string => {
-    return markdown
-      .replace(/\r\n/g, '\n')
-      .replace(/\t/g, '  ')
-      .replace(/^###\s+/gim, '')
-      .replace(/^##\s+/gim, '')
-      .replace(/^#\s+/gim, '')
-      .replace(/\*\*(.*?)\*\*/g, '$1')
-      .replace(/\*(.*?)\*/g, '$1')
-      .replace(/^\*\s+/gim, '• ')
-      .replace(/^\d+\.\s+/gim, match => match)
-      .replace(/\n{3,}/g, '\n\n');
-  };
-
-  const downloadReportAsPdf = async (markdown: string, filename: string) => {
-    try {
-      const jsPDFCtor = await loadJsPdf();
-      const doc = new jsPDFCtor({ unit: 'pt', format: 'a4' });
-      const margin = 40;
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const usableWidth = pageWidth - margin * 2;
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(18);
-      doc.text('Interview Analysis Report', margin, 60);
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.text(`Generated on ${new Date().toLocaleDateString()}`, margin, 80);
-
-      const bodyText = markdownToPlainText(markdown);
-      doc.setFontSize(12);
-      const lines = doc.splitTextToSize(bodyText, usableWidth);
-
-      let cursorY = 110;
-      const lineHeight = 16;
-      const pageHeight = doc.internal.pageSize.getHeight();
-
-      lines.forEach((line: string) => {
-        if (cursorY + lineHeight > pageHeight - margin) {
-          doc.addPage();
-          cursorY = margin;
-        }
-        doc.text(line, margin, cursorY);
-        cursorY += lineHeight;
-      });
-
-      doc.save(filename);
-    } catch (err) {
-      console.error('Client-side PDF generation failed:', err);
-      alert('Could not generate PDF on client.');
-    }
-  };
-
-  const buildAnalysisMarkdown = (data: AnalysisData): string => {
-    const lines: string[] = [];
-    lines.push(`# Interview Analysis Report`);
-    lines.push("");
-    lines.push(`- Session ID: ${data.session_id}`);
-    lines.push(`- Date: ${new Date(data.created_at || Date.now()).toLocaleString()}`);
-    lines.push(`- Overall Score: ${(data.overall_score || 0).toFixed(1)}/10`);
-    lines.push(`- Confidence: ${(((data.confidence_score || 0) * 100).toFixed(1))}%`);
-    lines.push(`- Duration: ${data.interview_duration || 0}s`);
-    lines.push(`- Questions Answered: ${data.questions_answered || 0}`);
-    lines.push("");
-    lines.push(`## Detailed Metrics`);
-    const m: any = (data as any).detailed_metrics || {};
-    const metric = (k: string) => (m?.[k]?.score ?? 0).toFixed(1);
-    lines.push(`- Eye Contact: ${metric('eye_contact')}/10`);
-    lines.push(`- Posture: ${metric('posture')}/10`);
-    lines.push(`- Facial Expression: ${metric('facial_expression')}/10`);
-    lines.push(`- Hand Gestures: ${metric('hand_gestures')}/10`);
-    lines.push(`- Head Movement: ${metric('head_movement')}/10`);
-    lines.push("");
-    if ((data.strengths || []).length) {
-      lines.push(`## Strengths`);
-      (data.strengths || []).forEach((s, i) => lines.push(`${i + 1}. ${s}`));
-      lines.push("");
-    }
-    if ((data.areas_for_improvement || []).length) {
-      lines.push(`## Areas for Improvement`);
-      (data.areas_for_improvement || []).forEach((s, i) => lines.push(`${i + 1}. ${s}`));
-      lines.push("");
-    }
-    if ((data.recommendations || []).length) {
-      lines.push(`## Recommendations`);
-      (data.recommendations || []).forEach((s, i) => lines.push(`${i + 1}. ${s}`));
-      lines.push("");
-    }
-    if ((data.transcript || []).length) {
-      lines.push(`## Transcript`);
-      (data.transcript || []).forEach((t, i) => {
-        lines.push(`### Q${i + 1}`);
-        lines.push(`Question: ${t.question || ''}`);
-        lines.push(`Answer: ${t.answer || ''}`);
-        lines.push("");
-      });
-    }
-    return lines.join('\n');
-  };
-
-  const { mutate: downloadReportMutation } = downloadReportDownloadReportPost({
-    onSuccess: async (data: any) => {
-      try {
-        console.log('download-report success payload:', data);
-        let reportStr: string | null = null;
-        if (typeof data?.report === 'string') reportStr = data.report;
-        else if (data?.report && typeof data.report === 'object') reportStr = JSON.stringify(data.report, null, 2);
-        else if (typeof data === 'string') reportStr = data;
-        if (!reportStr && analysisData) {
-          console.warn('No report string in response; generating from analysisData.');
-          reportStr = buildAnalysisMarkdown(analysisData);
-        }
-        if (reportStr) {
-          await downloadReportAsPdf(reportStr, `interview-analysis-${sessionId}.pdf`);
-        }
-      } catch (e) {
-        console.error('Error generating PDF from report:', e);
-      }
-    },
-    onError: (error: any) => {
-      console.error('Failed to generate report markdown:', error);
-    }
-  });
   
   // Get user ID from auth context or localStorage
   const getUserId = () => {
@@ -711,48 +494,34 @@ export default function AnalysisPage({ sessionId, onBack }: AnalysisPageProps) {
   };
 
   const downloadReport = () => {
-    console.log('Download Report clicked');
-    if (!analysisData) {
-      console.warn('No analysisData available to build report');
-      return;
-    }
-
-    const detailedScores: Record<string, number> = {
-      overall: analysisData.overall_score || 0,
-      confidence: (analysisData.confidence_score || 0) * 10,
-      eye_contact: analysisData.detailed_metrics?.eye_contact?.score || 0,
-      posture: analysisData.detailed_metrics?.posture?.score || 0,
-      facial_expression: analysisData.detailed_metrics?.facial_expression?.score || 0,
-      hand_gestures: analysisData.detailed_metrics?.hand_gestures?.score || 0,
-      head_movement: analysisData.detailed_metrics?.head_movement?.score || 0,
-    };
-
-    // First try server-side PDF generation
-    generateInterviewPdf({
-      final_score: analysisData.overall_score || 0,
-      scores: detailedScores,
-      section_times: {
-        duration_seconds: analysisData.interview_duration || 0,
-        average_response_time: analysisData.average_response_time || 0,
+    if (!analysisData) return;
+    
+    const report = {
+      "Interview Analysis Report": {
+        "Session ID": analysisData.session_id || "N/A",
+        "Overall Score": `${analysisData.overall_score || 0}/10`,
+        "Confidence Score": `${((analysisData.confidence_score || 0) * 100).toFixed(1)}%`,
+        "Interview Duration": formatDuration(analysisData.interview_duration || 0),
+        "Questions Answered": analysisData.questions_answered || 0,
+        "Average Response Time": `${(analysisData.average_response_time || 0).toFixed(1)}s`,
+        "Date": new Date(analysisData.created_at || Date.now()).toLocaleString(),
       },
-      recommendations: { items: analysisData.recommendations || [] },
-      skills: analysisData.position || 'Interview',
-      test_type: analysisData.interview_type || 'ai_mock_interview',
-    } as any);
-
-    // Then also request a markdown report and render as PDF on client as a robust fallback
-    const analysisSummary = {
-      overall_score: analysisData.overall_score,
-      confidence_score: analysisData.confidence_score,
-      detailed_metrics: analysisData.detailed_metrics,
-      strengths: analysisData.strengths,
-      areas_for_improvement: analysisData.areas_for_improvement,
-      recommendations: analysisData.recommendations,
-      transcript: analysisData.transcript,
-      session_id: analysisData.session_id,
-      created_at: analysisData.created_at,
+      "Detailed Metrics": analysisData.detailed_metrics || {},
+      "Strengths": analysisData.strengths || [],
+      "Areas for Improvement": analysisData.areas_for_improvement || [],
+      "Recommendations": analysisData.recommendations || [],
+      "Transcript": analysisData.transcript || []
     };
-    downloadReportMutation({ jobs: [], analysis: analysisSummary } as any);
+
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `interview-analysis-${sessionId}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   if (loading) {
@@ -813,25 +582,12 @@ export default function AnalysisPage({ sessionId, onBack }: AnalysisPageProps) {
                 <Button 
                   onClick={() => {
                     fetchAnalysis();
+                    fetchUserData();
                   }} 
                   variant="outline" 
                   className="border-primary/30 text-[#2D3253] hover:bg-primary/10 hover:border-primary/50 transition-all duration-200"
                 >
                   <RotateCcw className="w-4 h-4 mr-2" /> Refresh
-                </Button>
-                <Button 
-                  onClick={() => navigate('/interview-page')}
-                  variant="outline"
-                  className="border-primary/30 text-[#2D3253] hover:bg-primary/10 hover:border-primary/50 transition-all duration-200"
-                >
-                  Retake AI Interview
-                </Button>
-                <Button 
-                  onClick={() => navigate('/ai-assessment')}
-                  variant="outline"
-                  className="border-primary/30 text-[#2D3253] hover:bg-primary/10 hover:border-primary/50 transition-all duration-200"
-                >
-                  Go to AI Assessment
                 </Button>
                 <Button 
                   onClick={downloadReport} 
@@ -843,7 +599,32 @@ export default function AnalysisPage({ sessionId, onBack }: AnalysisPageProps) {
             </div>
             
 
-        {analysisData && (
+        {/* Tab Navigation */}
+        <div className="flex space-x-1 bg-white/80 backdrop-blur-sm p-1 rounded-lg shadow-lg border border-primary/20 mb-6">
+          {[
+            { id: 'analysis', label: 'Interview Analysis', icon: BarChart3 },
+            { id: 'profile', label: 'Profile', icon: UserCircle },
+            { id: 'progress', label: 'Progress', icon: TrendingUp },
+            { id: 'recommendations', label: 'Recommendations', icon: Lightbulb },
+            { id: 'history', label: 'History', icon: History }
+          ].map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id as any)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === id
+                  ? 'bg-white text-primary shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'analysis' && analysisData && (
           <>
             {/* Overall Score Card */}
             <Card className="p-6">
@@ -1099,7 +880,362 @@ export default function AnalysisPage({ sessionId, onBack }: AnalysisPageProps) {
           </>
         )}
 
-        
+        {/* Profile Tab */}
+        {activeTab === 'profile' && (
+          <div className="space-y-6">
+            <Card className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-semibold flex items-center gap-2">
+                  <UserCircle className="w-6 h-6 text-blue-500" /> User Profile
+                </h2>
+                {!isEditingProfile ? (
+                  <Button onClick={() => setIsEditingProfile(true)} variant="outline">
+                    <Edit3 className="w-4 h-4 mr-2" /> Edit Profile
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button onClick={updateUserProfile} size="sm">
+                      <Save className="w-4 h-4 mr-2" /> Save
+                    </Button>
+                    <Button onClick={() => setIsEditingProfile(false)} variant="outline" size="sm">
+                      <X className="w-4 h-4 mr-2" /> Cancel
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {userProfile && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="name">Name</Label>
+                      {isEditingProfile ? (
+                        <Input
+                          id="name"
+                          value={editingProfile?.name || ''}
+                          onChange={(e) => setEditingProfile(prev => prev ? { ...prev, name: e.target.value } : null)}
+                        />
+                      ) : (
+                        <p className="text-lg font-medium">{userProfile.name}</p>
+                      )}
+                    </div>
+                    <div>
+                      <Label htmlFor="email">Email</Label>
+                      {isEditingProfile ? (
+                        <Input
+                          id="email"
+                          type="email"
+                          value={editingProfile?.email || ''}
+                          onChange={(e) => setEditingProfile(prev => prev ? { ...prev, email: e.target.value } : null)}
+                        />
+                      ) : (
+                        <p className="text-lg">{userProfile.email}</p>
+                      )}
+                    </div>
+                    <div>
+                      <Label htmlFor="experience">Experience Level</Label>
+                      {isEditingProfile ? (
+                        <select
+                          id="experience"
+                          value={editingProfile?.experience_level || ''}
+                          onChange={(e) => setEditingProfile(prev => prev ? { ...prev, experience_level: e.target.value } : null)}
+                          className="w-full p-2 border rounded-md"
+                        >
+                          <option value="beginner">Beginner</option>
+                          <option value="intermediate">Intermediate</option>
+                          <option value="advanced">Advanced</option>
+                          <option value="expert">Expert</option>
+                        </select>
+                      ) : (
+                        <p className="text-lg capitalize">{userProfile.experience_level}</p>
+                      )}
+                    </div>
+                    <div>
+                      <Label htmlFor="industry">Industry</Label>
+                      {isEditingProfile ? (
+                        <Input
+                          id="industry"
+                          value={editingProfile?.industry || ''}
+                          onChange={(e) => setEditingProfile(prev => prev ? { ...prev, industry: e.target.value } : null)}
+                        />
+                      ) : (
+                        <p className="text-lg">{userProfile.industry}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="language">Preferred Language</Label>
+                      {isEditingProfile ? (
+                        <select
+                          id="language"
+                          value={editingProfile?.preferred_language || ''}
+                          onChange={(e) => setEditingProfile(prev => prev ? { ...prev, preferred_language: e.target.value } : null)}
+                          className="w-full p-2 border rounded-md"
+                        >
+                          <option value="English">English</option>
+                          <option value="Hindi">Hindi</option>
+                          <option value="Spanish">Spanish</option>
+                          <option value="French">French</option>
+                        </select>
+                      ) : (
+                        <p className="text-lg">{userProfile.preferred_language}</p>
+                      )}
+                    </div>
+                    <div>
+                      <Label>Skills</Label>
+                      {isEditingProfile ? (
+                        <Textarea
+                          value={editingProfile?.skills?.join(', ') || ''}
+                          onChange={(e) => setEditingProfile(prev => prev ? { ...prev, skills: e.target.value.split(',').map(s => s.trim()) } : null)}
+                          placeholder="Enter skills separated by commas"
+                        />
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {(userProfile.skills || []).map((skill, index) => (
+                            <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <Label>Goals</Label>
+                      {isEditingProfile ? (
+                        <Textarea
+                          value={editingProfile?.goals?.join(', ') || ''}
+                          onChange={(e) => setEditingProfile(prev => prev ? { ...prev, goals: e.target.value.split(',').map(s => s.trim()) } : null)}
+                          placeholder="Enter goals separated by commas"
+                        />
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {(userProfile.goals || []).map((goal, index) => (
+                            <span key={index} className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-sm">
+                              {goal}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </Card>
+          </div>
+        )}
+
+        {/* Progress Tab */}
+        {activeTab === 'progress' && (
+          <div className="space-y-6">
+            <Card className="p-6">
+              <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2">
+                <TrendingUp className="w-6 h-6 text-green-500" /> Your Progress
+              </h2>
+              {userProgress && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-blue-600">{userProgress.total_interviews || 0}</div>
+                    <div className="text-sm text-gray-600">Total Interviews</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-green-600">{(userProgress.average_score || 0).toFixed(1)}</div>
+                    <div className="text-sm text-gray-600">Average Score</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-purple-600">{userProgress.streak_days || 0}</div>
+                    <div className="text-sm text-gray-600">Day Streak</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-orange-600">{Math.floor((userProgress.total_practice_time || 0) / 60)}</div>
+                    <div className="text-sm text-gray-600">Hours Practiced</div>
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {userProgress && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="p-6">
+                  <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <Award className="w-5 h-5 text-yellow-500" /> Skills Improved
+                  </h3>
+                  <div className="space-y-2">
+                    {(userProgress.skills_improved || []).map((skill, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        <span>{skill}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+
+                <Card className="p-6">
+                  <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <Target className="w-5 h-5 text-red-500" /> Areas Needing Work
+                  </h3>
+                  <div className="space-y-2">
+                    {(userProgress.areas_needing_work || []).map((area, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-orange-500" />
+                        <span>{area}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Recommendations Tab */}
+        {activeTab === 'recommendations' && (
+          <div className="space-y-6">
+            {userRecommendations && (
+              <>
+                <Card className="p-6">
+                  <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2">
+                    <Lightbulb className="w-6 h-6 text-yellow-500" /> Personalized Recommendations
+                  </h2>
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div>
+                      <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                        <BookOpen className="w-5 h-5 text-blue-500" /> Skill Recommendations
+                      </h3>
+                      <div className="space-y-2">
+                        {(userRecommendations.skill_recommendations || []).map((rec, index) => (
+                          <div key={index} className="p-3 bg-blue-50 rounded-lg">
+                            <p className="text-sm">{rec}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                        <Target className="w-5 h-5 text-green-500" /> Practice Recommendations
+                      </h3>
+                      <div className="space-y-2">
+                        {(userRecommendations.practice_recommendations || []).map((rec, index) => (
+                          <div key={index} className="p-3 bg-green-50 rounded-lg">
+                            <p className="text-sm">{rec}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                        <Brain className="w-5 h-5 text-purple-500" /> Interview Tips
+                      </h3>
+                      <div className="space-y-2">
+                        {(userRecommendations.interview_tips || []).map((tip, index) => (
+                          <div key={index} className="p-3 bg-purple-50 rounded-lg">
+                            <p className="text-sm">{tip}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                        <BookOpen className="w-5 h-5 text-orange-500" /> Resource Suggestions
+                      </h3>
+                      <div className="space-y-2">
+                        {(userRecommendations.resource_suggestions || []).map((resource, index) => (
+                          <div key={index} className="p-3 bg-orange-50 rounded-lg">
+                            <p className="text-sm">{resource}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6">
+                    <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-indigo-500" /> Next Steps
+                    </h3>
+                    <div className="space-y-2">
+                      {(userRecommendations.next_steps || []).map((step, index) => (
+                        <div key={index} className="flex items-start gap-3 p-3 bg-indigo-50 rounded-lg">
+                          <div className="w-6 h-6 bg-indigo-500 text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">
+                            {index + 1}
+                          </div>
+                          <span className="text-sm">{step}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </Card>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* History Tab */}
+        {activeTab === 'history' && (
+          <div className="space-y-6">
+            <Card className="p-6">
+              <h2 className="text-2xl font-semibold mb-6 flex items-center gap-2">
+                <History className="w-6 h-6 text-gray-500" /> Interview History
+              </h2>
+              {userHistory && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div className="text-center p-4 bg-blue-50 rounded-lg">
+                      <div className="text-2xl font-bold text-blue-600">{userHistory.total_interviews || 0}</div>
+                      <div className="text-sm text-gray-600">Total Interviews</div>
+                    </div>
+                    <div className="text-center p-4 bg-green-50 rounded-lg">
+                      <div className="text-2xl font-bold text-green-600">{(userHistory.average_score || 0).toFixed(1)}</div>
+                      <div className="text-sm text-gray-600">Average Score</div>
+                    </div>
+                    <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                      <div className="text-2xl font-bold text-yellow-600">{userHistory.best_score || 0}</div>
+                      <div className="text-sm text-gray-600">Best Score</div>
+                    </div>
+                    <div className="text-center p-4 bg-purple-50 rounded-lg">
+                      <div className="text-2xl font-bold text-purple-600">{(userHistory.improvement_rate || 0).toFixed(1)}%</div>
+                      <div className="text-sm text-gray-600">Improvement Rate</div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold">Recent Interviews</h3>
+                    <div className="space-y-3">
+                      {(userHistory.interviews || []).map((interview, index) => (
+                        <div key={index} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="font-medium">{interview.type}</span>
+                                <span className="text-sm text-gray-500">•</span>
+                                <span className="text-sm text-gray-500">{new Date(interview.date).toLocaleDateString()}</span>
+                              </div>
+                              <p className="text-sm text-gray-600 mb-2">{interview.feedback}</p>
+                              <div className="flex items-center gap-4 text-sm text-gray-500">
+                                <span>Duration: {Math.floor(interview.duration / 60)}m {interview.duration % 60}s</span>
+                                <span>Score: {interview.score}/10</span>
+                              </div>
+                            </div>
+                            <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                              interview.score >= 8 ? 'bg-green-100 text-green-800' :
+                              interview.score >= 6 ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {interview.score}/10
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </Card>
+          </div>
+        )}
           </div>
         </div>
       </div>

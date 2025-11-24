@@ -138,7 +138,7 @@ const { data: healthzInfo } = jobsHealthzHealthzGet();
 
 ## URL Structure
 
-All endpoints use the base URL: `https://talentcueai.com` (configurable via `VITE_API_BASE_URL` environment variable)
+All endpoints use the base URL: `https://zettanix.in`
 
 ### Company URLs:
 - `GET /jobs/api/v1/companies` - List companies
@@ -183,6 +183,6 @@ This ensures proper URL construction for all endpoints.
 These endpoints are now **permanently fixed** and will:
 - ✅ Work correctly with `npm run dev`
 - ✅ Work correctly with `npm run build`
-- ✅ Use `talentcueai.com` instead of localhost (or set `VITE_API_BASE_URL` environment variable)
+- ✅ Use `zettanix.in` instead of localhost
 - ✅ Handle parameter substitution properly
 - ✅ Not revert to broken state on regeneration

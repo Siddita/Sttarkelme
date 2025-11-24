@@ -18,7 +18,7 @@ import {
   loginLoginPost,
   registerRegisterPost,
   refreshTokenRefreshPost,
-  authMeMeGet,
+  meMeGet,
   introspectIntrospectPost,
   authRoot_Get,
   authHealthCheckHealthGet
@@ -105,7 +105,7 @@ const Login = () => {
   });
 
   // Health check and user info hooks - completely disabled to prevent 401 errors
-  const { data: userInfo, refetch: refetchUserInfo } = authMeMeGet({
+  const { data: userInfo, refetch: refetchUserInfo } = meMeGet({
     enabled: false,
     retry: false,
     refetchOnWindowFocus: false,

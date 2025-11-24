@@ -31,8 +31,8 @@ import Footer from "@/components/Footer";
 import { 
   useGenerateBehavioralQuestions, 
   useEvaluateBehavioralAnswers,
-  useGenerateCodingQuestion,
-  useCodingHealthCheck,
+  useGenerateCodingChallenge,
+  useEvaluateCodeSolution,
   useQuizSession,
   useQuizProgress,
   type AptitudeQuestion,
@@ -44,8 +44,7 @@ import { TextHoverEffect } from "@/components/ui/text-hover-effect";
 import { 
   uploadResumeApiV1ResumesPost,
   getAnalysisApiV1Resumes_ResumeId_AnalysisGet,
-  recommendJobsRecommendPost,
-  searchJobsSearchPost,
+  listJobsApiV1JobsGet,
   generateQuestionsGenerateAptitudePost,
   evaluateAnswersEvaluateAptitudePost,
   generateWritingPromptGenerateWritingPromptPost,
@@ -96,8 +95,10 @@ const AIAssessment = () => {
 
   // API hooks
   const uploadResume = uploadResumeApiV1ResumesPost();
-  const { mutate: recommendJobs } = recommendJobsRecommendPost();
-  const { mutate: searchJobs } = searchJobsSearchPost();
+  const { data: jobsData, isLoading: jobsLoading, error: jobsError, refetch: refetchJobs } = listJobsApiV1JobsGet({
+    enabled: true, // Ensure jobs API is always called
+    retry: 3
+  });
   const { data: analysisData, isLoading: analysisLoading, error: analysisError, refetch: refetchAnalysis } = getAnalysisApiV1Resumes_ResumeId_AnalysisGet({
     resume_id: resumeId,
     enabled: !!resumeId,
@@ -109,15 +110,17 @@ const AIAssessment = () => {
   // Quiz hooks
   const generateBehavioralQuestions = useGenerateBehavioralQuestions();
   const evaluateBehavioralAnswers = useEvaluateBehavioralAnswers();
-  const generateCodingQuestion = useGenerateCodingQuestion();
-  // Note: Coding service doesn't have an evaluation endpoint, only health check available
-  const codingHealthCheck = useCodingHealthCheck();
+  const generateCodingChallenge = useGenerateCodingChallenge();
+  const evaluateCodeSolution = useEvaluateCodeSolution();
   const quizSession = useQuizSession();
   const quizProgress = useQuizProgress();
 
   // Debug API calls
   useEffect(() => {
     console.log('🔍 API Status:', {
+      jobsLoading,
+      jobsData: jobsData?.length || 0,
+      jobsError,
       analysisLoading,
       analysisData: !!analysisData,
       analysisError,
@@ -142,7 +145,7 @@ const AIAssessment = () => {
         allFields: Object.keys(analysisData)
       });
     }
-  }, [analysisLoading, analysisData, analysisError, resumeId]);
+  }, [jobsLoading, jobsData, jobsError, analysisLoading, analysisData, analysisError, resumeId]);
 
   // Scroll to top when component mounts or tab changes
   useEffect(() => {
@@ -212,26 +215,6 @@ const AIAssessment = () => {
         
         setExtractedSkills(skills);
         console.log('🎯 Skills extracted successfully:', skills);
-        
-        // Fetch job recommendations based on extracted skills
-        if (skills && skills.length > 0) {
-          console.log('🎯 Fetching job recommendations for skills:', skills);
-          recommendJobs(
-            { skills: Array.isArray(skills) ? skills : [skills] },
-            {
-              onSuccess: (data: any) => {
-                console.log('✅ Job recommendations received:', data);
-                const jobs = Array.isArray(data) ? data : data?.jobs || [];
-                setRecommendedJobs(jobs);
-                // Store in localStorage for other pages
-                localStorage.setItem('recommendedJobs', JSON.stringify(jobs));
-              },
-              onError: (error: any) => {
-                console.error('❌ Error fetching job recommendations:', error);
-              }
-            }
-          );
-        }
         
         // Generate job description from analysis
         if (analysisData.summary) {
@@ -316,9 +299,14 @@ const AIAssessment = () => {
     return Math.min(baseMatch + bonus, 100);
   };
 
-  // Function to get resume-based jobs (jobs API removed)
+  // Function to get resume-based jobs (same as JobListing)
   const getResumeBasedJobs = () => {
-    return []; // Jobs API removed, only using resume-based skill extraction
+    if (!analysisData?.skills) return jobsData || [];
+    
+    return (jobsData || []).map(job => ({
+      ...job,
+      matchScore: getJobMatchScore(job)
+    })).sort((a, b) => b.matchScore - a.matchScore);
   };
 
   // Assessment functions
@@ -382,9 +370,10 @@ const AIAssessment = () => {
       
       const challenge = (quizQuestions[0] as any)?.challenge || "Coding challenge";
       
-      // Note: Coding service doesn't have an evaluation endpoint
-      // Evaluation functionality removed
-      const response = { message: 'Evaluation not available in coding service' };
+      const response = await evaluateCodeSolution.mutateAsync({
+        challenge: challenge,
+        solution: codeSolution
+      });
 
       // Create a mock results object since the API returns evaluation text
       const mockResults = {
@@ -411,11 +400,23 @@ const AIAssessment = () => {
     setQuizStartTime(null);
     setCodeSolution('');
     setCodingResults(null);
-    // Navigate back to the assessment tab within the same page
-    setActiveTab('assessment');
   };
 
-  // Jobs API removed - no longer fetching job recommendations
+  // Handle jobs data for recommendations
+  useEffect(() => {
+    if (jobsData) {
+      console.log('💼 Jobs data available:', jobsData.length, 'jobs');
+      console.log('💼 Analysis data status:', analysisData?.status);
+      console.log('💼 Analysis skills:', analysisData?.skills);
+      
+      // Use the same logic as JobListing
+      const resumeBasedJobs = getResumeBasedJobs();
+      console.log('💼 Resume-based jobs:', resumeBasedJobs.length);
+      
+      // Take top 5 jobs
+      setRecommendedJobs(resumeBasedJobs.slice(0, 5));
+    }
+  }, [jobsData, analysisData]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -578,11 +579,11 @@ const AIAssessment = () => {
   const assessmentTypes = [
     {
       id: 1,
-      title: "Aptitude Test",
+      title: "Technical Skills",
       description: "Programming, algorithms, system design, and technical problem-solving",
       duration: "45-60 min",
       questions: "15-20",
-      focus: "Aptitude Test",
+      focus: "Technical Competency",
       sectors: ['tech', 'finance', 'ecommerce', 'consulting'],
       difficulty: ['intermediate', 'advanced'],
       comingSoon: false
@@ -896,9 +897,9 @@ const AIAssessment = () => {
                           <Button 
                             className="w-full" 
                             onClick={startCodingAssessment}
-                            disabled={generateCodingQuestion.isPending}
+                            disabled={generateCodingChallenge.isPending}
                           >
-                            {generateCodingQuestion.isPending ? (
+                            {generateCodingChallenge.isPending ? (
                               <>
                                 <Clock className="ml-2 h-4 w-4 animate-spin" />
                                 Starting...
@@ -1365,6 +1366,60 @@ const AIAssessment = () => {
                         Start Your Personalized Assessment
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
+                      <p className="text-sm text-muted-foreground mb-6">
+                        Get a guided, step-by-step assessment experience
+                      </p>
+                      
+                      <div className="border-t border-gray-200 pt-6">
+                        <p className="text-sm font-medium text-gray-600 mb-4">Or upload directly for quick analysis:</p>
+                      </div>
+                    </div>
+
+                    <div className="border-2 border-dashed border-primary/20 rounded-lg p-8 text-center hover:border-primary/40 transition-colors">
+                      {uploadError && (
+                        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                          {uploadError}
+                        </div>
+                      )}
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="relative">
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx"
+                            onChange={handleFileUpload}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            id="resume-assessment-upload"
+                            disabled={isUploading}
+                          />
+                          <label
+                            htmlFor="resume-assessment-upload"
+                            className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors cursor-pointer"
+                          >
+                            {isUploading ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                Analyzing Resume...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-4 h-4" />
+                                Upload Resume
+                              </>
+                            )}
+                          </label>
+                        </div>
+                        
+                        {uploadedFile && !isUploading && (
+                          <div className="flex items-center gap-2 text-green-600">
+                            <CheckCircle className="w-5 h-5" />
+                            <span className="text-sm font-medium">{uploadedFile.name}</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="mt-4 text-xs text-muted-foreground">
+                        Supported formats: PDF, DOC, DOCX (Max 10MB)
+                      </div>
                     </div>
                     
                   </Card>

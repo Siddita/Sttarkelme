@@ -1,12 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Navbar } from "@/components/ui/navbar-menu";
-import { useAuth } from "@/contexts/AuthContext";
 import {
   Brain,
   Camera,
@@ -39,16 +37,11 @@ import {
   Users,
   Star,
   ChevronDown,
-  ChevronUp,
-  Upload,
-  File,
-  X
+  ChevronUp
 } from "lucide-react";
 import AnalysisPage from "./AnalysisPage";
-import { parseResumeResumeParsePost } from "@/hooks/useApis";
-import { API_BASE_URL, getApiUrl } from "@/config/api";
 
-const API_BASE = API_BASE_URL;
+const API_BASE = "https://zettanix.in";
 
 async function apiClient(
   method: "GET" | "POST",
@@ -118,38 +111,8 @@ type InterviewTemplate = {
   description: string;
 };
 
-type RoleSuggestion = {
-  role: string;
-  description: string;
-  match_reason: string;
-};
-
-type ResumeData = {
-  template?: string;
-  personal_info?: {
-    name?: string;
-    email?: string;
-    phone?: string;
-    location?: string;
-    linkedin?: string;
-    github?: string;
-    website?: string;
-  };
-  summary?: string;
-  skills?: string[];
-  experience?: any[];
-  education?: any[];
-  projects?: any[];
-  certifications?: any[];
-  hobbies?: string[];
-};
-
 
 export default function InterviewPage() {
-  const navigate = useNavigate();
-  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
-
-  // All refs and state declarations (hooks must be called before any conditional returns)
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -162,27 +125,12 @@ export default function InterviewPage() {
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
   const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
-  const [lastInputMethod, setLastInputMethod] = useState<"text" | "audio">("text");
   
   // Template states
   const [templates, setTemplates] = useState<InterviewTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<InterviewTemplate | null>(null);
   const [showTemplates, setShowTemplates] = useState(true);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
-
-  // Role suggestion states
-  const [roleSuggestions, setRoleSuggestions] = useState<RoleSuggestion[]>([]);
-  const [selectedRole, setSelectedRole] = useState<string | null>(null);
-  const [isLoadingRoles, setIsLoadingRoles] = useState(false);
-  const [showRoleSelection, setShowRoleSelection] = useState(false);
-  const [resumeData, setResumeData] = useState<ResumeData | null>(null);
-
-  // Resume parsing states
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [parsingProgress, setParsingProgress] = useState(0);
-  const [isParsingComplete, setIsParsingComplete] = useState(false);
-  const [isResumeFromStorage, setIsResumeFromStorage] = useState(false);
-  const [isInterviewFromStorage, setIsInterviewFromStorage] = useState(false);
 
 
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -208,207 +156,62 @@ export default function InterviewPage() {
   const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesis | null>(null);
   const [currentUtterance, setCurrentUtterance] = useState<SpeechSynthesisUtterance | null>(null);
 
-  // Analytics collapse state
-  const [isAnalyticsExpanded, setIsAnalyticsExpanded] = useState(true);
-
   const frameIntervalRef = useRef<number | null>(null);
   const timerIntervalRef = useRef<number | null>(null);
-  const interviewSectionRef = useRef<HTMLDivElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Resume parsing mutation
-  const { mutate: parseResume, isLoading: isParseLoading } = parseResumeResumeParsePost({
-    onSuccess: (data) => {
-      if (data.success && data.data) {
-        // Simulate progress for better UX
-        setParsingProgress(50);
-        setTimeout(() => {
-          setParsingProgress(75);
-          setTimeout(() => {
-            const parsedData = data.data;
-            setResumeData(parsedData);
-            setIsResumeFromStorage(false); // Mark as newly uploaded, not from storage
-            
-            // Store parsed resume data in localStorage
-            try {
-              localStorage.setItem('parsedResumeData', JSON.stringify(parsedData));
-              console.log('Resume data stored in localStorage');
-            } catch (error) {
-              console.error('Failed to store resume data in localStorage:', error);
-            }
-            
-            setParsingProgress(100);
-            setIsParsingComplete(true);
-            
-            // Automatically fetch role suggestions after parsing
-            fetchRoleSuggestions(parsedData);
-            
-            // Reset success state after 3 seconds
-            setTimeout(() => {
-              setIsParsingComplete(false);
-              setParsingProgress(0);
-            }, 3000);
-          }, 500);
-        }, 500);
-      } else {
-        console.error("Failed to parse resume:", data);
-        setParsingProgress(0);
-        alert("Failed to parse resume. Please try again.");
-      }
-    },
-    onError: (error: any) => {
-      console.error("Error parsing resume:", error);
-      setParsingProgress(0);
-      alert("Error parsing resume: " + (error.message || "Unknown error"));
-    }
-  });
+  // Format time helper
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
-  // Fetch role suggestions based on resume data
-  const fetchRoleSuggestions = async (resume: ResumeData) => {
-    setIsLoadingRoles(true);
+  // Fetch interview templates
+  const fetchTemplates = async () => {
+    setIsLoadingTemplates(true);
     try {
-      const payload = { resume_data: resume };
-      const res = await apiClient("POST", "/interview/suggest-roles", payload, true);
-      if (res.success && res.roles) {
-        setRoleSuggestions(res.roles);
-        setShowRoleSelection(true);
-      } else {
-        console.error("Failed to fetch role suggestions:", res);
+      // Try without authentication first
+      const resp = await fetch(`${API_BASE}/interview/templates`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      
+      if (!resp.ok) {
+        throw new Error(`API ${resp.status} — ${await resp.text()}`);
       }
-    } catch (err: any) {
-      // Endpoint might not exist, fail gracefully
-      console.warn("Role suggestions endpoint not available:", err?.message || "Not Found");
-      // Don't block interview start if role suggestions fail
-      // Users can still proceed without role suggestions
+      
+      const res = await resp.json();
+      setTemplates(res.templates || []);
+      console.log("Templates loaded:", res.templates);
+    } catch (err) {
+      console.error("Failed to fetch templates:", err);
+      // Fallback to apiClient with auth if the above fails
+      try {
+        const res = await apiClient("GET", "/interview/templates", undefined, true);
+        setTemplates(res.templates || []);
+        console.log("Templates loaded with auth:", res.templates);
+      } catch (authErr) {
+        console.error("Failed to fetch templates with auth:", authErr);
+      }
     } finally {
-      setIsLoadingRoles(false);
+      setIsLoadingTemplates(false);
     }
   };
 
-  // Handle file upload
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      // Validate file type
-      const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-      if (!validTypes.includes(file.type)) {
-        alert("Please upload a PDF or image file (PDF, JPG, PNG)");
-        return;
-      }
-      
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        alert("File size should be less than 10MB");
-        return;
-      }
-      
-      setUploadedFile(file);
-      setIsParsingComplete(false);
-      setParsingProgress(0);
-    }
-  };
-
-  // Handle file drop
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const file = event.dataTransfer.files[0];
-    if (file) {
-      const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
-      if (!validTypes.includes(file.type)) {
-        alert("Please upload a PDF or image file (PDF, JPG, PNG)");
-        return;
-      }
-      if (file.size > 10 * 1024 * 1024) {
-        alert("File size should be less than 10MB");
-        return;
-      }
-      setUploadedFile(file);
-      setIsParsingComplete(false);
-      setParsingProgress(0);
-    }
-  };
-
-  // Handle parse resume
-  const handleParseResume = () => {
-    if (!uploadedFile) {
-      alert("Please upload a resume file first");
-      return;
-    }
-
-    // Show immediate parsing indication
-    setParsingProgress(10);
-    setIsParsingComplete(false);
-
-    // Create FormData object for multipart/form-data
-    const formData = new FormData();
-    formData.append('file', uploadedFile);
-
-    // Call parse resume API
-    parseResume(formData);
-  };
-
-  // Remove uploaded file
-  const removeFile = () => {
-    setUploadedFile(null);
-    setIsParsingComplete(false);
-    setParsingProgress(0);
-  };
-
-  // Redirect to login if not authenticated
+  // Load templates on component mount
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      navigate("/login");
-    }
-  }, [isAuthenticated, authLoading, navigate]);
-
-  // Load resume data from localStorage on mount
-  useEffect(() => {
-    try {
-      const storedResume = localStorage.getItem('parsedResumeData');
-      if (storedResume) {
-        const parsed = JSON.parse(storedResume);
-        setResumeData(parsed);
-        setIsResumeFromStorage(true); // Mark as loaded from storage
-        // Auto-fetch role suggestions if resume data is available
-        if (parsed && Object.keys(parsed).length > 0) {
-          fetchRoleSuggestions(parsed);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load resume data:', error);
-    }
-  }, []);
-
-  // Load interview session data from localStorage on mount
-  useEffect(() => {
-    try {
-      const storedInterview = localStorage.getItem('interviewSessionData');
-      if (storedInterview) {
-        const parsed = JSON.parse(storedInterview);
-        if (parsed && parsed.sessionId) {
-          setIsInterviewFromStorage(true);
-          // Optionally restore interview state if needed
-          // Note: Session might be expired on server, so we just show the message
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load interview session data:', error);
-    }
+    fetchTemplates();
   }, []);
 
   // Initialize TTS on component mount
   useEffect(() => {
-    if ('speechSynthesis' in window) {
-      setSpeechSynthesis(window.speechSynthesis);
-    } else {
-      console.warn('Speech synthesis not supported in this browser');
-    }
+    initializeTTS();
     
     // Cleanup function to stop speech when component unmounts
     return () => {
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
+      stopSpeaking();
     };
   }, []);
 
@@ -418,16 +221,7 @@ export default function InterviewPage() {
       // Small delay to ensure the question is fully displayed
       const timer = setTimeout(() => {
         if (speechSynthesis && currentQuestion.trim()) {
-          // Stop any current speech
-          if (speechSynthesis.speaking) {
-            speechSynthesis.cancel();
-          }
-          
-          const utterance = new SpeechSynthesisUtterance(currentQuestion);
-          utterance.rate = 0.8;
-          utterance.pitch = 1.0;
-          utterance.volume = 0.8;
-          speechSynthesis.speak(utterance);
+          speakQuestion(currentQuestion);
         }
       }, 1000);
       
@@ -437,125 +231,36 @@ export default function InterviewPage() {
 
   // Stop speech when interview ends
   useEffect(() => {
-    if (showAnalysis && speechSynthesis) {
-      speechSynthesis.cancel();
-      setIsSpeaking(false);
-      setCurrentUtterance(null);
+    if (showAnalysis) {
+      stopSpeaking();
     }
-  }, [showAnalysis, speechSynthesis]);
-
-  // Cleanup on unmount (must be before any conditional returns)
-  useEffect(() => {
-    return () => {
-      // These functions are defined later, but that's okay for cleanup
-      if (frameIntervalRef.current != null) {
-        clearInterval(frameIntervalRef.current);
-        frameIntervalRef.current = null;
-      }
-      if (timerIntervalRef.current != null) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-      }
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        mediaRecorderRef.current.stop();
-      }
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((t) => t.stop());
-      }
-    };
-  }, []);
-
-  // Show loading state while checking authentication
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-[#031527] flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-white">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Don't render if not authenticated (will redirect)
-  if (!isAuthenticated) {
-    return null;
-  }
-
-  // Format time helper
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  }, [showAnalysis]);
 
   // Start interview
   const startInterview = async () => {
-    // Check if role is selected (required by new API)
-    if (!selectedRole && roleSuggestions.length > 0) {
-      alert("Please select a role from the suggestions before starting the interview.");
-      return;
-    }
-
-    // Check if resume data is available (required by new API)
-    if (!resumeData) {
-      alert("Resume data is required to start an interview. Please upload your resume first.");
-      return;
-    }
-
     setIsStarting(true);
     try {
       const payload = {
         interview_type: "behavioral",
-        position: selectedRole || selectedTemplate?.position || "Software Engineer",
+        position: selectedTemplate?.position || "Software Engineer",
         experience_level: "intermediate",
         preferred_language: "English",
         mode: "practice",
         industry: selectedTemplate?.industry || "technology",
         company_template: selectedTemplate?.id || "google",
         custom_instructions: "Be confident and concise",
-        user_id: user?.id || "1",
-        resume_data: resumeData,
+        template_id: selectedTemplate?.id,
       };
       const res = await apiClient("POST", "/interview/interview/start", payload, true);
       setSessionId(res.session_id);
       setCurrentQuestion(res.first_question || "Welcome! Let's begin your interview.");      
       setQuestionCount(1);
-      setIsInterviewFromStorage(false); // Mark as new interview, not from storage
-      
-      // Store interview data in localStorage
-      try {
-        const interviewData = {
-          sessionId: res.session_id,
-          selectedRole: selectedRole || selectedTemplate?.position || "Software Engineer",
-          questionCount: 1,
-          timestamp: new Date().toISOString()
-        };
-        localStorage.setItem('interviewSessionData', JSON.stringify(interviewData));
-        console.log('Interview session data stored in localStorage');
-      } catch (error) {
-        console.error('Failed to store interview session data in localStorage:', error);
-      }
-      
       await initMedia();
       setIsInterviewRunning(true);
       setInterviewStartTime(new Date());
       setElapsedTime(0);
-      
-      // Wait a bit for video to be ready before starting frame analysis
-      setTimeout(() => {
-        startFrameLoop();
-      }, 500);
-      
+      startFrameLoop();
       startTimer();
-      
-      // Scroll to interview section after a short delay to ensure it's rendered
-      setTimeout(() => {
-        interviewSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 300);
     } catch (err) {
       console.error("startInterview error:", err);
       alert("Failed to start interview — please check console.");
@@ -646,46 +351,16 @@ export default function InterviewPage() {
 
   // Capture + analyze frame
   const captureAndAnalyze = async () => {
-    // Check prerequisites
-    if (!videoRef.current) {
-      console.warn("captureAndAnalyze: videoRef not available");
-      return;
-    }
-    if (!mediaStreamRef.current) {
-      console.warn("captureAndAnalyze: mediaStream not available");
-      return;
-    }
-    if (!sessionId) {
-      console.warn("captureAndAnalyze: sessionId not available");
-      return;
-    }
-    
-    // Check if video is ready
-    if (videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
-      console.warn("captureAndAnalyze: video not ready yet");
-      return;
-    }
-    
+    if (!videoRef.current || !mediaStreamRef.current) return;
     const canvas = document.createElement("canvas");
     canvas.width = videoRef.current.videoWidth || 640;
     canvas.height = videoRef.current.videoHeight || 480;
     const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      console.error("captureAndAnalyze: failed to get canvas context");
-      return;
-    }
-    
+    if (!ctx) return;
+    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+    const b64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
     try {
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const b64 = canvas.toDataURL("image/jpeg", 0.7).split(",")[1];
-      
-      if (!b64 || b64.length === 0) {
-        console.error("captureAndAnalyze: failed to capture frame data");
-        return;
-      }
-      
-      const body = { frame_data: b64, session_id: sessionId };
-      console.log("Sending frame for analysis, sessionId:", sessionId);
+      const body = { frame_data: b64 };
       const res = (await apiClient("POST", "/interview/analyze/frame", body, true)) as FrameAnalysis;
 
       const conf = res.confidence_score ?? 0;
@@ -708,21 +383,18 @@ export default function InterviewPage() {
         suggestions,
       });
 
-      console.log("Frame Analysis result:", res);
+      console.log("Frame Analysis:", res);
     } catch (err) {
       console.error("captureAndAnalyze failed:", err);
-      // Don't throw, just log - we want the loop to continue
     }
   };
 
   const startFrameLoop = () => {
     stopFrameLoop();
-    console.log("Starting frame analysis loop, sessionId:", sessionId);
     const id = window.setInterval(() => {
       void captureAndAnalyze();
     }, 1000);
     frameIntervalRef.current = id;
-    console.log("Frame loop started, interval ID:", id);
   };
   const stopFrameLoop = () => {
     if (frameIntervalRef.current != null) {
@@ -787,7 +459,7 @@ export default function InterviewPage() {
                     form.append("file", blob, "answer.webm");
                     
                     console.log("Sending audio for transcription...");
-                    const res = await apiClient("POST", "/audio/transcribe", form, false);
+                    const res = await apiClient("POST", "/interview/audio/transcribe", form, false);
                     console.log("Transcribe result:", res);
                     
                     // Handle different response formats
@@ -795,16 +467,13 @@ export default function InterviewPage() {
                         if ("transcript" in res) {
                             const tr = (res as any).transcript as string;
                             setUserAnswer(tr);
-                            setLastInputMethod("audio");
                             return;
                         } else if ("transcription" in res) {
                             const tr = (res as any).transcription as string;
                             setUserAnswer(tr);
-                            setLastInputMethod("audio");
                             return;
                         } else if (typeof res === "string") {
                             setUserAnswer(res);
-                            setLastInputMethod("audio");
                             return;
                         }
                     }
@@ -886,12 +555,7 @@ export default function InterviewPage() {
     setIsGeneratingQuestion(true);
     
     try {
-      // Use the tracked input method
-      const body = { 
-        session_id: sessionId, 
-        user_response: userAnswer.trim(),
-        input_method: lastInputMethod
-      };
+      const body = { session_id: sessionId, user_response: userAnswer.trim() };
       console.log("Submitting answer:", body);
       
       const res = await apiClient("POST", "/interview/interview/reply", body, true);
@@ -903,7 +567,6 @@ export default function InterviewPage() {
       // Show loading state while generating next question
       setCurrentQuestion("Generating next question...");
       setUserAnswer("");
-      setLastInputMethod("text");
       
       // Simulate a small delay to show the loading state
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -919,9 +582,6 @@ export default function InterviewPage() {
         if (mediaStreamRef.current) {
           mediaStreamRef.current.getTracks().forEach(t => t.stop());
         }
-        // Clear interview session data from localStorage when interview completes
-        localStorage.removeItem('interviewSessionData');
-        setIsInterviewFromStorage(false);
       } else {
         // Set the next question
         const nextQuestion = res.next_question || res.question || res.nextQuestion || "Great! Let's continue with the next question.";
@@ -1010,6 +670,19 @@ export default function InterviewPage() {
     }
   };
 
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      stopFrameLoop();
+      stopTimer();
+      stopAudioRecording();
+      stopSpeaking(); // Stop any ongoing speech
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      }
+    };
+  }, []);
+
   // Show analysis page if interview is completed
   if (showAnalysis && sessionId) {
     return (
@@ -1071,209 +744,122 @@ export default function InterviewPage() {
                     AI <span className="bg-gradient-primary bg-clip-text text-transparent">Interview</span>
                   </h1>
                   
-                  {/* Resume Upload Section */}
-                  {!isInterviewRunning && (
-                    <div className="max-w-4xl mx-auto mb-8">
-                      <Card className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-primary/20 shadow-lg">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center gap-2">
-                            <FileText className="w-5 h-5 text-primary" />
-                            <h3 className="text-lg font-semibold text-[#2D3253]">
-                              {resumeData 
-                                ? isResumeFromStorage 
-                                  ? "Resume Loaded (Previous Session)" 
-                                  : "Resume Uploaded"
-                                : "Upload Your Resume"}
-                            </h3>
-                          </div>
-                          {resumeData && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setResumeData(null);
-                                setUploadedFile(null);
-                                setRoleSuggestions([]);
-                                setSelectedRole(null);
-                                setShowRoleSelection(false);
-                                setIsResumeFromStorage(false);
-                                localStorage.removeItem('parsedResumeData');
-                              }}
-                              className="text-xs"
-                            >
-                              <Upload className="w-3 h-3 mr-1" />
-                              Re-upload
-                            </Button>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          {resumeData 
-                            ? isResumeFromStorage 
-                              ? "Resume data loaded from previous session. You can re-upload to update it."
-                              : "Your resume has been parsed successfully. Role suggestions are available below."
-                            : "Upload your resume to get personalized role suggestions and start your interview practice."
-                          }
-                        </p>
-                        
-                        {(!resumeData || isResumeFromStorage) && (
-                          <div>
-                            {/* File Upload Area */}
-                            <div
-                          onDrop={handleDrop}
-                          onDragOver={(e) => e.preventDefault()}
-                          className={`border-2 border-dashed rounded-xl p-8 text-center transition-all duration-200 ${
-                            uploadedFile
-                              ? 'border-primary bg-primary/5'
-                              : 'border-gray-300 hover:border-primary/50 hover:bg-gray-50'
-                          }`}
-                        >
-                          {uploadedFile ? (
-                            <div className="flex flex-col items-center gap-4">
-                              <div className="flex items-center gap-3 bg-white rounded-lg p-4 border border-primary/20 shadow-sm">
-                                <File className="w-8 h-8 text-primary" />
-                                <div className="flex-1 text-left">
-                                  <p className="font-medium text-[#2D3253]">{uploadedFile.name}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {(uploadedFile.size / 1024).toFixed(2)} KB
-                                  </p>
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={removeFile}
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
-                              </div>
-                              
-                              {parsingProgress > 0 && parsingProgress < 100 && (
-                                <div className="w-full max-w-md space-y-2">
-                                  <div className="flex items-center justify-center gap-2 text-sm text-primary">
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    <span>
-                                      {parsingProgress <= 10 ? "Starting parse..." : 
-                                       parsingProgress < 50 ? "Analyzing document..." :
-                                       parsingProgress < 75 ? "Extracting data..." :
-                                       parsingProgress < 100 ? "Processing..." : "Complete!"}
-                                    </span>
-                                  </div>
-                                  <Progress value={parsingProgress} className="h-2" />
-                                </div>
-                              )}
-                              
-                              {isParsingComplete && (
-                                <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 border border-green-200 rounded-lg p-3">
-                                  <CheckCircle className="h-4 w-4" />
-                                  <span>Resume parsed successfully! Role suggestions are being generated...</span>
-                                </div>
-                              )}
-                              
-                              {!isParseLoading && parsingProgress === 0 && (
-                                <Button
-                                  onClick={handleParseResume}
-                                  className="bg-primary hover:bg-primary/90 text-white"
-                                >
-                                  Parse Resume
-                                </Button>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center gap-4">
-                              <Upload className="w-12 h-12 text-muted-foreground" />
-                              <div>
-                                <p className="text-sm font-medium text-[#2D3253] mb-1">
-                                  {isResumeFromStorage 
-                                    ? "Upload a new resume to update your data"
-                                    : "Drop your resume here or click to browse"}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  Supports PDF, JPG, PNG (Max 10MB)
-                                </p>
-                              </div>
-                              <div>
-                                <input
-                                  ref={fileInputRef}
-                                  type="file"
-                                  accept=".pdf,.jpg,.jpeg,.png"
-                                  onChange={handleFileUpload}
-                                  className="hidden"
-                                />
-                                <Button
-                                  variant="outline"
-                                  className="border-primary text-primary hover:bg-primary hover:text-white"
-                                  type="button"
-                                  onClick={() => fileInputRef.current?.click()}
-                                >
-                                  Choose File
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                          </div>
-                          </div>
-                        )}
-                      </Card>
-                    </div>
-                  )}
-
                   <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed animate-fade-in">
                     Practice with real-time analysis and feedback to improve your interview skills
                   </p>
                   
-                  {/* Role Suggestions */}
-                  {showRoleSelection && roleSuggestions.length > 0 && !isInterviewRunning && (
+                  {/* Template Selection */}
+                  {!isInterviewRunning && (
                     <div className="max-w-4xl mx-auto mb-8">
-                      <Card className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-primary/20 shadow-lg">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Target className="w-5 h-5 text-primary" />
-                          <h3 className="text-lg font-semibold text-[#2D3253]">Suggested Roles for You</h3>
-                          {isLoadingRoles && (
-                            <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                          )}
+                      <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 shadow-lg">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-5 h-5 text-blue-600" />
+                            <h3 className="text-lg font-semibold text-gray-800">Interview Templates</h3>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowTemplates(!showTemplates)}
+                            className="flex items-center gap-2"
+                          >
+                            {showTemplates ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            {showTemplates ? 'Hide' : 'Show'} Templates
+                          </Button>
                         </div>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Based on your resume, we've identified these roles that match your skills. Select one to start your interview.
-                        </p>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          {roleSuggestions.map((suggestion, index) => (
-                            <Card
-                              key={index}
-                              className={`p-4 cursor-pointer transition-all duration-200 ${
-                                selectedRole === suggestion.role
-                                  ? 'border-2 border-primary bg-primary/5 shadow-md'
-                                  : 'border border-gray-200 hover:border-primary/50 hover:shadow-md'
-                              }`}
-                              onClick={() => setSelectedRole(suggestion.role)}
-                            >
-                              <div className="flex items-start justify-between mb-2">
-                                <h4 className="font-semibold text-[#2D3253] text-sm">{suggestion.role}</h4>
-                                {selectedRole === suggestion.role && (
-                                  <CheckCircle className="w-5 h-5 text-primary flex-shrink-0" />
-                                )}
+                        
+                        {showTemplates && (
+                          <div className="space-y-4">
+                            {isLoadingTemplates ? (
+                              <div className="flex items-center justify-center py-8">
+                                <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                                <span className="ml-2 text-gray-600">Loading templates...</span>
                               </div>
-                              <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
-                                {suggestion.description}
-                              </p>
-                              <div className="mt-2 pt-2 border-t border-gray-100">
-                                <p className="text-xs text-primary font-medium">
-                                  Match: {suggestion.match_reason}
-                                </p>
+                            ) : (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {templates.map((template) => (
+                                  <Card
+                                    key={template.id}
+                                    className={`p-4 cursor-pointer transition-all duration-200 hover:shadow-md ${
+                                      selectedTemplate?.id === template.id
+                                        ? 'ring-2 ring-blue-500 bg-blue-50'
+                                        : 'hover:bg-gray-50'
+                                    }`}
+                                    onClick={() => setSelectedTemplate(template)}
+                                  >
+                                    <div className="flex items-start justify-between mb-3">
+                                      <div>
+                                        <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+                                          <Building2 className="w-4 h-4 text-blue-600" />
+                                          {template.name}
+                                        </h4>
+                                        <p className="text-sm text-gray-600">{template.company}</p>
+                                      </div>
+                                      <Badge
+                                        variant={
+                                          template.difficulty === 'easy'
+                                            ? 'default'
+                                            : template.difficulty === 'intermediate'
+                                            ? 'secondary'
+                                            : 'destructive'
+                                        }
+                                        className="text-xs"
+                                      >
+                                        {template.difficulty}
+                                      </Badge>
+                                    </div>
+                                    
+                                    <p className="text-sm text-gray-600 mb-3">{template.description}</p>
+                                    
+                                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                                      <div className="flex items-center gap-1">
+                                        <Users className="w-3 h-3" />
+                                        {template.position}
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <Star className="w-3 h-3" />
+                                        {template.questions.length} questions
+                                      </div>
+                                    </div>
+                                    
+                                    {selectedTemplate?.id === template.id && (
+                                      <div className="mt-3 pt-3 border-t border-gray-200">
+                                        <p className="text-xs font-medium text-gray-700 mb-2">Sample Questions:</p>
+                                        <div className="space-y-1">
+                                          {template.questions.slice(0, 2).map((question, idx) => (
+                                            <p key={idx} className="text-xs text-gray-600 line-clamp-2">
+                                              • {question}
+                                            </p>
+                                          ))}
+                                          {template.questions.length > 2 && (
+                                            <p className="text-xs text-gray-500">
+                                              +{template.questions.length - 2} more questions
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </Card>
+                                ))}
                               </div>
-                            </Card>
-                          ))}
-                        </div>
-                        {selectedRole && (
-                          <div className="mt-4 p-3 bg-primary/10 rounded-lg border border-primary/20">
-                            <p className="text-sm text-[#2D3253]">
-                              <span className="font-semibold">Selected:</span> {selectedRole}
-                            </p>
+                            )}
+                            
+                            {selectedTemplate && (
+                              <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                <div className="flex items-center gap-2 text-blue-800">
+                                  <CheckCircle className="w-4 h-4" />
+                                  <span className="text-sm font-medium">
+                                    Selected: {selectedTemplate.name}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
-                      </Card>
+                      </div>
                     </div>
                   )}
-
+                  
                   {/* Additional Assessment Options */}
                   {selectedTemplate && (
                     <div className="max-w-4xl mx-auto mb-8">
@@ -1296,7 +882,7 @@ export default function InterviewPage() {
                               Test your programming skills with coding challenges and technical questions
                             </p>
                             <Button 
-                              onClick={() => navigate('/coding-round')}
+                              onClick={() => window.location.href = '/coding-round'}
                               className="w-full bg-blue-500 hover:bg-blue-600 text-white"
                               size="sm"
                             >
@@ -1316,7 +902,7 @@ export default function InterviewPage() {
                               Test your knowledge with multiple choice questions
                             </p>
                             <Button 
-                              onClick={() => navigate('/quiz')}
+                              onClick={() => window.location.href = '/coding-round'}
                               className="w-full bg-green-500 hover:bg-green-600 text-white"
                               size="sm"
                             >
@@ -1328,35 +914,6 @@ export default function InterviewPage() {
                     </div>
                   )}
 
-                  {/* Interview Session Data from Storage */}
-                  {isInterviewFromStorage && !isInterviewRunning && (
-                    <div className="max-w-4xl mx-auto mb-8">
-                      <Card className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-primary/20 shadow-lg">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Clock className="w-5 h-5 text-primary" />
-                          <h3 className="text-lg font-semibold text-[#2D3253]">
-                            Interview Session Data Loaded
-                          </h3>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Interview data loaded from previous session. You can start a new interview to update it.
-                        </p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            localStorage.removeItem('interviewSessionData');
-                            setIsInterviewFromStorage(false);
-                          }}
-                          className="text-xs"
-                        >
-                          <X className="w-3 h-3 mr-1" />
-                          Clear Session Data
-                        </Button>
-                      </Card>
-                    </div>
-                  )}
-
                   {/* Control Buttons */}
                   <div className="flex gap-4 justify-center relative mb-12">
                     {!isInterviewRunning ? (
@@ -1365,7 +922,7 @@ export default function InterviewPage() {
                           onClick={startInterview} 
                           disabled={isStarting} 
                           size="lg"
-                          className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-2xl font-medium transition-colors cursor-pointer hover:scale-105"
+                          className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white px-8 py-3 rounded-2xl font-medium transition-colors cursor-pointer hover:scale-105"
                         >
                           {isStarting ? (
                             <>
@@ -1373,7 +930,10 @@ export default function InterviewPage() {
                               Starting...
                             </>
                           ) : (
-                            "Start Interview"
+                            <>
+                              <Zap className="mr-2 w-5 h-5" />
+                              Start Interview
+                            </>
                           )}
                         </Button>
                         
@@ -1412,9 +972,6 @@ export default function InterviewPage() {
                             stopAudioRecording();
                             mediaStreamRef.current?.getTracks().forEach(t => t.stop());
                             setIsInterviewRunning(false);
-                            // Clear interview session data from localStorage
-                            localStorage.removeItem('interviewSessionData');
-                            setIsInterviewFromStorage(false);
                           }}
                           className="bg-red-500 hover:bg-red-600 rounded-2xl"
                         >
@@ -1432,39 +989,38 @@ export default function InterviewPage() {
       </div>
 
       {/* Main Content Section */}
-      <div ref={interviewSectionRef} className="-mt-20 relative z-10 h-[calc(100vh-64px)] w-full border border-blue-300 rounded-tl-[70px] rounded-tr-[70px] overflow-hidden bg-[#FFFFFF] animate-fade-in">
-        <div className="w-full h-full px-4 sm:px-6 lg:px-8 pt-8 pb-4">
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 h-full">
-            {/* Left side: Camera + Analytics stacked */}
-            <div className="lg:col-span-2 flex flex-col gap-3 h-full overflow-hidden">
-              {/* Camera Section */}
+      <div className="-mt-16 relative z-10 min-h-screen max-w-screen-2xl mx-auto px-2 sm:px-6 lg:px-8 border border-blue-300 rounded-tl-[70px] rounded-tr-[70px] overflow-hidden bg-[#FFFFFF] animate-fade-in">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left side: video + question + answer input */}
+            <div className="lg:col-span-2 space-y-8">
+              {/* Video Section */}
               <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.2 }}
-                className="flex-shrink-0"
               >
-                <Card className="p-3 bg-card/50 backdrop-blur-sm border border-primary/20 shadow-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-semibold flex items-center gap-2 text-[#2D3253]">
-                      <Video className="w-4 h-4 text-primary" />
+                <Card className="p-6 bg-card/50 backdrop-blur-sm border border-primary/20 shadow-lg">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold flex items-center gap-2 text-[#2D3253]">
+                      <Video className="w-5 h-5 text-primary" />
                       Camera Feed
                     </h3>
                     <div className="flex items-center gap-2">
                       {isCameraReady ? (
-                        <Badge variant="default" className="bg-green-100 text-green-800 border-green-200 text-xs">
+                        <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
                           <CheckCircle className="w-3 h-3 mr-1" />
-                          Active
+                          Camera Active
                         </Badge>
                       ) : (
-                        <Badge variant="secondary" className="bg-gray-100 text-gray-600 text-xs">
+                        <Badge variant="secondary" className="bg-gray-100 text-gray-600">
                           <VideoOff className="w-3 h-3 mr-1" />
-                          Off
+                          Camera Off
                         </Badge>
                       )}
                     </div>
                   </div>
-                  <div className="h-[320px] bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl overflow-hidden relative border-2 border-primary/20">
+                  <div className="aspect-video bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl overflow-hidden relative border-2 border-primary/20">
                     <video
                       ref={videoRef}
                       autoPlay
@@ -1474,13 +1030,13 @@ export default function InterviewPage() {
                     />
                     {!isCameraReady && (
                       <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black bg-opacity-50">
-                        <Camera className="w-10 h-10 mb-3 opacity-50" />
-                        <p className="text-sm font-medium">Camera & Microphone</p>
-                        <p className="text-xs opacity-75">Will be enabled when interview starts</p>
+                        <Camera className="w-12 h-12 mb-4 opacity-50" />
+                        <p className="text-lg font-medium">Camera & Microphone</p>
+                        <p className="text-sm opacity-75">Will be enabled when interview starts</p>
                       </div>
                     )}
                     {isInterviewRunning && (
-                      <div className="absolute top-2 right-2 flex gap-2">
+                      <div className="absolute top-4 right-4 flex gap-2">
                         <div className="bg-black bg-opacity-50 text-white px-2 py-1 rounded text-xs flex items-center gap-1">
                           <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                           Recording
@@ -1491,214 +1047,34 @@ export default function InterviewPage() {
                 </Card>
               </motion.div>
 
-              {/* Analytics Section - Collapsible */}
-              <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Collapsible Header */}
-                <button
-                  onClick={() => setIsAnalyticsExpanded(!isAnalyticsExpanded)}
-                  className="flex items-center justify-between p-2 bg-card/50 backdrop-blur-sm border border-primary/20 rounded-lg hover:bg-card/70 transition-colors mb-2"
-                >
-                  <div className="flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-primary" />
-                    <span className="text-xs font-semibold text-[#2D3253]">Live Analytics</span>
-                    {isInterviewRunning && (
-                      <Badge variant="default" className="bg-green-100 text-green-800 border-green-200 text-xs">
-                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse mr-1"></div>
-                        Live
-                      </Badge>
-                    )}
-                  </div>
-                  {isAnalyticsExpanded ? (
-                    <ChevronUp className="w-4 h-4 text-[#2D3253]" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-[#2D3253]" />
-                  )}
-                </button>
-
-                {/* Analytics Content - Collapsible */}
-                {isAnalyticsExpanded && (
-                  <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                    {/* Overall Performance */}
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.6, delay: 0.3 }}
-                    >
-                      <Card className="p-2 bg-card/50 backdrop-blur-sm border border-primary/20 shadow-lg">
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-xs font-semibold flex items-center gap-1.5 text-[#2D3253]">
-                            <TrendingUp className="w-3 h-3 text-primary" />
-                            Overall Performance
-                          </h3>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <div className="text-center">
-                            <div className="text-lg font-bold text-primary mb-0.5">
-                              {metrics.overallScore.toFixed(1)}/10
-                            </div>
-                            <div className="text-[10px] text-muted-foreground">Overall Score</div>
-                            <Progress value={metrics.overallScore * 10} className="h-1.5 mt-1" />
-                          </div>
-                          
-                          <div className="text-center">
-                            <div className="text-base font-bold text-cyan-600 mb-0.5">
-                              {metrics.confidencePercent.toFixed(1)}%
-                            </div>
-                            <div className="text-[10px] text-muted-foreground">Confidence</div>
-                            <Progress value={metrics.confidencePercent} className="h-1.5 mt-1" />
-                          </div>
-                        </div>
-                      </Card>
-                    </motion.div>
-
-                    {/* Detailed Metrics */}
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.6, delay: 0.4 }}
-                    >
-                      <Card className="p-2 bg-card/50 backdrop-blur-sm border border-primary/20 shadow-lg">
-                        <h3 className="text-xs font-semibold mb-2 flex items-center gap-1.5 text-[#2D3253]">
-                          <BarChart3 className="w-3 h-3 text-primary" />
-                          Detailed Analysis
-                        </h3>
-                        
-                        <div className="space-y-1.5">
-                          {[
-                            { key: 'eyeContact', label: 'Eye Contact', icon: Eye, color: 'primary' },
-                            { key: 'posture', label: 'Posture', icon: User, color: 'green' },
-                            { key: 'facialExpression', label: 'Expression', icon: Smile, color: 'yellow' },
-                            { key: 'handGestures', label: 'Gestures', icon: Hand, color: 'purple' },
-                            { key: 'headMovement', label: 'Head Move', icon: RotateCcw, color: 'red' }
-                          ].map(({ key, label, icon: Icon, color }) => {
-                            const score = metrics[key as keyof typeof metrics] as number;
-                            const getColorClass = (score: number) => {
-                              if (score >= 8) return 'text-green-600';
-                              if (score >= 6) return 'text-yellow-600';
-                              return 'text-red-600';
-                            };
-                            
-                            return (
-                              <div key={key} className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-1.5">
-                                    <Icon className={`w-3 h-3 text-${color === 'primary' ? 'primary' : color + '-500'}`} />
-                                    <span className="text-[10px] font-medium text-[#2D3253]">{label}</span>
-                                  </div>
-                                  <span className={`text-[10px] font-bold ${getColorClass(score)}`}>
-                                    {score.toFixed(1)}
-                                  </span>
-                                </div>
-                                <Progress value={score * 10} className="h-1" />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </Card>
-                    </motion.div>
-
-                    {/* Real-time Suggestions */}
-                    {metrics.suggestions.length > 0 && (
-                      <motion.div
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.6, delay: 0.5 }}
-                      >
-                        <Card className="p-2 bg-card/50 backdrop-blur-sm border border-primary/20 shadow-lg">
-                          <h3 className="text-xs font-semibold mb-2 flex items-center gap-1.5 text-[#2D3253]">
-                            <Lightbulb className="w-3 h-3 text-yellow-500" />
-                            Suggestions
-                          </h3>
-                          <div className="space-y-1.5">
-                            {metrics.suggestions.map((suggestion, index) => (
-                              <div key={index} className="flex items-start gap-1.5 p-1.5 bg-yellow-50 rounded border border-yellow-200">
-                                <AlertCircle className="w-2.5 h-2.5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                                <span className="text-[10px] text-yellow-800 leading-tight">{suggestion}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </Card>
-                      </motion.div>
-                    )}
-
-                    {/* Interview Status */}
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.6, delay: 0.6 }}
-                    >
-                      <Card className="p-2 bg-card/50 backdrop-blur-sm border border-primary/20 shadow-lg">
-                        <h3 className="text-xs font-semibold mb-1.5 flex items-center gap-1.5 text-[#2D3253]">
-                          <Clock className="w-3 h-3 text-primary" />
-                          Status
-                        </h3>
-                        <div className="space-y-1">
-                          <div className="flex justify-between items-center">
-                            <span className="text-[10px] text-muted-foreground">Duration</span>
-                            <span className="font-mono text-[10px] font-medium text-[#2D3253]">{formatTime(elapsedTime)}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-[10px] text-muted-foreground">Questions</span>
-                            <span className="text-[10px] font-medium text-[#2D3253]">{questionCount}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-[10px] text-muted-foreground">Status</span>
-                            <Badge variant={isInterviewRunning ? "default" : "secondary"} className="text-[10px] px-1.5 py-0">
-                              {isInterviewRunning ? "Active" : "Ready"}
-                            </Badge>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-[10px] text-muted-foreground">Camera</span>
-                            <Badge variant={isCameraReady ? "default" : "secondary"} className="text-[10px] px-1.5 py-0">
-                              {isCameraReady ? "On" : "Off"}
-                            </Badge>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-[10px] text-muted-foreground">Mic</span>
-                            <Badge variant={isRecordingAudio ? "destructive" : "secondary"} className="text-[10px] px-1.5 py-0">
-                              {isRecordingAudio ? "Rec" : "Ready"}
-                            </Badge>
-                          </div>
-                        </div>
-                      </Card>
-                    </motion.div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Right side: Question + Answer */}
-            <div className="lg:col-span-3 flex flex-col gap-4 h-full overflow-hidden">
-              {/* Question Section */}
+              {/* Question & Answer Section */}
               <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-                className="flex-shrink-0"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.4 }}
               >
-                <Card className="p-4 bg-card/50 backdrop-blur-sm border border-primary/20 shadow-lg">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Target className="w-4 h-4 text-primary" />
-                    <h3 className="text-base font-semibold text-[#2D3253]">Interview Question</h3>
+                <Card className="p-6 bg-card/50 backdrop-blur-sm border border-primary/20 shadow-lg">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Target className="w-5 h-5 text-primary" />
+                    <h3 className="text-lg font-semibold text-[#2D3253]">Interview Question</h3>
                   </div>
                   
-                  <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl p-4 border border-primary/20">
+                  <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl p-6 mb-6 border border-primary/20">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-primary">Question {questionCount}</span>
+                      <span className="text-sm font-medium text-primary">Question {questionCount}</span>
                       {isGeneratingQuestion && (
                         <div className="flex items-center gap-2 text-primary">
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                          <span className="text-xs">Generating...</span>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span className="text-sm">Generating...</span>
                         </div>
                       )}
                     </div>
-                    <div className="text-base font-medium text-[#2D3253] leading-relaxed">
+                    <div className="text-lg font-medium text-[#2D3253] leading-relaxed">
                       {currentQuestion}
                     </div>
                     
                     {/* TTS Controls */}
-                    <div className="flex items-center gap-2 mt-3">
+                    <div className="flex items-center gap-2 mt-4">
                       <Button
                         onClick={() => speakQuestion(currentQuestion)}
                         disabled={!currentQuestion.trim() || isSpeaking || currentQuestion === "Press Start to begin"}
@@ -1749,60 +1125,47 @@ export default function InterviewPage() {
                       )}
                     </div>
                   </div>
-                </Card>
-              </motion.div>
 
-              {/* Answer Section */}
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.6, delay: 0.3 }}
-                className="flex-1 min-h-0"
-              >
-                <Card className="p-4 bg-card/50 backdrop-blur-sm border border-primary/20 shadow-lg h-full flex flex-col">
-                  <div className="flex items-center gap-2 mb-3">
-                    <FileText className="w-4 h-4 text-primary" />
-                    <h3 className="text-base font-semibold text-[#2D3253]">Your Answer</h3>
-                  </div>
-                  
-                  <div className="flex-1 flex flex-col space-y-3 min-h-0">
-                    <textarea
-                      value={userAnswer}
-                      onChange={(e) => {
-                        setUserAnswer(e.target.value);
-                        setLastInputMethod("text");
-                      }}
-                      placeholder="Type your answer here..."
-                      className="flex-1 p-3 border border-primary/20 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent resize-none bg-background text-sm"
-                      style={{ maxHeight: 'calc(100vh - 500px)' }}
-                    />
-                    
-                    <Button 
-                      onClick={submitReply} 
-                      disabled={!sessionId || !userAnswer.trim() || isSubmittingAnswer}
-                      className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white py-2 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 text-sm"
-                    >
-                      {isSubmittingAnswer ? (
-                        <>
-                          <Loader2 className="mr-2 w-4 h-4 animate-spin" />
-                          Submitting...
-                        </>
-                      ) : (
-                        <>
-                          <Send className="mr-2 w-4 h-4" />
-                          Send Answer
-                        </>
-                      )}
-                    </Button>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-[#2D3253] mb-2">
+                        Your Answer
+                      </label>
+                      <div className="flex gap-3">
+                        <textarea
+                          value={userAnswer}
+                          onChange={(e) => setUserAnswer(e.target.value)}
+                          placeholder="Type your answer here..."
+                          className="flex-1 p-4 border border-primary/20 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent resize-none bg-background"
+                          rows={4}
+                        />
+                        <Button 
+                          onClick={submitReply} 
+                          disabled={!sessionId || !userAnswer.trim() || isSubmittingAnswer}
+                          className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white px-6 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
+                        >
+                          {isSubmittingAnswer ? (
+                            <>
+                              <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                              Submitting...
+                            </>
+                          ) : (
+                            <>
+                              <Send className="mr-2 w-4 h-4" />
+                              Send
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
 
-                    <div className="flex items-center gap-2 pt-2 border-t border-primary/20">
-                      <div className="text-xs text-muted-foreground">Or record:</div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-sm text-muted-foreground">Or record your answer:</div>
                       {!isRecordingAudio ? (
                         <Button 
                           onClick={startAudioRecording}
                           variant="outline"
-                          size="sm"
-                          className="flex-1 border-green-300 text-green-700 hover:bg-green-50 rounded-lg"
+                          className="border-green-300 text-green-700 hover:bg-green-50 rounded-xl"
                         >
                           <Mic className="mr-2 w-4 h-4" />
                           Start Recording
@@ -1811,8 +1174,7 @@ export default function InterviewPage() {
                         <Button 
                           variant="destructive" 
                           onClick={stopAudioRecording}
-                          size="sm"
-                          className="flex-1 bg-red-500 hover:bg-red-600 rounded-lg"
+                          className="bg-red-500 hover:bg-red-600 rounded-xl"
                         >
                           <StopCircle className="mr-2 w-4 h-4" />
                           Stop Recording
@@ -1824,6 +1186,161 @@ export default function InterviewPage() {
                           <span className="text-sm font-medium">Recording...</span>
                         </div>
                       )}
+                    </div>
+                  </div>
+                </Card>
+              </motion.div>
+            </div>
+
+            {/* Right side: live metrics + controls */}
+            <div className="space-y-8">
+              {/* Overall Performance */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+              >
+                <Card className="p-6 bg-card/50 backdrop-blur-sm border border-primary/20 shadow-lg">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold flex items-center gap-2 text-[#2D3253]">
+                      <TrendingUp className="w-5 h-5 text-primary" />
+                      Overall Performance
+                    </h3>
+                    {isInterviewRunning && (
+                      <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-1"></div>
+                        Live
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-primary mb-1">
+                        {metrics.overallScore.toFixed(1)}/10
+                      </div>
+                      <div className="text-sm text-muted-foreground">Overall Score</div>
+                      <Progress value={metrics.overallScore * 10} className="h-2 mt-2" />
+                    </div>
+                    
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-cyan-600 mb-1">
+                        {metrics.confidencePercent.toFixed(1)}%
+                      </div>
+                      <div className="text-sm text-muted-foreground">Confidence Level</div>
+                      <Progress value={metrics.confidencePercent} className="h-2 mt-2" />
+                    </div>
+                  </div>
+                </Card>
+              </motion.div>
+
+              {/* Detailed Metrics */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6, delay: 0.5 }}
+              >
+                <Card className="p-6 bg-card/50 backdrop-blur-sm border border-primary/20 shadow-lg">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-[#2D3253]">
+                    <BarChart3 className="w-5 h-5 text-primary" />
+                    Detailed Analysis
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    {[
+                      { key: 'eyeContact', label: 'Eye Contact', icon: Eye, color: 'primary' },
+                      { key: 'posture', label: 'Posture', icon: User, color: 'green' },
+                      { key: 'facialExpression', label: 'Facial Expression', icon: Smile, color: 'yellow' },
+                      { key: 'handGestures', label: 'Hand Gestures', icon: Hand, color: 'purple' },
+                      { key: 'headMovement', label: 'Head Movement', icon: RotateCcw, color: 'red' }
+                    ].map(({ key, label, icon: Icon, color }) => {
+                      const score = metrics[key as keyof typeof metrics] as number;
+                      const getColorClass = (score: number) => {
+                        if (score >= 8) return 'text-green-600';
+                        if (score >= 6) return 'text-yellow-600';
+                        return 'text-red-600';
+                      };
+                      
+                      return (
+                        <div key={key} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Icon className={`w-4 h-4 text-${color === 'primary' ? 'primary' : color + '-500'}`} />
+                              <span className="text-sm font-medium text-[#2D3253]">{label}</span>
+                            </div>
+                            <span className={`text-sm font-bold ${getColorClass(score)}`}>
+                              {score.toFixed(1)}/10
+                            </span>
+                          </div>
+                          <Progress value={score * 10} className="h-1.5" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              </motion.div>
+
+              {/* Real-time Suggestions */}
+              {metrics.suggestions.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.6, delay: 0.7 }}
+                >
+                  <Card className="p-6 bg-card/50 backdrop-blur-sm border border-primary/20 shadow-lg">
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-[#2D3253]">
+                      <Lightbulb className="w-5 h-5 text-yellow-500" />
+                      Live Suggestions
+                    </h3>
+                    <div className="space-y-3">
+                      {metrics.suggestions.map((suggestion, index) => (
+                        <div key={index} className="flex items-start gap-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                          <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                          <span className="text-sm text-yellow-800">{suggestion}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                </motion.div>
+              )}
+
+              {/* Interview Status */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6, delay: 0.6 }}
+              >
+                <Card className="p-6 bg-card/50 backdrop-blur-sm border border-primary/20 shadow-lg">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-[#2D3253]">
+                    <Clock className="w-5 h-5 text-primary" />
+                    Interview Status
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Duration</span>
+                      <span className="font-mono text-sm font-medium text-[#2D3253]">{formatTime(elapsedTime)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Questions</span>
+                      <span className="text-sm font-medium text-[#2D3253]">{questionCount}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Status</span>
+                      <Badge variant={isInterviewRunning ? "default" : "secondary"}>
+                        {isInterviewRunning ? "In Progress" : "Ready"}
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Camera</span>
+                      <Badge variant={isCameraReady ? "default" : "secondary"}>
+                        {isCameraReady ? "Active" : "Inactive"}
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Microphone</span>
+                      <Badge variant={isRecordingAudio ? "destructive" : "secondary"}>
+                        {isRecordingAudio ? "Recording" : "Ready"}
+                      </Badge>
                     </div>
                   </div>
                 </Card>

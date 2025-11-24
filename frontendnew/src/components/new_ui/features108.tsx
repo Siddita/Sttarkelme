@@ -31,7 +31,7 @@ interface Feature108Props {
 const Feature108 = ({
   badge = "",
   heading = "Turn your Career Confusion into Clarity With proven Assessments, expert Mentorship and Guidance.",
-  description ,
+  description = "Join us to build yourself",
   tabs = [],
 }: Feature108Props) => {
   const [activeTab, setActiveTab] = useState(tabs[0]?.value);
@@ -44,11 +44,11 @@ const Feature108 = ({
     // Small delay to ensure scroll happens before navigation
     setTimeout(() => {
       switch (buttonText) {
-        case "Start Journey":
+        case "Start Demo":
           navigate('/services/ai-assessment?tab=interview');
           break;
         case "See Insights":
-          navigate('/overview');
+          navigate('/services/ai-assessment?tab=assessment');
           break;
         case "Start Quick Test":
           navigate('/personalized-assessment');
@@ -63,18 +63,20 @@ const Feature108 = ({
     <div className="w-full max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="flex flex-col items-center gap-4 text-center">
+        <Badge variant="outline">{badge}</Badge>
         {/* <h1 className="max-w-2xl text-3xl font-semibold md:text-4xl"> */}
         <h1 className="max-w text-xl mb-6 sm:text-4xl md:text-6xl lg:text-4xl font-normal leading-tight text-[#2D3253]">
 
           {heading}
         </h1>
+        <p className="text-muted-foreground">{description}</p>
       </div>
 
       {/* Tabs */}
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
-        className="mt-4 p-6 sm:p-8 md:p-10 border-4 border-[#404040] bg-gradient-to-r from-slate-800 to-slate-700 rounded-3xl"
+        className="mt-8 p-6 sm:p-8 md:p-10 border-4 border-[#404040] bg-gradient-to-r from-slate-800 to-slate-700 rounded-3xl"
       >
         {/* Tab Buttons */}
         <TabsList className="flex flex-col items-center justify-center gap-4 sm:flex-row sm:flex-wrap md:gap-10">

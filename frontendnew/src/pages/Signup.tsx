@@ -12,7 +12,7 @@ import {
   registerRegisterPost,
   loginLoginPost,
   refreshTokenRefreshPost,
-  authMeMeGet,
+  meMeGet,
   introspectIntrospectPost,
   authRoot_Get,
   authHealthCheckHealthGet
@@ -104,7 +104,7 @@ const Signup = () => {
   });
 
   // Health check and user info hooks - only call when authenticated
-  const { data: userInfo, refetch: refetchUserInfo } = authMeMeGet({
+  const { data: userInfo, refetch: refetchUserInfo } = meMeGet({
     enabled: false // Disable automatic calls to prevent 401 errors
   });
   const { data: authHealth, refetch: refetchAuthHealth } = authHealthCheckHealthGet({

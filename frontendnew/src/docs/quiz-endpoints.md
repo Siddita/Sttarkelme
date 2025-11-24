@@ -13,7 +13,7 @@ The Quiz service provides comprehensive testing capabilities including:
 
 ## Base URL
 
-All quiz endpoints use the base URL: `https://talentcueai.com` (configurable via `VITE_API_BASE_URL` environment variable)
+All quiz endpoints use the base URL: `https://zettanix.in`
 
 ## Aptitude Quiz Endpoints
 

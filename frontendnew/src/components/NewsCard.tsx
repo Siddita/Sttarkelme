@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { NewsItem } from "@/lib/api";
 import { formatNewsItem } from "@/hooks/useNews";
-import { getApiUrl } from "@/config/api";
 
 interface NewsCardProps {
   news: NewsItem;
@@ -49,7 +48,7 @@ const getProxiedImageUrl = (imageUrl: string): string => {
   if (imageUrl.startsWith('http')) {
     try {
       const encodedUrl = encodeURIComponent(imageUrl);
-      return getApiUrl(`/api/v1/proxy/image?url=${encodedUrl}`);
+      return `https://zettanix.in/api/v1/proxy/image?url=${encodedUrl}`;
     } catch (error) {
       console.warn('Failed to encode image URL:', error);
       return "https://picsum.photos/400/200?random=1";

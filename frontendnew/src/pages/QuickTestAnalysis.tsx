@@ -30,10 +30,10 @@ import { useNavigate } from "react-router-dom";
 import { motion } from 'framer-motion';
 import { Navbar } from "@/components/ui/navbar-menu";
 import { 
-  analyzePerformanceGapsAnalyzePerformanceGapsPost,
-  generateSkillBasedRecommendationsGenerateSkillBasedRecommendationsPost,
-  downloadReportDownloadReportPost,
-  generateInterviewPdfGenerateInterviewPdfPost
+  analyzePerformanceGapsV1AnalyzePerformanceGapsPost,
+  generateSkillBasedRecommendationsV1GenerateSkillBasedRecommendationsPost,
+  downloadReportV1DownloadReportPost,
+  generateInterviewPdfV1GenerateInterviewPdfPost
 } from "@/hooks/useApis";
 
 const QuickTestAnalysis = () => {
@@ -175,7 +175,7 @@ const QuickTestAnalysis = () => {
   };
 
   // API hooks
-  const { mutate: analyzePerformanceGaps } = analyzePerformanceGapsAnalyzePerformanceGapsPost({
+  const { mutate: analyzePerformanceGaps } = analyzePerformanceGapsV1AnalyzePerformanceGapsPost({
     onSuccess: (data) => {
       console.log('Performance gaps analysis:', data);
       setOverallAnalysis(data);
@@ -187,7 +187,7 @@ const QuickTestAnalysis = () => {
     }
   });
 
-  const { mutate: generateSkillRecommendations } = generateSkillBasedRecommendationsGenerateSkillBasedRecommendationsPost({
+  const { mutate: generateSkillRecommendations } = generateSkillBasedRecommendationsV1GenerateSkillBasedRecommendationsPost({
     onSuccess: (data) => {
       console.log('Skill recommendations:', data);
       setOverallAnalysis(prev => ({ ...prev, recommendations: data }));
@@ -199,7 +199,7 @@ const QuickTestAnalysis = () => {
     }
   });
 
-  const { mutate: downloadReport } = downloadReportDownloadReportPost({
+  const { mutate: downloadReport } = downloadReportV1DownloadReportPost({
     onSuccess: (data) => {
       console.log('Report download initiated:', data);
       setDownloadedReport(data);
@@ -209,7 +209,7 @@ const QuickTestAnalysis = () => {
     }
   });
 
-  const { mutate: generateInterviewPdf } = generateInterviewPdfGenerateInterviewPdfPost({
+  const { mutate: generateInterviewPdf } = generateInterviewPdfV1GenerateInterviewPdfPost({
     onSuccess: (data) => {
       console.log('Interview PDF generated:', data);
       setGeneratedPdf(data);

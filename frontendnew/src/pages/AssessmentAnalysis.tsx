@@ -419,7 +419,7 @@ const AssessmentAnalysis = () => {
             </motion.div>
             )}
 
-            {/* Scenario-Based Assessment */}
+            {/* Behavioral Assessment */}
             {results.behavioralResults && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -434,7 +434,7 @@ const AssessmentAnalysis = () => {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div>
-                        <h3 className="text-xl font-bold text-primary">Scenario-Based Assessment</h3>
+                        <h3 className="text-xl font-bold text-primary">Behavioral Assessment</h3>
                         <p className="text-muted-foreground">Leadership & communication skills</p>
                       </div>
                     </div>
