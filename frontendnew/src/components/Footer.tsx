@@ -25,7 +25,7 @@ const Footer = () => {
   const informationLinks = [
     { name: "Home", path: "/" },
     { name: "About Us", path: "/about" },
-    { name: "Blogs/News", path: "/blogs" },
+    { name: "Community", path: "/community" },
     { name: "Mentorship", path: "/mentorship" },
   ];
 

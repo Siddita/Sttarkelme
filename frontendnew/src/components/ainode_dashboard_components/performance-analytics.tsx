@@ -15,7 +15,7 @@ export function PerformanceAnalytics() {
 
   const skillDistribution = [
     { name: "Technical", value: 40, color: "#3B82F6" },
-    { name: "Behavioral", value: 25, color: "#06B6D4" },
+    { name: "Scenario Based", value: 25, color: "#06B6D4" },
     { name: "Leadership", value: 20, color: "#8B5CF6" },
     { name: "Communication", value: 15, color: "#10B981" },
   ]

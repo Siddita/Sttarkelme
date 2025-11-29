@@ -47,7 +47,7 @@ export function RecentActivity() {
     {
       type: "study",
       title: "Completed mock interview",
-      description: "Behavioral interview practice with mentor Sarah",
+      description: "Scenario based interview practice with mentor Sarah",
       time: "4 days ago",
       icon: <BookOpen className="h-4 w-4" />,
       color: "text-blue-600 bg-blue-100",

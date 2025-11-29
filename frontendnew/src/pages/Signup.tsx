@@ -391,9 +391,21 @@ const Signup = () => {
                       id="phone"
                       name="phone"
                       type="tel"
-                      placeholder="+1 (555) 123-4567"
+                      inputMode="numeric"
+                      maxLength={10}
+                      pattern="\d{10}"
+                      placeholder="Enter 10 digit mobile number"
                       value={formData.phone}
-                      onChange={handleInputChange}
+                      onChange={(e) => {
+                        const numericValue = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        handleInputChange({
+                          ...e,
+                          target: {
+                            ...e.target,
+                            value: numericValue
+                          }
+                        } as React.ChangeEvent<HTMLInputElement>);
+                      }}
                       onFocus={() => setFocusedField("phone")}
                       onBlur={() => setFocusedField(null)}
                       className="pl-10 bg-white/80 border-cyan-200/50 text-[#2D3253] placeholder:text-[#2D3253]/50 focus:border-cyan-500 focus:ring-cyan-500/20 backdrop-blur-sm"

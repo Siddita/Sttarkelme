@@ -20,7 +20,7 @@ interface QuizCardProps {
   difficulty: 'easy' | 'medium' | 'hard';
   duration: number;
   questions: number;
-  type: 'aptitude' | 'coding' | 'mcq' | 'behavioral' | 'company';
+  type: 'aptitude' | 'coding' | 'mcq' | 'scenario-based' | 'company';
   onStart: () => void;
   isCompleted?: boolean;
   score?: number;
@@ -47,7 +47,7 @@ const QuizCard: React.FC<QuizCardProps> = ({
         return <Code className="h-6 w-6" />;
       case 'mcq':
         return <CheckCircle className="h-6 w-6" />;
-      case 'behavioral':
+      case 'scenario-based':
         return <Users className="h-6 w-6" />;
       case 'company':
         return <Building className="h-6 w-6" />;
@@ -77,7 +77,7 @@ const QuizCard: React.FC<QuizCardProps> = ({
         return 'text-purple-600 bg-purple-100 border-purple-200';
       case 'mcq':
         return 'text-green-600 bg-green-100 border-green-200';
-      case 'behavioral':
+      case 'scenario-based':
         return 'text-orange-600 bg-orange-100 border-orange-200';
       case 'company':
         return 'text-indigo-600 bg-indigo-100 border-indigo-200';

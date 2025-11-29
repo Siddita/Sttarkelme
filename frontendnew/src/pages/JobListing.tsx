@@ -37,6 +37,7 @@ import { getApiUrl } from "@/config/api";
 import { Navbar } from "@/components/ui/navbar-menu";
 import { TextHoverEffect } from "@/components/ui/text-hover-effect";
 import './OutlinedText.css';
+import { storeResume, hasStoredResume, getStoredResumeAsFile } from "@/utils/resumeStorage";
 import { 
   uploadResumeApiV1ResumesPost, 
   getResumeApiV1Resumes_ResumeId_Get,
@@ -60,6 +61,7 @@ const JobListing = () => {
   const [selectedCompanySize, setSelectedCompanySize] = useState("All");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [hasResume, setHasResume] = useState(false);
   const [selectedResumeId, setSelectedResumeId] = useState<string | null>(null);
   const [showResumeAnalysis, setShowResumeAnalysis] = useState(false);
   const [useResumeMatching, setUseResumeMatching] = useState(false);
@@ -113,38 +115,45 @@ const JobListing = () => {
     const skills: string[] = [];
     
     try {
-      // First, check for the latest resume upload
-      const latestUpload = localStorage.getItem('latestResumeUpload');
+      // 1) Strongest source: resumeAnalysis written by PersonalizedAssessment
+      const resumeAnalysis = localStorage.getItem('resumeAnalysis');
       let latestResumeId: string | null = null;
-      
+
+      if (resumeAnalysis) {
+        const analysis = JSON.parse(resumeAnalysis);
+        console.log('🧠 resumeAnalysis found in localStorage:', analysis);
+        if (analysis?.skills && Array.isArray(analysis.skills)) {
+          skills.push(
+            ...analysis.skills.map((skill: any) =>
+              typeof skill === 'string' ? skill : skill.skill || skill.name || String(skill)
+            )
+          );
+        }
+        // Some versions may also carry resume id info
+        latestResumeId = analysis?.resumeId || analysis?.id || null;
+      }
+
+      // 2) latestResumeUpload – use its skills if present
+      const latestUpload = localStorage.getItem('latestResumeUpload');
       if (latestUpload) {
         try {
           const uploadData = JSON.parse(latestUpload);
-          latestResumeId = uploadData?.resumeId || uploadData?.id || null;
-          console.log('📋 Latest resume upload found:', latestResumeId);
+          latestResumeId = latestResumeId || uploadData?.resumeId || uploadData?.id || null;
+          console.log('📋 latestResumeUpload found:', latestResumeId);
           
-          // If latest upload has direct skills/data, use them first
           if (uploadData?.skills && Array.isArray(uploadData.skills)) {
-            skills.push(...uploadData.skills.map((skill: any) => typeof skill === 'string' ? skill : skill.skill || skill.name || String(skill)));
+            skills.push(
+              ...uploadData.skills.map((skill: any) =>
+                typeof skill === 'string' ? skill : skill.skill || skill.name || String(skill)
+              )
+            );
           }
         } catch (e) {
           console.warn('Error parsing latestResumeUpload:', e);
         }
       }
       
-      // Try to get skills from resumeAnalysis (prioritize if it matches latest upload)
-      const resumeAnalysis = localStorage.getItem('resumeAnalysis');
-      if (resumeAnalysis) {
-        const analysis = JSON.parse(resumeAnalysis);
-        // If we have a latest resume ID, only use analysis if it matches
-        if (!latestResumeId || analysis?.resume_id === latestResumeId || analysis?.id === latestResumeId) {
-          if (analysis?.skills && Array.isArray(analysis.skills)) {
-            skills.push(...analysis.skills.map((skill: any) => typeof skill === 'string' ? skill : skill.skill || skill.name || String(skill)));
-          }
-        }
-      }
-      
-      // Try to get skills from parsedResumeData (only if no latest upload or if it matches)
+      // 3) parsedResumeData (only if no latest upload or if it matches)
       const parsedResume = localStorage.getItem('parsedResumeData');
       if (parsedResume) {
         const resumeData = JSON.parse(parsedResume);
@@ -156,7 +165,7 @@ const JobListing = () => {
         }
       }
       
-      // Try to get skills from dashboard-state (fallback)
+      // 4) dashboard-state (fallback)
       const dashboardState = localStorage.getItem('dashboard-state');
       if (dashboardState) {
         const state = JSON.parse(dashboardState);
@@ -168,7 +177,7 @@ const JobListing = () => {
         }
       }
       
-      // Also try to get skills from resume analysis data if available (and matches latest)
+      // 5) Also try to get skills from in-memory resume analysis data if available (and matches latest)
       if (analysisData?.skills && (!latestResumeId || selectedResumeId === latestResumeId)) {
         const analysisSkills = Array.isArray(analysisData.skills) 
           ? analysisData.skills 
@@ -182,7 +191,9 @@ const JobListing = () => {
     }
     
     // Remove duplicates and return
-    return [...new Set(skills.filter(skill => skill && skill.trim()))];
+    const unique = [...new Set(skills.filter(skill => skill && skill.trim()))];
+    console.log('✅ Final skills extracted from localStorage for JobListing:', unique);
+    return unique;
   };
 
   // Function to fetch recommended jobs (explicitly passes skills from localStorage)
@@ -192,7 +203,8 @@ const JobListing = () => {
     console.log('📋 Skills extracted from localStorage:', skills);
     
     if (skills.length === 0) {
-      console.warn('⚠️ No skills found in localStorage, using empty array');
+      console.warn('⚠️ No skills found in localStorage. Skipping recommendJobs call.');
+      return;
     }
     
     recommendJobs(
@@ -350,6 +362,22 @@ const JobListing = () => {
     }
   }, [isAnalysisLoading, resumeAnalysis, analysisError]);
 
+  // Check for stored resume / analysis on component mount
+  useEffect(() => {
+    const storedResume = hasStoredResume();
+    const hasAnalysis = !!localStorage.getItem('resumeAnalysis');
+    const has = storedResume || hasAnalysis;
+    setHasResume(has);
+
+    // If we have a stored resume file, hydrate the UI with its name
+    if (storedResume) {
+      const storedFile = getStoredResumeAsFile();
+      if (storedFile) {
+        setUploadedFile(storedFile);
+      }
+    }
+  }, []);
+
   // Fetch recommended jobs on component mount (skills will be auto-extracted from localStorage)
   useEffect(() => {
     handleFetchRecommendedJobs();
@@ -399,9 +427,17 @@ const JobListing = () => {
       const formData = new FormData();
       formData.append('file', file, file.name);
       uploadResume(formData, {
-        onSuccess: (created: any) => {
+        onSuccess: async (created: any) => {
           setIsUploading(false);
-          // Store the latest upload response in localStorage
+          // Store resume file in localStorage (replaces previous resume)
+          try {
+            await storeResume(file, created?.id ?? created?.resume?.id, created);
+            setHasResume(true);
+            console.log('✅ Resume stored in localStorage');
+          } catch (error) {
+            console.error('Failed to store resume in localStorage:', error);
+          }
+          // Store the latest upload response in localStorage (for backward compatibility)
           try {
             const uploadResponse = {
               ...created,
@@ -531,7 +567,7 @@ const JobListing = () => {
               headers["Authorization"] = `Bearer ${token}`;
             }
 
-            const resp = await fetch(getApiUrl("/interview/audio/transcribe"), {
+            const resp = await fetch(getApiUrl("/v1/audio/transcribe"), {
               method: "POST",
               headers,
               body: form,
@@ -906,66 +942,68 @@ const JobListing = () => {
               </div>
             </section>
 
-            {/* Upload Resume Section */}
-            <motion.div 
-              className="max-w-4xl mx-auto mb-12"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
-            >
-              <Card className="p-8 bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20 hover:border-primary/30 transition-all duration-300">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <FileText className="h-8 w-8 text-primary" />
-                  </div>
-                  <h3 className="text-2xl font-bold mb-2 text-[#2D3253]">
-                    Get Personalized Job Recommendations
-                  </h3>
-                  <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
-                    Upload your resume and our AI will analyze your skills and experience to find the perfect job matches for you.
-                  </p>
-                  
-                  <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                    <div className="relative">
-                      <input
-                        type="file"
-                        accept=".pdf,.doc,.docx"
-                        onChange={handleFileChange}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        id="resume-upload"
-                      />
-                      <label
-                        htmlFor="resume-upload"
-                        className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors cursor-pointer"
-                      >
-                        {isUploading ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="w-4 h-4" />
-                            Upload Resume
-                          </>
-                        )}
-                      </label>
+            {/* Upload Resume Section - hidden when we already have resume/analysis in localStorage */}
+            {!hasResume && (
+              <motion.div 
+                className="max-w-4xl mx-auto mb-12"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+              >
+                <Card className="p-8 bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20 hover:border-primary/30 transition-all duration-300">
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <FileText className="h-8 w-8 text-primary" />
+                    </div>
+                    <h3 className="text-2xl font-bold mb-2 text-[#2D3253]">
+                      Get Personalized Job Recommendations
+                    </h3>
+                    <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
+                      Upload your resume and our AI will analyze your skills and experience to find the perfect job matches for you.
+                    </p>
+                    
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                      <div className="relative">
+                        <input
+                          type="file"
+                          accept=".pdf,.doc,.docx"
+                          onChange={handleFileChange}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          id="resume-upload"
+                        />
+                        <label
+                          htmlFor="resume-upload"
+                          className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors cursor-pointer"
+                        >
+                          {isUploading ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              Uploading...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-4 h-4" />
+                              {hasResume ? 'Reupload Resume' : 'Upload Resume'}
+                            </>
+                          )}
+                        </label>
+                      </div>
+                      
+                      {uploadedFile && !isUploading && (
+                        <div className="flex items-center gap-2 text-green-600">
+                          <CheckCircle className="w-5 h-5" />
+                          <span className="text-sm font-medium">{uploadedFile.name}</span>
+                        </div>
+                      )}
                     </div>
                     
-                    {uploadedFile && !isUploading && (
-                      <div className="flex items-center gap-2 text-green-600">
-                        <CheckCircle className="w-5 h-5" />
-                        <span className="text-sm font-medium">{uploadedFile.name}</span>
-                      </div>
-                    )}
-          </div>
-                  
-                  <div className="mt-4 text-xs text-muted-foreground">
-                    Supported formats: PDF, DOC, DOCX (Max 10MB)
+                    <div className="mt-4 text-xs text-muted-foreground">
+                      Supported formats: PDF, DOC, DOCX (Max 10MB)
+                    </div>
                   </div>
-                </div>
-              </Card>
-            </motion.div>
+                </Card>
+              </motion.div>
+            )}
 
 
           {/* Resume Management Section */}

@@ -293,7 +293,7 @@ const Interview = () => {
                   </div>
                   <div className="flex items-start space-x-2">
                     <div className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0"></div>
-                    <p>Use the STAR method for behavioral questions</p>
+                    <p>Use the STAR method for scenario-based questions</p>
                   </div>
                   <div className="flex items-start space-x-2">
                     <div className="w-1.5 h-1.5 bg-primary rounded-full mt-2 flex-shrink-0"></div>

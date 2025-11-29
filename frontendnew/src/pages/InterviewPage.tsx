@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Navbar } from "@/components/ui/navbar-menu";
 import { useAuth } from "@/contexts/AuthContext";
+import { storeResume, hasStoredResume, getStoredResumeAsFile } from "@/utils/resumeStorage";
 import {
   Brain,
   Camera,
@@ -91,8 +93,35 @@ async function apiClient(
 
   if (!resp.ok) {
     console.error(`API Error: ${resp.status}`, { text, json });
-    const err = new Error(`HTTP ${resp.status}: ${json?.detail || text}`);
+    
+    // Handle validation errors (422) with detailed messages
+    let errorMessage = `HTTP ${resp.status}`;
+    if (json) {
+      if (json.detail) {
+        // Handle Pydantic validation errors
+        if (Array.isArray(json.detail)) {
+          const validationErrors = json.detail.map((err: any) => {
+            const field = err.loc?.join('.') || 'unknown';
+            return `${field}: ${err.msg}`;
+          }).join(', ');
+          errorMessage = `Validation Error: ${validationErrors}`;
+        } else if (typeof json.detail === 'string') {
+          errorMessage = json.detail;
+        } else if (typeof json.detail === 'object') {
+          errorMessage = JSON.stringify(json.detail, null, 2);
+        }
+      } else if (json.message) {
+        errorMessage = json.message;
+      } else {
+        errorMessage = JSON.stringify(json, null, 2);
+      }
+    } else if (text) {
+      errorMessage = text;
+    }
+    
+    const err = new Error(errorMessage);
     (err as any).response = json;
+    (err as any).status = resp.status;
     throw err;
   }
 
@@ -180,9 +209,11 @@ export default function InterviewPage() {
   // isLoadingRoles is now managed by the mutation hook
   const [showRoleSelection, setShowRoleSelection] = useState(false);
   const [resumeData, setResumeData] = useState<ResumeData | null>(null);
+  const [hasParsedResume, setHasParsedResume] = useState(false);
 
   // Resume parsing states
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [hasResume, setHasResume] = useState(false);
   const [parsingProgress, setParsingProgress] = useState(0);
   const [isParsingComplete, setIsParsingComplete] = useState(false);
   const [isResumeFromStorage, setIsResumeFromStorage] = useState(false);
@@ -195,6 +226,8 @@ export default function InterviewPage() {
   const [interviewStartTime, setInterviewStartTime] = useState<Date | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [questionCount, setQuestionCount] = useState(0);
+  const [selectedJobData, setSelectedJobData] = useState<any | null>(null);
+  const [isJobSpecificInterview, setIsJobSpecificInterview] = useState(false);
 
   const [metrics, setMetrics] = useState({
     confidencePercent: 0,
@@ -214,11 +247,18 @@ export default function InterviewPage() {
 
   // Analytics collapse state
   const [isAnalyticsExpanded, setIsAnalyticsExpanded] = useState(true);
+  const roleGradientPalette = [
+    "from-sky-500/10 via-sky-400/5 to-transparent",
+    "from-indigo-500/10 via-indigo-400/5 to-transparent",
+    "from-emerald-500/10 via-emerald-400/5 to-transparent",
+    "from-amber-500/10 via-amber-400/5 to-transparent",
+  ];
 
   const frameIntervalRef = useRef<number | null>(null);
   const timerIntervalRef = useRef<number | null>(null);
   const interviewSectionRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
 
   // Resume parsing mutation
   const { mutate: parseResume, isLoading: isParseLoading } = parseResumeBuilderApiV1ResumesBuilderParsePost({
@@ -231,6 +271,7 @@ export default function InterviewPage() {
           setTimeout(() => {
             const parsedData = data.data;
             setResumeData(parsedData);
+            setHasParsedResume(true);
             setIsResumeFromStorage(false); // Mark as newly uploaded, not from storage
             
             // Store parsed resume data in localStorage
@@ -314,8 +355,20 @@ export default function InterviewPage() {
     }
   };
 
+  // Check for stored resume on component mount
+  useEffect(() => {
+    const stored = hasStoredResume();
+    setHasResume(stored);
+    if (stored) {
+      const storedFile = getStoredResumeAsFile();
+      if (storedFile) {
+        setUploadedFile(storedFile);
+      }
+    }
+  }, []);
+
   // Handle file upload
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       // Validate file type
@@ -331,14 +384,24 @@ export default function InterviewPage() {
         return;
       }
       
+      // Store resume file in localStorage (replaces previous resume)
+      try {
+        await storeResume(file);
+        setHasResume(true);
+        console.log('✅ Resume stored in localStorage');
+      } catch (error) {
+        console.error('Failed to store resume in localStorage:', error);
+      }
+      
       setUploadedFile(file);
       setIsParsingComplete(false);
       setParsingProgress(0);
+      setHasParsedResume(false);
     }
   };
 
   // Handle file drop
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     const file = event.dataTransfer.files[0];
     if (file) {
@@ -351,9 +414,20 @@ export default function InterviewPage() {
         alert("File size should be less than 10MB");
         return;
       }
+      
+      // Store resume file in localStorage (replaces previous resume)
+      try {
+        await storeResume(file);
+        setHasResume(true);
+        console.log('✅ Resume stored in localStorage');
+      } catch (error) {
+        console.error('Failed to store resume in localStorage:', error);
+      }
+      
       setUploadedFile(file);
       setIsParsingComplete(false);
       setParsingProgress(0);
+      setHasParsedResume(false);
     }
   };
 
@@ -367,6 +441,7 @@ export default function InterviewPage() {
     // Show immediate parsing indication
     setParsingProgress(10);
     setIsParsingComplete(false);
+    setHasParsedResume(false);
 
     // Create FormData object for multipart/form-data
     const formData = new FormData();
@@ -381,6 +456,7 @@ export default function InterviewPage() {
     setUploadedFile(null);
     setIsParsingComplete(false);
     setParsingProgress(0);
+    setHasParsedResume(false);
   };
 
   // Redirect to login if not authenticated
@@ -431,6 +507,7 @@ export default function InterviewPage() {
       
       if (resumeData) {
         setResumeData(resumeData);
+        setHasParsedResume(true);
         setIsResumeFromStorage(true); // Mark as loaded from storage
         // Auto-fetch role suggestions if resume data is available
         if (resumeData && Object.keys(resumeData).length > 0) {
@@ -456,6 +533,36 @@ export default function InterviewPage() {
       }
     } catch (error) {
       console.error('Failed to load interview session data:', error);
+    }
+  }, []);
+
+  // Check for job-specific interview mode
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const mode = urlParams.get('mode');
+    const hasJobData = urlParams.get('hasJobData') === 'true';
+    
+    if (mode === 'job-specific' && hasJobData) {
+      const jobData = localStorage.getItem('selectedJobForInterview');
+      const resumeDataFromStorage = localStorage.getItem('parsedResumeData');
+      
+      if (jobData && resumeDataFromStorage) {
+        try {
+          const parsedJobData = JSON.parse(jobData);
+          setSelectedJobData(parsedJobData);
+          setIsJobSpecificInterview(true);
+          console.log('✅ Job-specific interview mode activated:', parsedJobData);
+          
+          // Also set the selected role from the job
+          if (parsedJobData.job_title) {
+            setSelectedRole(parsedJobData.job_title);
+          }
+        } catch (error) {
+          console.error('❌ Error parsing job data:', error);
+        }
+      } else {
+        console.warn('⚠️ Job-specific mode requested but data not found in localStorage');
+      }
     }
   }, []);
 
@@ -558,7 +665,7 @@ export default function InterviewPage() {
   // Start interview
   const startInterview = async () => {
     // Check if role is selected (required by new API)
-    if (!selectedRole && roleSuggestions.length > 0) {
+    if (!selectedRole && roleSuggestions.length > 0 && !isJobSpecificInterview) {
       alert("Please select a role from the suggestions before starting the interview.");
       return;
     }
@@ -571,19 +678,53 @@ export default function InterviewPage() {
 
     setIsStarting(true);
     try {
-      const payload = {
-        interview_type: "behavioral",
-        position: selectedRole || selectedTemplate?.position || "Software Engineer",
-        experience_level: "intermediate",
-        preferred_language: "English",
-        mode: "practice",
-        industry: selectedTemplate?.industry || "technology",
-        company_template: selectedTemplate?.id || "google",
-        custom_instructions: "Be confident and concise",
-        user_id: user?.id || "1",
-        resume_data: resumeData,
-      };
-      const res = await apiClient("POST", "/interview/v1/interview/start", payload, true);
+      let endpoint = "/interview/v1/interview/start";
+      let payload: any;
+
+      // Use job-specific endpoint if job data is available
+      if (isJobSpecificInterview && selectedJobData) {
+        endpoint = "/interview/v1/interview/start-with-job";
+        payload = {
+          interview_type: "behavioral",
+          job_description: selectedJobData.job_description || "No description available",
+          job_title: selectedJobData.job_title || selectedRole || "Software Engineer",
+          experience_level: "intermediate",
+          preferred_language: "English",
+          mode: "assessment",
+          industry: "technology",
+          custom_instructions: "Be confident and concise",
+          ...(user?.id && { user_id: user.id }),
+          ...(resumeData && Object.keys(resumeData).length > 0 && { resume_data: resumeData }),
+        };
+        console.log('🎯 Starting job-specific interview with payload:', payload);
+      } else {
+        // Regular interview endpoint - only include fields that match the schema
+        // Position is required, resume_data might be required by deployed API
+        const position = selectedRole || selectedTemplate?.position || "Software Engineer";
+        if (!position) {
+          alert("Position is required. Please select a role.");
+          setIsStarting(false);
+          return;
+        }
+        
+        payload = {
+          interview_type: "behavioral",
+          position: position,
+          experience_level: "intermediate",
+          preferred_language: "English",
+          mode: "practice",
+          industry: selectedTemplate?.industry || "technology",
+          ...(selectedTemplate?.id && { company_template: selectedTemplate.id }),
+          custom_instructions: "Be confident and concise",
+          ...(user?.id && { user_id: user.id }),
+          ...(resumeData && Object.keys(resumeData).length > 0 && { resume_data: resumeData }),
+        };
+        console.log('📝 Starting regular interview with payload:', payload);
+      }
+
+      const res = await apiClient("POST", endpoint, payload, true);
+      // Immediately store session id in both state and ref so analytics loop has access
+      sessionIdRef.current = res.session_id;
       setSessionId(res.session_id);
       setCurrentQuestion(res.first_question || "Welcome! Let's begin your interview.");      
       setQuestionCount(1);
@@ -619,9 +760,24 @@ export default function InterviewPage() {
       setTimeout(() => {
         interviewSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 300);
-    } catch (err) {
+    } catch (err: any) {
       console.error("startInterview error:", err);
-      alert("Failed to start interview — please check console.");
+      console.error("Error response:", err.response);
+      console.error("Error status:", err.status);
+      
+      // Show user-friendly error message
+      let errorMessage = "Failed to start interview.";
+      if (err.message) {
+        errorMessage = err.message;
+      } else if (err.response?.detail) {
+        if (Array.isArray(err.response.detail)) {
+          errorMessage = `Validation Error: ${err.response.detail.map((e: any) => `${e.loc?.join('.')}: ${e.msg}`).join(', ')}`;
+        } else {
+          errorMessage = err.response.detail;
+        }
+      }
+      
+      alert(errorMessage);
     } finally {
       setIsStarting(false);
     }
@@ -718,7 +874,8 @@ export default function InterviewPage() {
       console.warn("captureAndAnalyze: mediaStream not available");
       return;
     }
-    if (!sessionId) {
+    const activeSessionId = sessionIdRef.current;
+    if (!activeSessionId) {
       console.warn("captureAndAnalyze: sessionId not available");
       return;
     }
@@ -747,21 +904,38 @@ export default function InterviewPage() {
         return;
       }
       
-      const body = { frame_data: b64, session_id: sessionId };
-      console.log("Sending frame for analysis, sessionId:", sessionId);
+      const body = { frame_data: b64, session_id: activeSessionId };
+      console.log("Sending frame for analysis, sessionId:", activeSessionId);
       const res = (await apiClient("POST", "/interview/v1/analyze/frame", body, true)) as FrameAnalysis;
 
-      const conf = res.confidence_score ?? 0;
-      const overall = res.overall_score ?? 0;
-      const ec = res.eye_contact?.score ?? 0;
-      const posture = res.posture?.score ?? 0;
-      const hm = res.head_movement?.score ?? 0;
-      const fe = res.facial_expression?.score ?? 0;
-      const hg = res.hand_gestures?.score ?? 0;
+      // Helper to safely extract a numeric score from different possible shapes
+      const getScore = (value: any): number => {
+        if (typeof value === "number") return value;
+        if (!value || typeof value !== "object") return 0;
+        if (typeof value.score === "number") return value.score;
+        if (typeof value.value === "number") return value.value;
+        // Some backends may nest scores deeper or use 0‑1 scale only
+        const first = Object.values(value)[0] as any;
+        if (typeof first === "number") return first;
+        if (first && typeof first === "object" && typeof first.score === "number") return first.score;
+        return 0;
+      };
+
+      const confRaw = res.confidence_score ?? 0;
+      const overallRaw = res.overall_score ?? 0;
+
+      const conf = typeof confRaw === "number" && confRaw <= 1 ? confRaw * 100 : confRaw;
+      const overall = typeof overallRaw === "number" ? overallRaw : getScore(overallRaw);
+
+      const ec = getScore((res as any).eye_contact);
+      const posture = getScore((res as any).posture);
+      const hm = getScore((res as any).head_movement);
+      const fe = getScore((res as any).facial_expression);
+      const hg = getScore((res as any).hand_gestures);
       const suggestions = res.real_time_suggestions ?? [];
 
       setMetrics({
-        confidencePercent: conf * 100,
+        confidencePercent: conf,
         overallScore: overall,
         eyeContact: ec,
         posture,
@@ -780,7 +954,7 @@ export default function InterviewPage() {
 
   const startFrameLoop = () => {
     stopFrameLoop();
-    console.log("Starting frame analysis loop, sessionId:", sessionId);
+    console.log("Starting frame analysis loop, sessionId:", sessionIdRef.current);
     const id = window.setInterval(() => {
       void captureAndAnalyze();
     }, 1000);
@@ -850,7 +1024,7 @@ export default function InterviewPage() {
                     form.append("file", blob, "answer.webm");
                     
                     console.log("Sending audio for transcription...");
-                    const res = await apiClient("POST", "/interview/v1/audio/transcribe", form, false);
+                    const res = await apiClient("POST", "/v1/audio/transcribe", form, false);
                     console.log("Transcribe result:", res);
                     
                     // Handle different response formats
@@ -874,18 +1048,9 @@ export default function InterviewPage() {
                 } catch (apiErr) {
                     console.error("API transcription failed:", apiErr);
                     
-                    // Fallback: Create a download link for manual transcription
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'interview-audio.webm';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    
-                    alert("Audio API not available. Audio file downloaded. Please type your answer manually.");
+                    // Fallback: Show message and keep textbox available for manual input
                     setUserAnswer(""); // Clear the answer field for manual input
+                    toast.error("Audio transcription failed. Please type your answer in the textbox below.");
                 }
             } catch (err) {
                 console.error("Audio processing failed:", err);
@@ -1081,6 +1246,7 @@ export default function InterviewPage() {
         onBack={() => {
           setShowAnalysis(false);
           setSessionId(null);
+          sessionIdRef.current = null;
           setCurrentQuestion("Press Start to begin");
           setUserAnswer("");
           setMetrics({
@@ -1134,8 +1300,8 @@ export default function InterviewPage() {
                     AI <span className="bg-gradient-primary bg-clip-text text-transparent">Interview</span>
                   </h1>
                   
-                  {/* Resume Upload Section */}
-                  {!isInterviewRunning && (
+                  {/* Resume Upload Section - Hidden for job-specific interviews */}
+                  {!isInterviewRunning && !isJobSpecificInterview && (
                     <div className="max-w-4xl mx-auto mb-8">
                       <Card className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-primary/20 shadow-lg">
                         <div className="flex items-center justify-between mb-4">
@@ -1161,6 +1327,7 @@ export default function InterviewPage() {
                                 setShowRoleSelection(false);
                                 setIsResumeFromStorage(false);
                                 localStorage.removeItem('parsedResumeData');
+                                setHasParsedResume(false);
                               }}
                               className="text-xs"
                             >
@@ -1268,7 +1435,7 @@ export default function InterviewPage() {
                                   type="button"
                                   onClick={() => fileInputRef.current?.click()}
                                 >
-                                  Choose File
+                                  {hasResume ? 'Reupload Resume' : 'Choose File'}
                                 </Button>
                               </div>
                             </div>
@@ -1284,69 +1451,143 @@ export default function InterviewPage() {
                     Practice with real-time analysis and feedback to improve your interview skills
                   </p>
                   
-                  {/* Role Suggestions */}
-                  {/* Debug: showRoleSelection={String(showRoleSelection)}, roleSuggestions.length={roleSuggestions.length}, isInterviewRunning={String(isInterviewRunning)} */}
-                  {(showRoleSelection || roleSuggestions.length > 0) && !isInterviewRunning && (
+                  {/* Job-Specific Interview Indicator */}
+                  {isJobSpecificInterview && selectedJobData && !isInterviewRunning && (
                     <div className="max-w-4xl mx-auto mb-8">
-                      <Card className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-primary/20 shadow-lg">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Target className="w-5 h-5 text-primary" />
-                          <h3 className="text-lg font-semibold text-[#2D3253]">Suggested Roles for You</h3>
-                          {isSuggestingRoles && (
-                            <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                      <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-6 shadow-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-green-500 p-2 rounded-full">
+                            <Target className="w-6 h-6 text-white" />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="text-lg font-bold text-green-900 mb-1">
+                              Job-Specific Interview Selected
+                            </h3>
+                            <p className="text-sm text-green-700 font-medium">
+                              {selectedJobData.job_title} at {selectedJobData.company_name}
+                            </p>
+                            {selectedJobData.location && (
+                              <p className="text-xs text-green-600 mt-1">
+                                📍 {selectedJobData.location}
+                              </p>
+                            )}
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => {
+                              setSelectedJobData(null);
+                              setIsJobSpecificInterview(false);
+                              localStorage.removeItem('selectedJobForInterview');
+                            }}
+                            className="text-green-700 hover:text-green-900 hover:bg-green-100"
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        <div className="mt-4 p-3 bg-white/60 rounded-lg border border-green-200">
+                          <p className="text-xs text-green-800">
+                            💡 <span className="font-semibold">Your interview will be tailored</span> to match this specific job role and requirements.
+                          </p>
+                        </div>
+                      </Card>
+                    </div>
+                  )}
+                  
+                  {/* Role Suggestions - Hidden for job-specific interviews */}
+                  {/* Debug: showRoleSelection={String(showRoleSelection)}, roleSuggestions.length={roleSuggestions.length}, isInterviewRunning={String(isInterviewRunning)} */}
+                  {hasParsedResume && (showRoleSelection || roleSuggestions.length > 0) && !isInterviewRunning && !isJobSpecificInterview && (
+                    <div className="max-w-5xl mx-auto mb-10">
+                      <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-white via-sky-50 to-violet-50 shadow-2xl">
+                        <div className="absolute inset-x-8 inset-y-4 rounded-3xl bg-white/60 blur-3xl pointer-events-none" />
+                        <div className="relative p-8 space-y-5">
+                          <div className="flex flex-wrap items-center gap-4 justify-between">
+                            <div>
+                              <p className="text-xs uppercase tracking-[0.25em] text-primary font-semibold">Tailored Matches</p>
+                              <h3 className="text-2xl font-bold text-slate-900 mt-1">Suggested Roles for You</h3>
+                            </div>
+                            {isSuggestingRoles && (
+                              <Badge variant="secondary" className="flex items-center gap-2 bg-primary/10 text-primary border-primary/20">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Analyzing resume
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-slate-600 text-sm md:text-base max-w-3xl">
+                            Based on your resume, we curated roles that align with your current strengths and growth areas. Pick one to personalize your mock interview.
+                          </p>
+                          
+                          {isSuggestingRoles && roleSuggestions.length === 0 && (
+                            <div className="flex items-center justify-center rounded-2xl border border-dashed border-primary/30 bg-primary/5 py-10 text-sm text-primary">
+                              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                              Generating intelligent recommendations…
+                            </div>
+                          )}
+
+                          {!isSuggestingRoles && roleSuggestions.length === 0 && (
+                            <div className="text-center py-6 rounded-2xl border border-dashed border-muted bg-white/60">
+                              <p className="text-sm text-muted-foreground">
+                                No role suggestions available yet. Try re-uploading your resume or continue with a default interview.
+                              </p>
+                            </div>
+                          )}
+
+                          {roleSuggestions.length > 0 && (
+                            <div className="grid gap-5 md:grid-cols-3">
+                              {roleSuggestions.map((suggestion, index) => {
+                                const gradient = roleGradientPalette[index % roleGradientPalette.length];
+                                const isActive = selectedRole === suggestion.role;
+                                return (
+                                  <button
+                                    key={suggestion.role + index}
+                                    onClick={() => setSelectedRole(suggestion.role)}
+                                    className={`group relative rounded-4xl border-2 bg-white p-6 text-left transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                                      isActive
+                                        ? "border-primary shadow-xl shadow-primary/20"
+                                        : "border-white/60 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg"
+                                    }`}
+                                  >
+                                    <div className={`pointer-events-none absolute inset-0 rounded-4xl bg-gradient-to-br ${gradient} opacity-0 transition group-hover:opacity-100 ${isActive ? "opacity-100" : ""}`} />
+                                    <div className="relative space-y-4">
+                                      <div className="flex items-start justify-between">
+                                        <div>
+                                          <p className="text-[11px] uppercase tracking-[0.25em] text-slate-400">Role Match</p>
+                                          <h4 className="text-lg font-semibold text-slate-900 mt-1">{suggestion.role}</h4>
+                                        </div>
+                                        {isActive && (
+                                          <Badge className="bg-primary text-white flex items-center gap-1 rounded-full px-3 py-1">
+                                            <CheckCircle className="h-3 w-3" />
+                                            Selected
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <p className="text-sm text-slate-600 leading-relaxed line-clamp-2">
+                                        {suggestion.description}
+                                      </p>
+                                      {suggestion.match_reason && (
+                                        <div className="rounded-3xl border border-primary/10 bg-primary/5 p-3 text-xs text-primary/90 font-medium leading-relaxed">
+                                          {suggestion.match_reason}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {selectedRole && (
+                            <div className="flex items-center justify-between rounded-2xl border border-primary/30 bg-white/80 px-5 py-3 text-sm text-slate-700">
+                              <div>
+                                <p className="text-xs uppercase tracking-wide text-primary font-semibold">Ready</p>
+                                <p className="font-medium text-slate-900">You’ll be interviewed as <span className="text-primary">{selectedRole}</span></p>
+                              </div>
+                              <Button variant="outline" size="sm" onClick={() => setSelectedRole(null)}>
+                                Clear selection
+                              </Button>
+                            </div>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Based on your resume, we've identified these roles that match your skills. Select one to start your interview.
-                        </p>
-                        {isSuggestingRoles && roleSuggestions.length === 0 && (
-                          <div className="text-center py-4">
-                            <Loader2 className="w-6 h-6 animate-spin text-primary mx-auto mb-2" />
-                            <p className="text-sm text-muted-foreground">Analyzing your resume and generating role suggestions...</p>
-                          </div>
-                        )}
-                        {!isSuggestingRoles && roleSuggestions.length === 0 && (
-                          <div className="text-center py-4">
-                            <p className="text-sm text-muted-foreground">No role suggestions available. You can still start the interview with a default role.</p>
-                          </div>
-                        )}
-                        {roleSuggestions.length > 0 && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          {roleSuggestions.map((suggestion, index) => (
-                            <Card
-                              key={index}
-                              className={`p-4 cursor-pointer transition-all duration-200 ${
-                                selectedRole === suggestion.role
-                                  ? 'border-2 border-primary bg-primary/5 shadow-md'
-                                  : 'border border-gray-200 hover:border-primary/50 hover:shadow-md'
-                              }`}
-                              onClick={() => setSelectedRole(suggestion.role)}
-                            >
-                              <div className="flex items-start justify-between mb-2">
-                                <h4 className="font-semibold text-[#2D3253] text-sm">{suggestion.role}</h4>
-                                {selectedRole === suggestion.role && (
-                                  <CheckCircle className="w-5 h-5 text-primary flex-shrink-0" />
-                                )}
-                              </div>
-                              <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
-                                {suggestion.description}
-                              </p>
-                              <div className="mt-2 pt-2 border-t border-gray-100">
-                                <p className="text-xs text-primary font-medium">
-                                  Match: {suggestion.match_reason}
-                                </p>
-                              </div>
-                            </Card>
-                          ))}
-                        </div>
-                        )}
-                        {selectedRole && (
-                          <div className="mt-4 p-3 bg-primary/10 rounded-lg border border-primary/20">
-                            <p className="text-sm text-[#2D3253]">
-                              <span className="font-semibold">Selected:</span> {selectedRole}
-                            </p>
-                          </div>
-                        )}
                       </Card>
                     </div>
                   )}
@@ -1481,6 +1722,23 @@ export default function InterviewPage() {
                           <BarChart3 className="mr-2 w-4 h-4" />
                           History
                         </Button>
+                        <Button
+                          variant="outline"
+                          disabled={!isInterviewRunning}
+                          onClick={() => {
+                            if (!isInterviewRunning) return;
+                            // Ensure analytics panel is visible and scroll into view
+                            setIsAnalyticsExpanded(true);
+                            interviewSectionRef.current?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "start",
+                            });
+                          }}
+                          className="border-gray-300 hover:bg-gray-50 rounded-2xl"
+                        >
+                          <BarChart3 className="mr-2 w-4 h-4" />
+                          Live Analytics
+                        </Button>
                         <Button 
                           variant="destructive" 
                           onClick={() => {
@@ -1489,6 +1747,7 @@ export default function InterviewPage() {
                             stopAudioRecording();
                             mediaStreamRef.current?.getTracks().forEach(t => t.stop());
                             setIsInterviewRunning(false);
+                        sessionIdRef.current = null;
                             // Clear interview session data from localStorage
                             localStorage.removeItem('interviewSessionData');
                             setIsInterviewFromStorage(false);
@@ -1770,7 +2029,13 @@ export default function InterviewPage() {
                         </div>
                       )}
                     </div>
-                    <div className="text-base font-medium text-[#2D3253] leading-relaxed">
+                    <div 
+                      className="text-base font-medium text-[#2D3253] leading-relaxed h-[11.375rem] overflow-y-auto pr-2 whitespace-pre-wrap break-words"
+                      style={{
+                        scrollbarWidth: 'thin',
+                        scrollbarColor: 'rgba(59, 130, 246, 0.5) transparent'
+                      }}
+                    >
                       {currentQuestion}
                     </div>
                     

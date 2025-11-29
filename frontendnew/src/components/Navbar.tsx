@@ -32,7 +32,7 @@ const Navbar = () => {
         { name: "AI Assessment", path: "/services/ai-assessment" },
       ],
     },
-    { name: "Blogs/News", path: "/blogs" },
+    { name: "Community", path: "/community-public" },
     { name: "Mentorship", path: "/mentorship" },
     { name: "Try Placemate", path: "https://place-pro-theta.vercel.app/", external: true },
   ];

@@ -41,7 +41,7 @@ import {
 import { Navbar } from "@/components/ui/navbar-menu";
 import Footer from "@/components/Footer";
 
-type QuizType = 'aptitude' | 'coding' | 'mcq' | 'behavioral' | 'company';
+type QuizType = 'aptitude' | 'coding' | 'mcq' | 'scenario-based' | 'company';
 type QuizState = 'selection' | 'loading' | 'question' | 'results';
 
 const Quiz: React.FC = () => {
@@ -63,8 +63,8 @@ const Quiz: React.FC = () => {
   // Note: Coding service doesn't have an evaluation endpoint
   const codingHealthCheck = useCodingHealthCheck();
   const generateMCQ = useGenerateMCQQuestions();
-  const generateBehavioral = useGenerateBehavioralQuestions();
-  const evaluateBehavioral = useEvaluateBehavioralAnswers();
+  const generateScenarioBased = useGenerateBehavioralQuestions();
+  const evaluateScenarioBased = useEvaluateBehavioralAnswers();
   const { data: companyRounds } = useGetCompanyRounds();
   const generateCompany = useGenerateCompanyQuestion();
   const evaluateCompany = useEvaluateCompanyAnswer();
@@ -103,9 +103,9 @@ const Quiz: React.FC = () => {
       questions: 15,
       color: 'text-green-600 bg-green-100 border-green-200'
     },
-    behavioral: {
+    'scenario-based': {
       title: "Scenario-Based Assessment",
-      description: "Evaluate your soft skills and behavioral patterns",
+      description: "Evaluate your soft skills and scenario-based patterns",
       icon: Users,
       difficulty: 'medium' as const,
       duration: 25,
@@ -156,8 +156,8 @@ const Quiz: React.FC = () => {
             count: config.questions
           });
           break;
-        case 'behavioral':
-          response = await generateBehavioral.mutateAsync({
+        case 'scenario-based':
+          response = await generateScenarioBased.mutateAsync({
             role: 'software_engineer',
             difficulty: config.difficulty,
             count: config.questions

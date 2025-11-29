@@ -32,7 +32,7 @@ interface QuizResultsProps {
   }>;
   onRetake: () => void;
   onHome: () => void;
-  type: 'aptitude' | 'coding' | 'mcq' | 'behavioral' | 'company';
+  type: 'aptitude' | 'coding' | 'mcq' | 'scenario-based' | 'company';
   className?: string;
 }
 
@@ -70,7 +70,7 @@ const QuizResults: React.FC<QuizResultsProps> = ({
         return <Code className="h-6 w-6" />;
       case 'mcq':
         return <CheckCircle className="h-6 w-6" />;
-      case 'behavioral':
+      case 'scenario-based':
         return <Users className="h-6 w-6" />;
       case 'company':
         return <Building className="h-6 w-6" />;

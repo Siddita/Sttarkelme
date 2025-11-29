@@ -42,6 +42,7 @@ import {
 import { Navbar } from "@/components/ui/navbar-menu";
 import { TextHoverEffect } from "@/components/ui/text-hover-effect";
 import { FeatureSteps } from "@/components/new_ui/feature-section2";
+import { storeResume, hasStoredResume, getStoredResumeAsFile } from "@/utils/resumeStorage";
 import { 
   uploadResumeApiV1ResumesPost,
   getAnalysisApiV1Resumes_ResumeId_AnalysisGet,
@@ -104,6 +105,7 @@ const AIAssessment = () => {
   const [activeTab, setActiveTab] = useState<'personalized' | 'assessment' | 'interview'>(getInitialTab());
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [hasResume, setHasResume] = useState(false);
   const [showSampleQuestions, setShowSampleQuestions] = useState(false);
   const [resumeWorkflowStep, setResumeWorkflowStep] = useState<'upload' | 'analysis' | 'jobs' | 'test' | 'interview'>('upload');
   const [extractedSkills, setExtractedSkills] = useState<string[]>([]);
@@ -115,6 +117,8 @@ const AIAssessment = () => {
   const [resumeAnalysis, setResumeAnalysis] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [selectedJobData, setSelectedJobData] = useState<any | null>(null);
+  const [isJobSpecificInterview, setIsJobSpecificInterview] = useState(false);
   const navigate = useNavigate();
 
   // Quiz-related state
@@ -143,8 +147,8 @@ const AIAssessment = () => {
   const evaluateAptitude = evaluateAnswersV1EvaluateAptitudePost();
 
   // Quiz hooks
-  const generateBehavioralQuestions = useGenerateBehavioralQuestions();
-  const evaluateBehavioralAnswers = useEvaluateBehavioralAnswers();
+  const generateScenarioBasedQuestions = useGenerateBehavioralQuestions();
+  const evaluateScenarioBasedAnswers = useEvaluateBehavioralAnswers();
   const generateCodingQuestion = useGenerateCodingQuestion();
   // Note: Coding service doesn't have an evaluation endpoint, only health check available
   const codingHealthCheck = useCodingHealthCheck();
@@ -180,6 +184,18 @@ const AIAssessment = () => {
     }
   }, [analysisLoading, analysisData, analysisError, resumeId]);
 
+  // Check for stored resume on component mount
+  useEffect(() => {
+    const stored = hasStoredResume();
+    setHasResume(stored);
+    if (stored) {
+      const storedFile = getStoredResumeAsFile();
+      if (storedFile) {
+        setUploadedFile(storedFile);
+      }
+    }
+  }, []);
+
   // Scroll to top when component mounts or tab changes
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -190,6 +206,30 @@ const AIAssessment = () => {
     console.log('🚀 Component mounted, triggering jobs API call...');
     // The jobs API should automatically trigger due to enabled: true
   }, []);
+
+  // Check for job-specific interview mode
+  useEffect(() => {
+    const mode = searchParams.get('mode');
+    const hasJobData = searchParams.get('hasJobData') === 'true';
+    
+    if (mode === 'job-specific' && hasJobData) {
+      const jobData = localStorage.getItem('selectedJobForInterview');
+      const resumeData = localStorage.getItem('parsedResumeData');
+      
+      if (jobData && resumeData) {
+        try {
+          const parsedJobData = JSON.parse(jobData);
+          setSelectedJobData(parsedJobData);
+          setIsJobSpecificInterview(true);
+          console.log('✅ Job-specific interview mode activated:', parsedJobData);
+        } catch (error) {
+          console.error('❌ Error parsing job data:', error);
+        }
+      } else {
+        console.warn('⚠️ Job-specific mode requested but data not found in localStorage');
+      }
+    }
+  }, [searchParams]);
 
   // Poll for analysis updates when analysis is in progress
   useEffect(() => {
@@ -478,7 +518,7 @@ const AIAssessment = () => {
       const lastQuestion = quizQuestions.find(q => q.id === lastQuestionId);
       
       if (lastQuestion && lastAnswer !== undefined) {
-        const response = await evaluateBehavioralAnswers.mutateAsync({
+        const response = await evaluateScenarioBasedAnswers.mutateAsync({
           question: lastQuestion.question,
           response: lastQuestion.options[lastAnswer] || "No answer provided"
         });
@@ -492,7 +532,7 @@ const AIAssessment = () => {
           incorrect_answers: Math.floor(quizQuestions.length * 0.3),
           time_taken: timeTaken,
           detailed_results: [],
-          evaluation: response.evaluation || "Good performance on behavioral questions."
+          evaluation: response.evaluation || "Good performance on scenario-based questions."
         };
 
         setQuizResults(mockResults);
@@ -564,7 +604,16 @@ const AIAssessment = () => {
         const uploadResult = await uploadResume.mutateAsync(formData);
         console.log('✅ Resume uploaded successfully:', uploadResult);
         
-        // Store the latest upload response in localStorage
+        // Store resume file in localStorage (replaces previous resume)
+        try {
+          await storeResume(file, uploadResult?.id, uploadResult);
+          setHasResume(true);
+          console.log('✅ Resume stored in localStorage');
+        } catch (error) {
+          console.error('Failed to store resume in localStorage:', error);
+        }
+
+        // Store the latest upload response in localStorage (for backward compatibility)
         try {
           const uploadResponse = {
             ...uploadResult,
@@ -695,7 +744,7 @@ const AIAssessment = () => {
       ]
     },
     {
-      category: "Behavioral Questions", 
+      category: "Scenario Based Questions", 
       questions: [
         "Tell me about a time you had to work under pressure.",
         "Describe a situation where you had to learn something new quickly.",
@@ -1203,7 +1252,7 @@ const AIAssessment = () => {
                     </Button>
                   </div>
 
-                  {selectedAssessment.type === "behavioral" && quizQuestions.length > 0 && (
+                  {selectedAssessment.type === "scenario-based" && quizQuestions.length > 0 && (
                     <div className="space-y-6">
                       {/* Progress Bar */}
                       <div className="w-full bg-gray-200 rounded-full h-2">

@@ -50,6 +50,49 @@ import {
 
 const SoftSkillsPage = () => {
   const navigate = useNavigate();
+
+  // YouTube helper functions
+  const getYouTubeVideoId = (url: string): string | null => {
+    if (!url || typeof url !== 'string') return null;
+    const regex = /(?:v=|\/)([0-9A-Za-z_-]{11})/;
+    const match = url.match(regex);
+    return match ? match[1] : null;
+  };
+
+  const isYouTubeLink = (text: string): boolean => {
+    if (!text || typeof text !== 'string') return false;
+    return text.includes('youtube.com') || text.includes('youtu.be');
+  };
+
+  const normalizeYouTubeUrl = (url: string): string | null => {
+    if (!url || typeof url !== 'string') return null;
+    if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        return url;
+      } else if (url.startsWith('www.')) {
+        return `https://${url}`;
+      } else {
+        return `https://${url}`;
+      }
+    }
+    const videoId = getYouTubeVideoId(url);
+    if (videoId) {
+      return `https://www.youtube.com/watch?v=${videoId}`;
+    }
+    if (/^[a-zA-Z0-9_-]{11}$/.test(url.trim())) {
+      return `https://www.youtube.com/watch?v=${url.trim()}`;
+    }
+    return null;
+  };
+
+  const getYouTubeThumbnail = (url: string): string | null => {
+    if (!url || typeof url !== 'string') return null;
+    const videoId = getYouTubeVideoId(url);
+    if (videoId) {
+      return `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+    }
+    return null;
+  };
   
   // Quiz-related state
   const [quizQuestions, setQuizQuestions] = useState<AptitudeQuestion[]>([]);
@@ -61,8 +104,8 @@ const SoftSkillsPage = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   // API hooks
-  const generateBehavioralQuestions = useGenerateBehavioralQuestions();
-  const evaluateBehavioralResponse = evaluateBehavioralResponseV1EvaluateBehavioralPost();
+  const generateScenarioBasedQuestions = useGenerateBehavioralQuestions();
+  const evaluateScenarioBasedResponse = evaluateBehavioralResponseV1EvaluateBehavioralPost();
   
   // New analysis results state
   const [performanceGaps, setPerformanceGaps] = useState<any>(null);
@@ -122,11 +165,11 @@ const SoftSkillsPage = () => {
       setIsQuizActive(true);
       setQuizStartTime(Date.now());
       
-      const response = await generateBehavioralQuestions.mutateAsync({
+      const response = await generateScenarioBasedQuestions.mutateAsync({
         skills: "communication, leadership, teamwork, problem-solving",
         level: "intermediate",
         job_role: "Software Engineer",
-        test_type: "behavioral",
+        test_type: "scenario-based",
         company: "Tech Company"
       });
       
@@ -155,7 +198,7 @@ const SoftSkillsPage = () => {
           correct_answer: 0,
           explanation: "",
           difficulty: "medium" as const,
-          category: "behavioral"
+          category: "scenario-based"
         };
       });
       
@@ -185,7 +228,7 @@ const SoftSkillsPage = () => {
       const totalQuestions = quizQuestions.length;
       const answeredQuestions = Object.keys(userAnswers).length;
       
-      // For behavioral questions, we'll use a more realistic scoring approach
+      // For scenario-based questions, we'll use a more realistic scoring approach
       // Since these are subjective, we'll give partial credit based on completion
       const completionRate = answeredQuestions / totalQuestions;
       
@@ -892,37 +935,210 @@ const SoftSkillsPage = () => {
                            </div>
                          )}
 
-                         {/* Learning Resources */}
-                         {performanceGaps.learning_resources && (
-                           <div className="mb-6">
-                             <h4 className="text-lg font-semibold text-purple-800 mb-3">Learning Resources</h4>
-                             <div className="space-y-3">
-                               {typeof performanceGaps.learning_resources === 'object' ? (
-                                 Object.entries(performanceGaps.learning_resources).map(([category, resources]: [string, any], index) => (
-                                   <div key={index} className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                                     <h5 className="font-semibold text-purple-800 mb-2 capitalize">{category.replace('_', ' ')}</h5>
-                                     {Array.isArray(resources) ? (
-                                       <ul className="space-y-1">
-                                         {resources.map((resource: string, resourceIndex: number) => (
-                                           <li key={resourceIndex} className="flex items-start gap-2">
-                                             <span className="text-purple-600 mt-1">•</span>
-                                             <span className="text-sm text-purple-700">{resource}</span>
-                                           </li>
-                                         ))}
-                                       </ul>
-                                     ) : (
-                                       <p className="text-sm text-purple-700">{resources}</p>
-                                     )}
-                                   </div>
-                                 ))
-                               ) : (
-                                 <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                                   <p className="text-sm text-purple-700">{performanceGaps.learning_resources}</p>
-                                 </div>
-                               )}
-                             </div>
-                           </div>
-                         )}
+                    {/* Learning Resources */}
+                    {performanceGaps.learning_resources && (
+                      <div className="mb-6">
+                        <h4 className="text-lg font-semibold text-purple-800 mb-4">Learning Resources</h4>
+                        <div className="space-y-6">
+                          {typeof performanceGaps.learning_resources === 'object' ? (
+                            Object.entries(performanceGaps.learning_resources).map(([category, resources]: [string, any], index) => {
+                              const categoryLower = category.toLowerCase();
+                              // Special handling for youtube_courses
+                              if ((categoryLower === 'youtube_courses' || categoryLower === 'youtubecourses' || categoryLower.includes('youtube')) && Array.isArray(resources) && resources.length > 0) {
+                                const validCourses: any[] = [];
+                                resources.forEach((course: any) => {
+                                  let parsedCourse = course;
+                                  if (typeof course === 'string' && course.trim().startsWith('{')) {
+                                    try {
+                                      parsedCourse = JSON.parse(course);
+                                    } catch (e) {
+                                      const urlMatch = course.match(/https?:\/\/[^\s"']+/);
+                                      if (urlMatch) validCourses.push({ url: urlMatch[0], title: 'YouTube Video' });
+                                      return;
+                                    }
+                                  }
+                                  if (!parsedCourse || typeof parsedCourse !== 'object' || Array.isArray(parsedCourse)) return;
+                                  const courseUrl = parsedCourse?.url || parsedCourse?.link || '';
+                                  const courseTitle = parsedCourse?.title || parsedCourse?.name || 'Untitled Video';
+                                  if (courseUrl || courseTitle) {
+                                    validCourses.push({
+                                      url: courseUrl,
+                                      title: courseTitle,
+                                      thumbnail_url: parsedCourse?.thumbnail_url,
+                                      channel: parsedCourse?.channel,
+                                      duration: parsedCourse?.duration
+                                    });
+                                  }
+                                });
+                                if (validCourses.length === 0) return null;
+                                return (
+                                  <div key={index} className="space-y-3">
+                                    <h5 className="text-md font-semibold text-purple-700 capitalize">YouTube Courses</h5>
+                                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                      {validCourses.map((course: any, courseIndex: number) => {
+                                        const courseUrl = course?.url || '';
+                                        const courseTitle = course?.title || 'Untitled Video';
+                                        const videoId = courseUrl ? getYouTubeVideoId(courseUrl) : null;
+                                        let thumbnailUrl = course?.thumbnail_url || null;
+                                        if (!thumbnailUrl && videoId) {
+                                          thumbnailUrl = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+                                        }
+                                        const isYouTube = courseUrl && isYouTubeLink(courseUrl);
+                                        const normalizedUrl = isYouTube && courseUrl ? normalizeYouTubeUrl(courseUrl) : (courseUrl && (courseUrl.startsWith('http://') || courseUrl.startsWith('https://')) ? courseUrl : null);
+                                        const channel = course?.channel || null;
+                                        const duration = course?.duration || null;
+                                        if (!normalizedUrl || !thumbnailUrl) return null;
+                                        return (
+                                          <div 
+                                            key={courseIndex} 
+                                            className="group relative overflow-hidden bg-white border border-purple-200 rounded-lg shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer"
+                                            onClick={() => normalizedUrl && window.open(normalizedUrl, '_blank', 'noopener,noreferrer')}
+                                          >
+                                            <div className="relative aspect-video overflow-hidden bg-gray-100">
+                                              <img 
+                                                src={thumbnailUrl} 
+                                                alt={courseTitle}
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                loading="lazy"
+                                                onError={(e) => {
+                                                  const target = e.target as HTMLImageElement;
+                                                  if (videoId && !target.src.includes('hqdefault')) {
+                                                    target.src = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+                                                  } else if (videoId && target.src.includes('hqdefault')) {
+                                                    target.src = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+                                                  } else {
+                                                    target.style.display = 'none';
+                                                  }
+                                                }}
+                                              />
+                                              {isYouTube && (
+                                                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 group-hover:bg-opacity-10 transition-opacity">
+                                                  <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center opacity-90 group-hover:opacity-100">
+                                                    <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                                      <path d="M8 5v14l11-7z"/>
+                                                    </svg>
+                                                  </div>
+                                                </div>
+                                              )}
+                                              {duration && (
+                                                <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs font-semibold px-2 py-1 rounded">
+                                                  {duration}
+                                                </div>
+                                              )}
+                                            </div>
+                                            <div className="p-3">
+                                              <h6 className="text-xs font-semibold text-gray-800 line-clamp-2 group-hover:text-purple-700 transition-colors mb-1">
+                                                {courseTitle.length > 80 ? `${courseTitle.substring(0, 80)}...` : courseTitle}
+                                              </h6>
+                                              {channel && (
+                                                <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                                                  <span>📺</span>
+                                                  {channel}
+                                                </p>
+                                              )}
+                                              <a 
+                                                href={normalizedUrl} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="inline-flex items-center text-xs text-red-600 hover:text-red-800 font-medium"
+                                              >
+                                                Watch on YouTube
+                                                <span className="ml-1">→</span>
+                                              </a>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              
+                              // Default handling
+                              if (!resources || (Array.isArray(resources) && resources.length === 0)) return null;
+                              
+                              return (
+                                <div key={index} className="space-y-3">
+                                  <h5 className="text-md font-semibold text-purple-700 capitalize">{category.replace(/_/g, ' ')}</h5>
+                                  {Array.isArray(resources) ? (
+                                    <ul className="space-y-1">
+                                      {resources.map((resource: any, resourceIndex: number) => {
+                                        let parsedResource = resource;
+                                        if (typeof resource === 'string' && resource.trim().startsWith('{')) {
+                                          try {
+                                            parsedResource = JSON.parse(resource);
+                                          } catch (e) {
+                                            parsedResource = resource;
+                                          }
+                                        }
+                                        
+                                        // Handle object resources - ensure we always get a string
+                                        const isStructuredObject = typeof parsedResource === 'object' && parsedResource !== null && !Array.isArray(parsedResource) && (parsedResource.title || parsedResource.url || parsedResource.name);
+                                        
+                                        // Extract URL
+                                        let resourceUrl = '';
+                                        if (isStructuredObject) {
+                                          resourceUrl = parsedResource.url || parsedResource.link || '';
+                                        } else if (typeof parsedResource === 'string') {
+                                          const urlMatch = parsedResource.match(/https?:\/\/[^\s"']+/);
+                                          resourceUrl = urlMatch ? urlMatch[0] : '';
+                                        } else if (typeof parsedResource === 'object' && parsedResource !== null) {
+                                          resourceUrl = parsedResource.url || parsedResource.link || '';
+                                        }
+                                        
+                                        // Extract text - always ensure it's a string
+                                        let resourceText = '';
+                                        if (isStructuredObject) {
+                                          resourceText = parsedResource.title || parsedResource.name || parsedResource.url || 'Resource';
+                                        } else if (typeof parsedResource === 'string') {
+                                          resourceText = parsedResource;
+                                        } else if (typeof parsedResource === 'object' && parsedResource !== null) {
+                                          resourceText = parsedResource.title || parsedResource.name || parsedResource.url || parsedResource.link || JSON.stringify(parsedResource);
+                                        } else {
+                                          resourceText = String(parsedResource || 'Resource');
+                                        }
+                                        
+                                        const isYouTube = resourceUrl && isYouTubeLink(resourceUrl);
+                                        const normalizedListUrl = isYouTube && resourceUrl ? normalizeYouTubeUrl(resourceUrl) : (resourceUrl && (resourceUrl.startsWith('http://') || resourceUrl.startsWith('https://')) ? resourceUrl : null);
+                                        
+                                        return (
+                                          <li key={resourceIndex} className="flex items-start gap-2">
+                                            <span className="text-purple-600 mt-1">•</span>
+                                            {normalizedListUrl ? (
+                                              <a 
+                                                href={normalizedListUrl} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className={`text-sm ${isYouTube ? 'text-red-600 hover:text-red-800' : 'text-purple-700 hover:text-purple-900'} hover:underline flex items-center gap-1`}
+                                              >
+                                                {resourceText}
+                                                <span>→</span>
+                                                {isYouTube && (
+                                                  <span className="text-xs bg-red-100 text-red-700 px-1 rounded ml-1">YouTube</span>
+                                                )}
+                                              </a>
+                                            ) : (
+                                              <span className="text-sm text-purple-700">{resourceText}</span>
+                                            )}
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  ) : (
+                                    <p className="text-sm text-purple-700">{typeof resources === 'string' ? resources : (typeof resources === 'object' ? JSON.stringify(resources) : String(resources || ''))}</p>
+                                  )}
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                              <p className="text-sm text-purple-700">{typeof performanceGaps.learning_resources === 'string' ? performanceGaps.learning_resources : (typeof performanceGaps.learning_resources === 'object' ? JSON.stringify(performanceGaps.learning_resources) : String(performanceGaps.learning_resources || ''))}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                          {/* Timeline */}
                          {performanceGaps.timeline && (
@@ -989,26 +1205,207 @@ const SoftSkillsPage = () => {
                          {/* Courses & Resources */}
                          {skillRecommendations.courses_resources && (
                            <div className="mb-6">
-                             <h4 className="text-lg font-semibold text-purple-800 mb-3">Courses & Resources</h4>
-                             <div className="space-y-3">
+                             <h4 className="text-lg font-semibold text-purple-800 mb-4">Courses & Resources</h4>
+                             <div className="space-y-6">
                                {typeof skillRecommendations.courses_resources === 'object' ? (
-                                 Object.entries(skillRecommendations.courses_resources).map(([category, resources]: [string, any], index) => (
-                                   <div key={index} className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                                     <h5 className="font-semibold text-purple-800 mb-2 capitalize">{category.replace('_', ' ')}</h5>
-                                     {Array.isArray(resources) ? (
-                                       <ul className="space-y-1">
-                                         {resources.map((resource: string, resourceIndex: number) => (
-                                           <li key={resourceIndex} className="flex items-start gap-2">
-                                             <span className="text-purple-600 mt-1">•</span>
-                                             <span className="text-sm text-purple-700">{resource}</span>
-                                           </li>
-                                         ))}
-                                       </ul>
-                                     ) : (
-                                       <p className="text-sm text-purple-700">{resources}</p>
-                                     )}
-                                   </div>
-                                 ))
+                                 Object.entries(skillRecommendations.courses_resources).map(([category, resources]: [string, any], index) => {
+                                   const categoryLower = category.toLowerCase();
+                                   // Special handling for youtube_courses
+                                   if ((categoryLower === 'youtube_courses' || categoryLower === 'youtubecourses' || categoryLower.includes('youtube')) && Array.isArray(resources) && resources.length > 0) {
+                                     const validCourses: any[] = [];
+                                     resources.forEach((course: any) => {
+                                       let parsedCourse = course;
+                                       if (typeof course === 'string' && course.trim().startsWith('{')) {
+                                         try {
+                                           parsedCourse = JSON.parse(course);
+                                         } catch (e) {
+                                           const urlMatch = course.match(/https?:\/\/[^\s"']+/);
+                                           if (urlMatch) {
+                                             validCourses.push({ url: urlMatch[0], title: 'YouTube Video', isFallback: true });
+                                           }
+                                           return;
+                                         }
+                                       }
+                                       if (!parsedCourse || typeof parsedCourse !== 'object' || Array.isArray(parsedCourse)) return;
+                                       const courseUrl = parsedCourse?.url || parsedCourse?.link || '';
+                                       const courseTitle = parsedCourse?.title || parsedCourse?.name || 'Untitled Video';
+                                       if (courseUrl || courseTitle) {
+                                         validCourses.push({
+                                           url: courseUrl,
+                                           title: courseTitle,
+                                           thumbnail_url: parsedCourse?.thumbnail_url,
+                                           channel: parsedCourse?.channel,
+                                           duration: parsedCourse?.duration
+                                         });
+                                       }
+                                     });
+                                     
+                                     if (validCourses.length === 0) return null;
+                                     
+                                     return (
+                                       <div key={index} className="space-y-3">
+                                         <h5 className="text-md font-semibold text-purple-700 capitalize">YouTube Courses</h5>
+                                         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                           {validCourses.map((course: any, courseIndex: number) => {
+                                             const courseUrl = course?.url || '';
+                                             const courseTitle = course?.title || 'Untitled Video';
+                                             const videoId = courseUrl ? getYouTubeVideoId(courseUrl) : null;
+                                             let thumbnailUrl = course?.thumbnail_url || null;
+                                             if (!thumbnailUrl && videoId) {
+                                               thumbnailUrl = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+                                             }
+                                             const isYouTube = courseUrl && isYouTubeLink(courseUrl);
+                                             const normalizedUrl = isYouTube && courseUrl ? normalizeYouTubeUrl(courseUrl) : (courseUrl && (courseUrl.startsWith('http://') || courseUrl.startsWith('https://')) ? courseUrl : null);
+                                             const channel = course?.channel || null;
+                                             const duration = course?.duration || null;
+                                             
+                                             if (!normalizedUrl || !thumbnailUrl) return null;
+                                             
+                                             return (
+                                               <div 
+                                                 key={courseIndex} 
+                                                 className="group relative overflow-hidden bg-white border border-purple-200 rounded-lg shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer"
+                                                 onClick={() => normalizedUrl && window.open(normalizedUrl, '_blank', 'noopener,noreferrer')}
+                                               >
+                                                 <div className="relative aspect-video overflow-hidden bg-gray-100">
+                                                   <img 
+                                                     src={thumbnailUrl} 
+                                                     alt={courseTitle}
+                                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                     loading="lazy"
+                                                     onError={(e) => {
+                                                       const target = e.target as HTMLImageElement;
+                                                       if (videoId && !target.src.includes('hqdefault')) {
+                                                         target.src = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+                                                       } else if (videoId && target.src.includes('hqdefault')) {
+                                                         target.src = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+                                                       } else {
+                                                         target.style.display = 'none';
+                                                       }
+                                                     }}
+                                                   />
+                                                   {isYouTube && (
+                                                     <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 group-hover:bg-opacity-10 transition-opacity">
+                                                       <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center opacity-90 group-hover:opacity-100">
+                                                         <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                                           <path d="M8 5v14l11-7z"/>
+                                                         </svg>
+                                                       </div>
+                                                     </div>
+                                                   )}
+                                                   {duration && (
+                                                     <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs font-semibold px-2 py-1 rounded">
+                                                       {duration}
+                                                     </div>
+                                                   )}
+                                                 </div>
+                                                 <div className="p-3">
+                                                   <h6 className="text-xs font-semibold text-gray-800 line-clamp-2 group-hover:text-purple-700 transition-colors mb-1">
+                                                     {courseTitle.length > 80 ? `${courseTitle.substring(0, 80)}...` : courseTitle}
+                                                   </h6>
+                                                   {channel && (
+                                                     <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                                                       <span>📺</span>
+                                                       {channel}
+                                                     </p>
+                                                   )}
+                                                   <a 
+                                                     href={normalizedUrl} 
+                                                     target="_blank" 
+                                                     rel="noopener noreferrer"
+                                                     onClick={(e) => e.stopPropagation()}
+                                                     className="inline-flex items-center text-xs text-red-600 hover:text-red-800 font-medium"
+                                                   >
+                                                     Watch on YouTube
+                                                     <span className="ml-1">→</span>
+                                                   </a>
+                                                 </div>
+                                               </div>
+                                             );
+                                           })}
+                                         </div>
+                                       </div>
+                                     );
+                                   }
+                                   
+                                   // Default handling
+                                   if (!resources || (Array.isArray(resources) && resources.length === 0)) return null;
+                                   
+                                   return (
+                                     <div key={index} className="space-y-3">
+                                       <h5 className="text-md font-semibold text-purple-700 capitalize">{category.replace(/_/g, ' ')}</h5>
+                                       {Array.isArray(resources) ? (
+                                         <ul className="space-y-1">
+                                           {resources.map((resource: any, resourceIndex: number) => {
+                                             let parsedResource = resource;
+                                             if (typeof resource === 'string' && resource.trim().startsWith('{')) {
+                                               try {
+                                                 parsedResource = JSON.parse(resource);
+                                               } catch (e) {
+                                                 parsedResource = resource;
+                                               }
+                                             }
+                                             
+                                             // Handle object resources - ensure we always get a string
+                                             const isStructuredObject = typeof parsedResource === 'object' && parsedResource !== null && !Array.isArray(parsedResource) && (parsedResource.title || parsedResource.url || parsedResource.name);
+                                             
+                                             // Extract URL
+                                             let resourceUrl = '';
+                                             if (isStructuredObject) {
+                                               resourceUrl = parsedResource.url || parsedResource.link || '';
+                                             } else if (typeof parsedResource === 'string') {
+                                               const urlMatch = parsedResource.match(/https?:\/\/[^\s"']+/);
+                                               resourceUrl = urlMatch ? urlMatch[0] : '';
+                                             } else if (typeof parsedResource === 'object' && parsedResource !== null) {
+                                               // Even if not structured, try to extract URL
+                                               resourceUrl = parsedResource.url || parsedResource.link || '';
+                                             }
+                                             
+                                             // Extract text - always ensure it's a string
+                                             let resourceText = '';
+                                             if (isStructuredObject) {
+                                               resourceText = parsedResource.title || parsedResource.name || parsedResource.url || 'Resource';
+                                             } else if (typeof parsedResource === 'string') {
+                                               resourceText = parsedResource;
+                                             } else if (typeof parsedResource === 'object' && parsedResource !== null) {
+                                               // For any object, try to extract a meaningful string
+                                               resourceText = parsedResource.title || parsedResource.name || parsedResource.url || parsedResource.link || JSON.stringify(parsedResource);
+                                             } else {
+                                               resourceText = String(parsedResource || 'Resource');
+                                             }
+                                             
+                                             const isYouTube = resourceUrl && isYouTubeLink(resourceUrl);
+                                             const normalizedListUrl = isYouTube && resourceUrl ? normalizeYouTubeUrl(resourceUrl) : (resourceUrl && (resourceUrl.startsWith('http://') || resourceUrl.startsWith('https://')) ? resourceUrl : null);
+                                             
+                                             return (
+                                               <li key={resourceIndex} className="flex items-start gap-2">
+                                                 <span className="text-purple-600 mt-1">•</span>
+                                                 {normalizedListUrl ? (
+                                                   <a 
+                                                     href={normalizedListUrl} 
+                                                     target="_blank" 
+                                                     rel="noopener noreferrer"
+                                                     className={`text-sm ${isYouTube ? 'text-red-600 hover:text-red-800' : 'text-purple-700 hover:text-purple-900'} hover:underline flex items-center gap-1`}
+                                                   >
+                                                     {resourceText}
+                                                     <span>→</span>
+                                                     {isYouTube && (
+                                                       <span className="text-xs bg-red-100 text-red-700 px-1 rounded ml-1">YouTube</span>
+                                                     )}
+                                                   </a>
+                                                 ) : (
+                                                   <span className="text-sm text-purple-700">{resourceText}</span>
+                                                 )}
+                                               </li>
+                                             );
+                                           })}
+                                         </ul>
+                                       ) : (
+                                         <p className="text-sm text-purple-700">{typeof resources === 'string' ? resources : (typeof resources === 'object' ? JSON.stringify(resources) : String(resources || ''))}</p>
+                                       )}
+                                     </div>
+                                   );
+                                 })
                                ) : (
                                  <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
                                    <p className="text-sm text-purple-700">{skillRecommendations.courses_resources}</p>

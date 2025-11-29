@@ -49,35 +49,35 @@ const QuickTestAnalysis = () => {
   const getTestData = () => {
     try {
       const aptitudeData = JSON.parse(localStorage.getItem('aptitudeTestData') || 'null');
-      const behavioralData = JSON.parse(localStorage.getItem('behavioralTestData') || 'null');
+      const scenarioBasedData = JSON.parse(localStorage.getItem('behavioralTestData') || 'null'); // Keep key for backward compatibility
       const codingData = JSON.parse(localStorage.getItem('codingTestData') || 'null');
       
-      console.log('Retrieved test data:', { aptitudeData, behavioralData, codingData });
+      console.log('Retrieved test data:', { aptitudeData, scenarioBasedData, codingData });
       
       // Debug: Log the structure of each test data
       if (aptitudeData) {
         console.log('Aptitude data structure:', aptitudeData);
         console.log('Aptitude data keys:', Object.keys(aptitudeData));
       }
-      if (behavioralData) {
-        console.log('Behavioral data structure:', behavioralData);
-        console.log('Behavioral data keys:', Object.keys(behavioralData));
+      if (scenarioBasedData) {
+        console.log('Scenario based data structure:', scenarioBasedData);
+        console.log('Scenario based data keys:', Object.keys(scenarioBasedData));
       }
       if (codingData) {
         console.log('Coding data structure:', codingData);
         console.log('Coding data keys:', Object.keys(codingData));
       }
       
-      return { aptitudeData, behavioralData, codingData };
+      return { aptitudeData, scenarioBasedData, codingData };
     } catch (error) {
       console.error('Error parsing test data from localStorage:', error);
-      return { aptitudeData: null, behavioralData: null, codingData: null };
+      return { aptitudeData: null, scenarioBasedData: null, codingData: null };
     }
   };
 
   // Analysis results state
   const [aptitudeAnalysis, setAptitudeAnalysis] = useState<any>(null);
-  const [behavioralAnalysis, setBehavioralAnalysis] = useState<any>(null);
+  const [scenarioBasedAnalysis, setScenarioBasedAnalysis] = useState<any>(null);
   const [codingAnalysis, setCodingAnalysis] = useState<any>(null);
   const [overallAnalysis, setOverallAnalysis] = useState<any>(null);
 
@@ -221,12 +221,12 @@ const QuickTestAnalysis = () => {
 
   // Calculate overall metrics
   const aptitudeScore = testData?.aptitudeData ? calculateScore(testData.aptitudeData) : 0;
-  const behavioralScore = testData?.behavioralData ? calculateScore(testData.behavioralData) : 0;
+  const scenarioBasedScore = testData?.scenarioBasedData ? calculateScore(testData.scenarioBasedData) : 0;
   const codingScore = testData?.codingData ? calculateScore(testData.codingData) : 0;
   
-  const overallScore = testData ? Math.round((aptitudeScore + behavioralScore + codingScore) / 3) : 0;
+  const overallScore = testData ? Math.round((aptitudeScore + scenarioBasedScore + codingScore) / 3) : 0;
   
-  const totalTests = testData ? [testData.aptitudeData, testData.behavioralData, testData.codingData].filter(Boolean).length : 0;
+  const totalTests = testData ? [testData.aptitudeData, testData.scenarioBasedData, testData.codingData].filter(Boolean).length : 0;
   
   const overallRating = overallScore >= 90 ? "A+" : 
                        overallScore >= 80 ? "A" : 
@@ -243,8 +243,8 @@ const QuickTestAnalysis = () => {
       trend: "stable" 
     },
     { 
-      name: "Behavioral", 
-      score: behavioralScore, 
+      name: "Scenario Based", 
+      score: scenarioBasedScore, 
       maxScore: 100, 
       improvement: 0, 
       trend: "stable" 
@@ -392,7 +392,7 @@ const QuickTestAnalysis = () => {
                   </h1>
                   
                   <p className="text-xl text-muted-foreground mb-10 max-w-3xl mx-auto leading-relaxed animate-fade-in">
-                    Comprehensive analysis of your aptitude, behavioral, and coding test performance with AI-powered insights and recommendations.
+                    Comprehensive analysis of your aptitude, scenario-based, and coding test performance with AI-powered insights and recommendations.
                   </p>
                 </motion.div>
               </div>
@@ -417,7 +417,7 @@ const QuickTestAnalysis = () => {
                       <p>Total Tests: {totalTests}</p>
                       <p>Overall Score: {overallScore}%</p>
                       <p>Aptitude Score: {aptitudeScore}% (Data: {testData?.aptitudeData ? 'Available' : 'Missing'})</p>
-                      <p>Behavioral Score: {behavioralScore}% (Data: {testData?.behavioralData ? 'Available' : 'Missing'})</p>
+                      <p>Scenario Based Score: {scenarioBasedScore}% (Data: {testData?.scenarioBasedData ? 'Available' : 'Missing'})</p>
                       <p>Coding Score: {codingScore}% (Data: {testData?.codingData ? 'Available' : 'Missing'})</p>
                     </div>
                   </Card>
@@ -430,7 +430,7 @@ const QuickTestAnalysis = () => {
                       <AlertCircle className="h-12 w-12 text-yellow-500" />
                       <h3 className="text-xl font-semibold">No Test Data Available</h3>
                       <p className="text-muted-foreground max-w-md">
-                        Complete the aptitude, behavioral, and coding tests to see your analysis here.
+                        Complete the aptitude, scenario-based, and coding tests to see your analysis here.
                       </p>
                       <Button 
                         onClick={() => navigate('/personalized-assessment')}
@@ -598,29 +598,29 @@ const QuickTestAnalysis = () => {
                       </div>
                     </Card>
 
-                    {/* Behavioral Test */}
+                    {/* Scenario Based Test */}
                     <Card className="p-6 bg-gradient-card border-primary/10">
                       <div className="flex items-center gap-3 mb-4">
                         <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                           <Users className="w-5 h-5 text-green-600" />
                         </div>
                         <div>
-                          <h3 className="font-semibold">Behavioral Test</h3>
+                          <h3 className="font-semibold">Scenario Based Test</h3>
                           <p className="text-sm text-muted-foreground">Soft Skills</p>
                         </div>
                       </div>
                       <div className="space-y-3">
                         <div className="flex justify-between">
                           <span className="text-sm">Score</span>
-                          <span className="font-semibold">{behavioralScore}%</span>
+                          <span className="font-semibold">{scenarioBasedScore}%</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-sm">Status</span>
-                          <Badge variant={testData?.behavioralData ? "default" : "secondary"}>
-                            {testData?.behavioralData ? "Completed" : "Not Taken"}
+                          <Badge variant={testData?.scenarioBasedData ? "default" : "secondary"}>
+                            {testData?.scenarioBasedData ? "Completed" : "Not Taken"}
                           </Badge>
                         </div>
-                        <Progress value={behavioralScore} className="h-2" />
+                        <Progress value={scenarioBasedScore} className="h-2" />
                       </div>
                     </Card>
 
@@ -860,7 +860,7 @@ const QuickTestAnalysis = () => {
                                 analysis: {
                                   assessment_results: {
                                     aptitude: testData?.aptitudeData,
-                                    behavioral: testData?.behavioralData,
+                                    scenarioBased: testData?.scenarioBasedData,
                                     coding: testData?.codingData,
                                     overall_score: overallScore,
                                     total_tests: totalTests
@@ -904,9 +904,9 @@ const QuickTestAnalysis = () => {
 - Score: ${aptitudeScore}%
 - Status: ${testData?.aptitudeData ? 'Completed' : 'Not Taken'}
 
-### Behavioral Test
-- Score: ${behavioralScore}%
-- Status: ${testData?.behavioralData ? 'Completed' : 'Not Taken'}
+### Scenario Based Test
+- Score: ${scenarioBasedScore}%
+- Status: ${testData?.scenarioBasedData ? 'Completed' : 'Not Taken'}
 
 ### Coding Test
 - Score: ${codingScore}%
@@ -998,9 +998,9 @@ Generated on ${new Date().toLocaleString()}
                           </Badge>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-sm">Behavioral Test</span>
-                          <Badge variant={testData?.behavioralData ? "default" : "secondary"}>
-                            {testData?.behavioralData ? "Completed" : "Pending"}
+                          <span className="text-sm">Scenario Based Test</span>
+                          <Badge variant={testData?.scenarioBasedData ? "default" : "secondary"}>
+                            {testData?.scenarioBasedData ? "Completed" : "Pending"}
                           </Badge>
                         </div>
                         <div className="flex items-center justify-between">

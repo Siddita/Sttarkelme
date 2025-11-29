@@ -217,31 +217,36 @@ const IconLayer: React.FC = () => {
 
           <div className="flex gap-4 justify-center relative mb-24 lg:mb-0">
             <button
-              type="button"
-              onClick={() => {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-                setTimeout(() => {
-                  navigate('/personalized-assessment');
-                }, 100);
-              }}
-              className="text-white cursor-pointer group justify-center flex items-center gap-3 px-8 py-3 pl-6 pr-6 text-xs lg:text-lg rounded-2xl bg-gradient-to-r from-gray-800 to-gray-600 border-2 border-gray-700 hover:bg-gray-700 hover:text-white transition-colors duration-800 hover:bg-gradient-to-r hover:from-gray-700 hover:to-gray-500 hover:border-gray-900"
-            >
-              Start Journey
+                type="button"
+                onClick={() => {
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                  setTimeout(() => {
+                    navigate('/ai-assessment');
+                  }, 100);
+                }}
+              className="relative text-white cursor-pointer group justify-center flex items-center gap-3 px-8 py-3 pl-6 pr-6 text-xs lg:text-lg rounded-2xl bg-gradient-to-r from-gray-800 to-gray-600 border-2 border-gray-700 hover:bg-gray-700 hover:text-white transition-all duration-300 hover:bg-gradient-to-r hover:from-gray-700 hover:to-gray-500 hover:border-gray-900 animate-pulse-glow hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(75,85,99,0.5)] hover:shadow-[0_0_30px_rgba(75,85,99,0.8)]"
+              style={{
+                animation: 'pulse-glow 2s ease-in-out infinite, gentle-bounce 3s ease-in-out infinite',
+                  }}
+                >
+              <span className="relative z-10">Start Journey</span>
               <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width={24}
-                height={24}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="lucide lucide-arrow-right size-4 group-hover:translate-x-1 transition-transform duration-300"
-              >
-                <path d="M5 12h14" />
-                <path d="m12 5 7 7-7 7" />
+                  xmlns="http://www.w3.org/2000/svg"
+                  width={24}
+                  height={24}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                className="lucide lucide-arrow-right size-4 group-hover:translate-x-1 transition-transform duration-300 relative z-10"
+                >
+                  <path d="M5 12h14" />
+                  <path d="m12 5 7 7-7 7" />
               </svg>
+              {/* Animated gradient overlay */}
+              <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-cyan-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500 animate-gradient-shift" />
             </button>
 
             <div 

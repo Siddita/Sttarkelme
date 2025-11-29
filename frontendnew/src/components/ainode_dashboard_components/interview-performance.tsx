@@ -46,7 +46,7 @@ export function InterviewPerformance() {
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-blue-300 rounded-full"></div>
-                <span>Behavioral 15%</span>
+                <span>Scenario Based 15%</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-blue-200 rounded-full"></div>

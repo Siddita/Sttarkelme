@@ -3,26 +3,38 @@ import { API_BASE_URL } from '../config/api';
 
 async function apiClient(method: string, path: string, data: any = null, contentType: string = 'application/json') {
   const url = `${API_BASE_URL}${path}`;
-  const options: RequestInit = {
-    method: method.toUpperCase(),
-  };
-
-  // Add authorization header if token exists
+  
+  // Always initialize headers object
+  const headers: Record<string, string> = {};
+  
+  // Add authorization header if token exists - ALWAYS check and add token
   const token = localStorage.getItem('accessToken');
   if (token) {
-    options.headers = {
-      'Authorization': `Bearer ${token}`,
-    };
+    headers['Authorization'] = `Bearer ${token}`;
+  } else {
+    console.warn('⚠️ No token found for API call to:', path, '- Request may fail if endpoint requires authentication');
   }
+
+  if (data) {
+    if (contentType === 'multipart/form-data') {
+      // Don't set Content-Type for FormData - browser will set it with boundary
+    } else {
+      headers['Content-Type'] = contentType;
+    }
+  } else if (!data && contentType !== 'multipart/form-data') {
+    // Even for GET requests without data, set Content-Type if not multipart
+    headers['Content-Type'] = contentType;
+  }
+
+  const options: RequestInit = {
+    method: method.toUpperCase(),
+    headers,
+  };
 
   if (data) {
     if (contentType === 'multipart/form-data') {
       options.body = data;
     } else {
-      options.headers = {
-        ...options.headers,
-        'Content-Type': contentType,
-      };
       options.body = JSON.stringify(data);
     }
   }
@@ -48,7 +60,7 @@ async function apiClient(method: string, path: string, data: any = null, content
 
 export interface AssessmentResult {
   id: string;
-  type: 'aptitude' | 'mcq' | 'coding' | 'behavioral';
+  type: 'aptitude' | 'mcq' | 'coding' | 'scenario-based';
   score: number;
   total: number;
   passed: boolean;
@@ -273,7 +285,7 @@ class AnalyticsService {
       'aptitude': 'Logical Reasoning',
       'mcq': 'Technical Knowledge',
       'coding': 'Programming',
-      'behavioral': 'Communication'
+      'scenario-based': 'Communication'
     };
     return skillMap[type] || 'General Skills';
   }

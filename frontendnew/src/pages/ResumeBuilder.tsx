@@ -48,6 +48,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, memo, useCallback } from "react";
 import { getApiUrl } from "@/config/api";
+import { storeResume, hasStoredResume, getStoredResumeAsFile } from "@/utils/resumeStorage";
 import { motion } from 'framer-motion';
 import Footer from "@/components/Footer";
 import { Navbar } from "@/components/ui/navbar-menu";
@@ -277,6 +278,7 @@ const ResumeBuilder = () => {
 
   // Resume Builder State
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [hasResume, setHasResume] = useState(false);
   const [parsedResumeData, setParsedResumeData] = useState<any>(null);
   const [generatedResume, setGeneratedResume] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -698,8 +700,20 @@ const ResumeBuilder = () => {
     });
   };
 
+  // Check for stored resume on component mount
+  useEffect(() => {
+    const stored = hasStoredResume();
+    setHasResume(stored);
+    if (stored) {
+      const storedFile = getStoredResumeAsFile();
+      if (storedFile) {
+        setUploadedFile(storedFile);
+      }
+    }
+  }, []);
+
   // Resume Builder Handlers
-  const validateAndSetFile = (file: File) => {
+  const validateAndSetFile = async (file: File) => {
     // Check for DOCX files specifically
     if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
         file.name.toLowerCase().endsWith('.docx')) {
@@ -724,6 +738,15 @@ const ResumeBuilder = () => {
     if (file.size > 10 * 1024 * 1024) {
       toast.error("File size must be less than 10MB");
       return false;
+    }
+    
+    // Store resume file in localStorage (replaces previous resume)
+    try {
+      await storeResume(file);
+      setHasResume(true);
+      console.log('✅ Resume stored in localStorage');
+    } catch (error) {
+      console.error('Failed to store resume in localStorage:', error);
     }
     
     setUploadedFile(file);
@@ -1339,7 +1362,7 @@ const ResumeBuilder = () => {
               headers["Authorization"] = `Bearer ${token}`;
             }
 
-            const resp = await fetch(getApiUrl("/interview/audio/transcribe"), {
+            const resp = await fetch(getApiUrl("/v1/audio/transcribe"), {
               method: "POST",
               headers,
               body: form,
@@ -2047,21 +2070,21 @@ const ResumeBuilder = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: "easeOut" }}
           viewport={{ once: true }}
-          className="relative z-40 w-full h-screen flex items-center bg-gradient-to-b from-cyan-100 to-white overflow-hidden"
+          className="relative z-40 w-full min-h-[650px] lg:min-h-screen flex items-center bg-gradient-to-b from-cyan-100 to-white overflow-hidden py-14 sm:py-20"
         >
-          <div className="w-full h-full max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-12 relative">
+          <div className="w-full h-full max-w-[1600px] mx-auto px-6 sm:px-10 lg:px-12 relative flex flex-col-reverse lg:flex-row items-center gap-12">
             
             {/* LEFT SIDE - Text Content */}
             <motion.div 
               initial={{ opacity: 0, x: -30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8, ease: "easeOut", delay: 0.3 }}
-              className="absolute top-[25%] left-12 sm:left-24 lg:left-32 -translate-y-0 z-10 max-w-[600px] lg:max-w-[700px]"
+              className="w-full lg:w-1/2 z-10 max-w-[700px] flex flex-col justify-center items-center lg:items-start text-center lg:text-left mb-10 lg:mb-0"
             >
-              <div className="space-y-6 lg:space-y-8 text-left">
+              <div className="space-y-6 lg:space-y-8 w-full text-center lg:text-left">
 
                 {/* Badge */}
-                <div className="text-sm bg-white/70 px-4 py-1 rounded-full border border-primary/20 w-fit backdrop-blur">
+                <div className="text-sm bg-white/70 px-4 py-1 rounded-full border border-primary/20 w-fit backdrop-blur mx-auto lg:mx-0">
                   AI-Powered • ATS Optimized
                 </div>
 
@@ -2071,13 +2094,13 @@ const ResumeBuilder = () => {
                 </h1>
 
                 {/* Subtext */}
-                <p className="text-gray-700 text-base sm:text-lg lg:text-xl max-w-xl">
+                <p className="text-gray-700 text-base sm:text-lg lg:text-xl max-w-xl mx-auto lg:mx-0">
                   Build sleek, ATS-friendly resumes in minutes.  
                   Import your details, let AI refine everything, and export a polished final result instantly.
                 </p>
 
                 {/* Buttons */}
-                <div className="flex flex-wrap gap-4 pt-2">
+                <div className="flex flex-wrap gap-4 pt-2 justify-center lg:justify-start">
                   <Button size="lg" onClick={scrollToBuilding} className="text-base shadow-lg">
                     Start Building
                   </Button>
@@ -2099,13 +2122,13 @@ const ResumeBuilder = () => {
               initial={{ opacity: 0, x: 30 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8, ease: "easeOut", delay: 0.5 }}
-              className="absolute inset-y-0 right-0 w-full lg:w-[60%] flex items-stretch justify-end"
+              className="w-full lg:w-[60%] flex items-stretch justify-center lg:justify-end"
             >
-              <div className="relative w-full h-full">
+              <div className="relative w-full min-h-[460px] sm:min-h-[520px] lg:min-h-[640px]">
                 {/* Soft gradient backdrop */}
-                <div className="absolute inset-0 rounded-l-[80px] bg-gradient-to-br from-white/40 via-white/10 to-primary/10 blur-2xl opacity-80"></div>
+                <div className="absolute inset-0 rounded-[32px] sm:rounded-[48px] lg:rounded-l-[80px] bg-gradient-to-br from-white/40 via-white/10 to-primary/10 blur-2xl opacity-80"></div>
                 
-                <div className="absolute inset-0 flex justify-end items-end pr-8 pb-6">
+                <div className="absolute inset-0 flex justify-end items-end pr-4 sm:pr-6 lg:pr-8 pb-4 sm:pb-6">
                   <style>{`
                     .hero-card-swap .card-swap-container {
                       position: relative;
@@ -2117,7 +2140,7 @@ const ResumeBuilder = () => {
                       transform-origin: bottom right !important;
                     }
                   `}</style>
-                  <div className="hero-card-swap">
+                  <div className="hero-card-swap scale-[0.7] sm:scale-90 md:scale-100 origin-bottom">
                     <CardSwap
                       width={420}
                       height={600}
@@ -2184,7 +2207,7 @@ const ResumeBuilder = () => {
                 </div>
 
                 {/* Live preview badge */}
-                <div className="absolute top-8 right-14 bg-white/95 shadow-md px-4 py-1.5 rounded-full text-sm border z-40 flex items-center gap-2">
+                <div className="hidden sm:flex absolute top-4 sm:top-8 right-6 sm:right-14 bg-white/95 shadow-md px-4 py-1.5 rounded-full text-sm border z-40 items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
                   Live preview
                 </div>
@@ -2333,7 +2356,7 @@ const ResumeBuilder = () => {
                   <label htmlFor="resume-upload" className="cursor-pointer block">
                     <Upload className={`h-12 w-12 mx-auto mb-4 ${isDragOver ? 'text-primary' : 'text-primary/50'}`} />
                     <p className="text-lg font-medium mb-2">
-                      {isDragOver ? 'Drop your file here' : 'Upload your existing resume'}
+                      {isDragOver ? 'Drop your file here' : (hasResume ? 'Reupload Resume' : 'Upload your existing resume')}
                     </p>
                     <p className="text-sm text-muted-foreground mb-4">
                       Only PDF files are currently supported (max 10MB)

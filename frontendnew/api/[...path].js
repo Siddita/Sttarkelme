@@ -27,12 +27,20 @@ export default async function handler(req, res) {
     console.log(`Proxying ${method} request to: ${API_BASE_URL}${finalPath}`);
     
     // Forward the request to the actual API
+    // Forward Authorization header if present
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    
+    // Forward Authorization header from the original request
+    if (req.headers.authorization) {
+      headers['Authorization'] = req.headers.authorization;
+    }
+    
     const response = await fetch(`${API_BASE_URL}${finalPath}`, {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
+      headers,
       body: method !== 'GET' && body ? JSON.stringify(body) : undefined,
     });
 

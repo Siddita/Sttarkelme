@@ -78,7 +78,7 @@ const AptitudeTest = () => {
     }
   ];
 
-  const stepNames = ["Aptitude", "MCQ", "Coding", "Behavioral", "Soft Skills"];
+  const stepNames = ["Aptitude", "MCQ", "Coding", "Scenario Based", "Soft Skills"];
 
   const handleAnswerSelect = (answer: string) => {
     setSelectedAnswers(prev => ({

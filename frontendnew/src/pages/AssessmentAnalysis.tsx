@@ -31,7 +31,7 @@ interface AssessmentResults {
     results?: any[];
     percentage: number;
   };
-  behavioralResults?: {
+  scenarioBasedResults?: {
     evaluation: string;
     score?: number;
     strengths?: string[];
@@ -84,7 +84,7 @@ const AssessmentAnalysis = () => {
       try {
         // Load stored test data from localStorage
         const aptitudeTestData = localStorage.getItem('aptitudeTestData');
-        const behavioralTestData = localStorage.getItem('behavioralTestData');
+        const scenarioBasedTestData = localStorage.getItem('behavioralTestData'); // Keep key for backward compatibility
         const codingTestData = localStorage.getItem('codingTestData');
         
         // Check for latest resume upload first
@@ -141,10 +141,10 @@ const AssessmentAnalysis = () => {
             };
         }
 
-        // Evaluate behavioral test if data exists
-        if (behavioralTestData) {
-          const behavioralData = JSON.parse(behavioralTestData);
-              allResults.behavioralResults = {
+        // Evaluate scenario based test if data exists
+        if (scenarioBasedTestData) {
+          const scenarioBasedData = JSON.parse(scenarioBasedTestData);
+              allResults.scenarioBasedResults = {
             evaluation: "**Evaluation of the Response** Since the response provided is 'qwertyui', it appears to be a random sequence of keys and does not constitute a meaningful answer to a behavioral interview question. However, I will provide a structured evaluation based on the STAR method and offer feedback for improvement.\n\n### 1. STAR Method Analysis\n- **Situation**: Not provided. The response does not describe a situation or context.\n- **Task**: Not mentioned. There's no clear task or challenge presented.\n- **Action**: Absent. No actions or steps taken are described.\n- **Result**: Not given. The outcome or results of any actions are not discussed.\n\n### 2. Strengths Identified\nNone can be identified from the provided response as it does not contain any relevant information related to the question.\n\n### 3. Areas for Improvement\n- **Clarity and Relevance**: The response needs to clearly and directly address the question asked.\n- **Structure**: Utilizing the STAR method to structure the response can enhance clarity and effectiveness.\n- **Content**: Providing specific examples from experience, including the situation, the task at hand, the actions taken, and the results achieved, is essential.\n\n### 4. Overall Score\nGiven the response, I would score it a **0** out of 10 because it does not provide any meaningful information or insight into the candidate's experiences, skills, or behaviors.\n\n### 5. Specific Feedback\nTo improve, it's crucial to:\n- **Listen carefully to the question** and ensure you understand what is being asked.\n- **Prepare examples** from your past experiences that relate to common behavioral interview questions.\n- **Use the STAR method** to structure your responses: Describe the Situation, describe the Task you faced, outline the Actions you took, and share the Results of your actions.\n- **Practice answering behavioral questions** to feel more comfortable with the format and to ensure you can provide clear, concise examples of your skills and experiences.\n\nIn a real interview, it's essential to ask for clarification if you're unsure about the question and to take a moment to gather your thoughts before responding. Providing detailed, specific examples from your experience will help demonstrate your skills and behaviors to the interviewer.",
             score: 0,
             strengths: [],
@@ -172,8 +172,8 @@ const AssessmentAnalysis = () => {
           totalScore += allResults.aptitudeResults.percentage;
           scoreCount++;
         }
-        if (allResults.behavioralResults?.score !== undefined) {
-          totalScore += (allResults.behavioralResults.score * 10); // Convert to percentage
+        if (allResults.scenarioBasedResults?.score !== undefined) {
+          totalScore += (allResults.scenarioBasedResults.score * 10); // Convert to percentage
           scoreCount++;
         }
         if (allResults.codingResults?.score !== undefined) {
@@ -448,7 +448,7 @@ const AssessmentAnalysis = () => {
             )}
 
             {/* Scenario-Based Assessment */}
-            {results.behavioralResults && (
+            {results.scenarioBasedResults && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -457,7 +457,7 @@ const AssessmentAnalysis = () => {
               <Card className="overflow-hidden bg-gradient-card border-primary/10">
                 <div 
                   className="p-6 cursor-pointer hover:bg-primary/5 transition-all duration-300"
-                  onClick={() => toggleSection('behavioral')}
+                  onClick={() => toggleSection('scenario-based')}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -468,15 +468,15 @@ const AssessmentAnalysis = () => {
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
-                        <div className={`text-2xl font-bold ${getScoreColor((results.behavioralResults.score || 0) * 10)}`}>
-                          {results.behavioralResults.score || 0}/10
+                        <div className={`text-2xl font-bold ${getScoreColor((results.scenarioBasedResults.score || 0) * 10)}`}>
+                          {results.scenarioBasedResults.score || 0}/10
                         </div>
                         <div className="text-sm text-muted-foreground">
                           STAR Method
                         </div>
                       </div>
                       <motion.div
-                        animate={{ rotate: expandedSections.behavioral ? 180 : 0 }}
+                        animate={{ rotate: expandedSections['scenario-based'] ? 180 : 0 }}
                         transition={{ duration: 0.3 }}
                       >
                         <ChevronDown className="w-5 h-5 text-primary" />
@@ -486,7 +486,7 @@ const AssessmentAnalysis = () => {
                 </div>
 
                 <AnimatePresence>
-                  {expandedSections.behavioral && (
+                  {expandedSections['scenario-based'] && (
                     <motion.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
@@ -499,7 +499,7 @@ const AssessmentAnalysis = () => {
                     <h4 className="font-semibold text-green-800 mb-2">Evaluation Summary</h4>
                           <div className="text-green-700 text-sm leading-relaxed">
                             <div className="prose prose-sm max-w-none">
-                              {formatEvaluationText(results.behavioralResults.evaluation)}
+                              {formatEvaluationText(results.scenarioBasedResults.evaluation)}
                             </div>
                           </div>
                   </div>

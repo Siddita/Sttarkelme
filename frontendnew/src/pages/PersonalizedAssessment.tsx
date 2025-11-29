@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { FeatureSteps } from "@/components/new_ui/feature-section2";
 import { Progress } from "@/components/ui/progress";
 import { 
@@ -70,6 +71,7 @@ import { motion } from 'framer-motion';
 import Footer from "@/components/Footer";
 import { Navbar } from "@/components/ui/navbar-menu";
 import { TextHoverEffect } from "@/components/ui/text-hover-effect";
+import { storeResume, hasStoredResume, getStoredResumeAsFile } from "@/utils/resumeStorage";
 import { 
   uploadResumeApiV1ResumesPost,
   getAnalysisApiV1Resumes_ResumeId_AnalysisGet,
@@ -177,63 +179,71 @@ async function apiClient(
   const resp = await fetch(`${API_BASE}${path}`, opts);
   const text = await resp.text();
   let json: any = null;
+  
+  // Try to parse as JSON, but handle non-JSON responses
   try {
-    json = text ? JSON.parse(text) : null;
+    if (text && text.trim().length > 0) {
+      json = JSON.parse(text);
+    }
   } catch {
-    // non-JSON response
+    // If parsing fails, it might be a plain string response
+    // Return the text directly if it's not empty
+    if (text && text.trim().length > 0) {
+      json = text;
+    }
   }
 
   if (!resp.ok) {
-    console.error(`API Error: ${resp.status}`, { text, json });
-    const err = new Error(`HTTP ${resp.status}: ${json?.detail || text}`);
-    (err as any).response = json;
+    console.error(`API Error: ${resp.status}`, { text, json, path });
+    const errorMessage = (json && typeof json === 'object' && (json.detail || json.message || json.error)) || text || `HTTP ${resp.status}`;
+    const err = new Error(errorMessage);
+    (err as any).response = { status: resp.status, data: json || text };
     throw err;
   }
 
-  return json;
+  // Return the parsed JSON or the text if it's a string response
+  return json !== null ? json : (text || null);
 }
 
 // Helper function to extract profile data from parsed resume or dashboard state
 const getProfileFromResume = () => {
   try {
-    // First, check for the latest resume upload
-    const latestUpload = localStorage.getItem('latestResumeUpload');
+    // Strong preference: parsedResumeData (explicit request)
     let latestResumeId: string | null = null;
-    let resumeData = null;
-    
-    if (latestUpload) {
+    let resumeData: any = null;
+    const storedResume = localStorage.getItem('parsedResumeData');
+    if (storedResume) {
       try {
-        const uploadData = JSON.parse(latestUpload);
-        latestResumeId = uploadData?.resumeId || uploadData?.id || null;
-        console.log('📋 Latest resume upload found in getProfileFromResume:', latestResumeId);
-        // If latest upload has direct data, use it
-        if (uploadData && Object.keys(uploadData).length > 2) { // More than just id and uploadedAt
-          resumeData = uploadData;
-        }
+        const parsed = JSON.parse(storedResume);
+        resumeData = parsed;
+        latestResumeId = parsed?.resumeId || parsed?.id || null;
+        console.log('✅ Using parsedResumeData for coding profile. resumeId:', latestResumeId);
       } catch (e) {
-        console.warn('Failed to parse latestResumeUpload:', e);
+        console.warn('Failed to parse parsedResumeData:', e);
       }
     }
-    
-    // If no data from latest upload, try to get from parsedResumeData (only if it matches latest)
+    // Fallback: latest resume upload if parsedResumeData not present
     if (!resumeData) {
-      const storedResume = localStorage.getItem('parsedResumeData');
-      if (storedResume) {
+      const latestUpload = localStorage.getItem('latestResumeUpload');
+      if (latestUpload) {
         try {
-          const parsed = JSON.parse(storedResume);
-          // Only use if no latest upload specified, or if it matches
-          if (!latestResumeId || parsed?.resumeId === latestResumeId || parsed?.id === latestResumeId) {
-            resumeData = parsed;
+          const uploadData = JSON.parse(latestUpload);
+          latestResumeId = uploadData?.resumeId || uploadData?.id || null;
+          console.log('📋 Latest resume upload found in getProfileFromResume:', latestResumeId);
+          // If latest upload has direct data, use it
+          if (uploadData && Object.keys(uploadData).length > 2) { // More than just id and uploadedAt
+            resumeData = uploadData;
           }
         } catch (e) {
-          console.warn('Failed to parse parsedResumeData:', e);
+          console.warn('Failed to parse latestResumeUpload:', e);
         }
       }
     }
     
-    // If no resume data, try to get from dashboard-state (userProfile)
+    // If no resume data, try to get from dashboard-state (userProfile) or resumeAnalysis
     let userProfile = null;
     let dashboardSkills = null;
+    let analysisProfile: any = null;
     if (!resumeData) {
       const dashboardState = localStorage.getItem('dashboard-state');
       if (dashboardState) {
@@ -245,10 +255,21 @@ const getProfileFromResume = () => {
           console.warn('Failed to parse dashboard-state:', e);
         }
       }
+      // Also try resumeAnalysis stored by PersonalizedAssessment
+      if (!userProfile) {
+        const storedAnalysis = localStorage.getItem('resumeAnalysis');
+        if (storedAnalysis) {
+          try {
+            analysisProfile = JSON.parse(storedAnalysis);
+          } catch (e) {
+            console.warn('Failed to parse resumeAnalysis:', e);
+          }
+        }
+      }
     }
     
-    // Use resumeData if available, otherwise use userProfile
-    const dataSource = resumeData || userProfile;
+    // Use resumeData if available, otherwise use userProfile or analysisProfile
+    const dataSource = resumeData || userProfile || analysisProfile;
     if (!dataSource) {
       console.log('No profile data found in localStorage');
       return null;
@@ -256,6 +277,8 @@ const getProfileFromResume = () => {
     
     // Extract Education (get highest degree)
     let education = "Bachelor's in Computer Science"; // Default
+    // Extract Years_of_Experience (calculate from experience array)
+    let yearsOfExperience = 0;
     if (resumeData) {
       // From parsed resume format
       if (resumeData.education && Array.isArray(resumeData.education) && resumeData.education.length > 0) {
@@ -273,7 +296,6 @@ const getProfileFromResume = () => {
     }
     
     // Extract Years_of_Experience (calculate from experience array)
-    let yearsOfExperience = 0;
     if (resumeData) {
       // From parsed resume format
       if (resumeData.experience && Array.isArray(resumeData.experience)) {
@@ -404,6 +426,10 @@ const getProfileFromResume = () => {
           }
         }
       }
+    } else if (analysisProfile) {
+      if (Array.isArray(analysisProfile.skills) && analysisProfile.skills.length > 0) {
+        skills = analysisProfile.skills;
+      }
     }
     
     // Extract Certifications
@@ -455,18 +481,20 @@ const PersonalizedAssessment = () => {
   const [searchParams] = useSearchParams();
   
   // Check if step parameter is in URL, otherwise default to 'welcome'
-  const initialStep = searchParams.get('step') as 'welcome' | 'upload' | 'analysis' | 'jobs' | 'aptitude' | 'behavioral' | 'coding' | 'results' | 'interview' | null;
-  const [currentStep, setCurrentStep] = useState<'welcome' | 'upload' | 'analysis' | 'jobs' | 'aptitude' | 'behavioral' | 'coding' | 'results' | 'interview'>(
-    initialStep && ['welcome', 'upload', 'analysis', 'jobs', 'aptitude', 'behavioral', 'coding', 'results', 'interview'].includes(initialStep) 
+  const initialStep = searchParams.get('step') as 'welcome' | 'upload' | 'analysis' | 'jobs' | 'aptitude' | 'scenario-based' | 'coding' | 'results' | 'interview' | null;
+  const [currentStep, setCurrentStep] = useState<'welcome' | 'upload' | 'analysis' | 'jobs' | 'aptitude' | 'scenario-based' | 'coding' | 'results' | 'interview'>(
+    initialStep && ['welcome', 'upload', 'analysis', 'jobs', 'aptitude', 'scenario-based', 'coding', 'results', 'interview'].includes(initialStep) 
       ? initialStep 
       : 'welcome'
   );
   const [selectedPath, setSelectedPath] = useState<'quick-test' | 'ai-interview' | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [hasResume, setHasResume] = useState(false);
   const [extractedSkills, setExtractedSkills] = useState<string[]>([]);
   const [jobDescription, setJobDescription] = useState<string>('');
   const [recommendedJobs, setRecommendedJobs] = useState<any[]>([]);
+  const [hasRequestedJobs, setHasRequestedJobs] = useState(false);
   const [testCompleted, setTestCompleted] = useState(false);
   const [selectedTestType, setSelectedTestType] = useState<'mcq-technical' | 'ai-interview' | null>(null);
   const [resumeId, setResumeId] = useState<string | null>(null);
@@ -476,6 +504,7 @@ const PersonalizedAssessment = () => {
   const [suggestedRole, setSuggestedRole] = useState<string | null>(null);
   const [additionalRoles, setAdditionalRoles] = useState<string[]>([]);
   const [isGeneratingRoles, setIsGeneratingRoles] = useState(false);
+  const [selectedJobForInterview, setSelectedJobForInterview] = useState<any | null>(null);
   
   // Aptitude Test State
   const [aptitudeQuestions, setAptitudeQuestions] = useState<any[]>([]);
@@ -485,13 +514,125 @@ const PersonalizedAssessment = () => {
   const [isSubmittingAptitude, setIsSubmittingAptitude] = useState(false);
   const [aptitudeResults, setAptitudeResults] = useState<any>(null);
   
-  // Behavioral Test State
-  const [behavioralQuestions, setBehavioralQuestions] = useState<any[]>([]);
-  const [currentBehavioralQuestion, setCurrentBehavioralQuestion] = useState(0);
-  const [behavioralAnswers, setBehavioralAnswers] = useState<string[]>([]);
-  const [isGeneratingBehavioral, setIsGeneratingBehavioral] = useState(false);
-  const [isSubmittingBehavioral, setIsSubmittingBehavioral] = useState(false);
-  const [behavioralResults, setBehavioralResults] = useState<any>(null);
+  // Scenario Based Test State
+  const [scenarioBasedQuestions, setScenarioBasedQuestions] = useState<any[]>([]);
+  const [currentScenarioBasedQuestion, setCurrentScenarioBasedQuestion] = useState(0);
+  const [scenarioBasedAnswers, setScenarioBasedAnswers] = useState<string[]>([]);
+  const [isGeneratingScenarioBased, setIsGeneratingScenarioBased] = useState(false);
+  const [isSubmittingScenarioBased, setIsSubmittingScenarioBased] = useState(false);
+  const [scenarioBasedResults, setScenarioBasedResults] = useState<any>(null);
+
+  // Helper function to extract YouTube thumbnail URL
+  const getYouTubeThumbnail = (url: string): string | null => {
+    if (!url || typeof url !== 'string') return null;
+    
+    // Extract video ID using the same reliable method
+    const videoId = getYouTubeVideoId(url);
+    if (videoId) {
+      // Use img.youtube.com domain for real YouTube thumbnails (maxresdefault for best quality)
+      return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+    }
+    return null;
+  };
+
+  // Helper function to extract YouTube video ID
+  const getYouTubeVideoId = (url: string): string | null => {
+    if (!url || typeof url !== 'string') return null;
+    // Simple and reliable regex to extract 11-character video ID
+    const regex = /(?:v=|\/)([0-9A-Za-z_-]{11})/;
+    const match = url.match(regex);
+    return match ? match[1] : null;
+  };
+
+  // Helper function to check if text contains YouTube link
+  const isYouTubeLink = (text: string): boolean => {
+    if (!text || typeof text !== 'string') return false;
+    return text.includes('youtube.com') || text.includes('youtu.be');
+  };
+
+  // Helper function to normalize YouTube URL - ensures it's a valid, complete YouTube URL
+  const normalizeYouTubeUrl = (url: string): string | null => {
+    if (!url || typeof url !== 'string') return null;
+    
+    // If it's already a complete YouTube URL, validate and return it
+    if (url.includes('youtube.com/watch') || url.includes('youtu.be/')) {
+      // Ensure it has https://
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        return url;
+      } else if (url.startsWith('www.')) {
+        return `https://${url}`;
+      } else {
+        return `https://${url}`;
+      }
+    }
+    
+    // Extract video ID if present
+    const videoId = getYouTubeVideoId(url);
+    if (videoId) {
+      return `https://www.youtube.com/watch?v=${videoId}`;
+    }
+    
+    // If it looks like just a video ID (11 characters, alphanumeric)
+    if (/^[a-zA-Z0-9_-]{11}$/.test(url.trim())) {
+      return `https://www.youtube.com/watch?v=${url.trim()}`;
+    }
+    
+    return null;
+  };
+
+  // Helper function to extract title from resource text (if it's a structured object or has title)
+  const getResourceTitle = (resource: any): string => {
+    if (typeof resource === 'string') {
+      // Try to extract a meaningful title from the string
+      // If it's a URL, try to get a title from it
+      if (isYouTubeLink(resource)) {
+        // For YouTube, we'll use the URL as title or extract from URL
+        return resource;
+      }
+      return resource;
+    }
+    if (typeof resource === 'object') {
+      return resource.title || resource.name || resource.url || resource.link || JSON.stringify(resource);
+    }
+    return String(resource);
+  };
+
+  // Load recommended jobs from localStorage or build from analyzed resume
+  // Only runs after user explicitly requests jobs
+  useEffect(() => {
+    if (
+      currentStep === 'jobs' &&
+      hasRequestedJobs &&
+      (!recommendedJobs || recommendedJobs.length === 0)
+    ) {
+      try {
+        const stored = localStorage.getItem('recommendedJobs');
+        if (stored) {
+          const jobs = JSON.parse(stored);
+          if (Array.isArray(jobs) && jobs.length > 0) {
+            console.log('📦 Loaded recommended jobs from localStorage:', jobs);
+            setRecommendedJobs(jobs);
+            return;
+          }
+        }
+
+        // If no stored jobs, try to use analyzed resume data from localStorage
+        const storedAnalysis = localStorage.getItem('resumeAnalysis');
+        if (storedAnalysis) {
+          const analysis = JSON.parse(storedAnalysis);
+          const skillsFromAnalysis: string[] = analysis?.skills || [];
+          if (Array.isArray(skillsFromAnalysis) && skillsFromAnalysis.length > 0) {
+            console.log('🧠 Building jobs from analyzed resume skills:', skillsFromAnalysis);
+            const localJobs = createLocalJobRecommendations(skillsFromAnalysis);
+            setRecommendedJobs(localJobs);
+            localStorage.setItem('recommendedJobs', JSON.stringify(localJobs));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load recommended jobs from localStorage:', err);
+      }
+    }
+  }, [currentStep, hasRequestedJobs, recommendedJobs]);
   
   // Coding Test State
   const [codingChallenge, setCodingChallenge] = useState<any>(null);
@@ -562,7 +703,7 @@ const PersonalizedAssessment = () => {
   // Track if we've already auto-advanced to jobs (to prevent auto-advance when navigating back)
   const hasAutoAdvancedToJobs = useRef(false);
   
-  // Speech recognition state for behavioral assessment
+  // Speech recognition state for scenario based assessment
   const [isRecordingSpeech, setIsRecordingSpeech] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -582,7 +723,7 @@ const PersonalizedAssessment = () => {
 
   // API hooks
   const uploadResume = uploadResumeApiV1ResumesPost();
-  const { mutate: recommendJobs } = recommendJobsApiV1ListingsRecommendPost();
+  const { mutate: recommendJobs } = recommendJobsApiV1ListingsRecommendPost(); // kept for future API-based recommendations
   const { mutate: searchJobs } = searchJobsApiV1ListingsSearchPost();
   // listJobsApiV1JobsGet available for fallback if needed
 
@@ -604,8 +745,8 @@ const PersonalizedAssessment = () => {
   // Test API hooks
   const generateAptitudeQuestions = generateQuestionsV1GenerateAptitudePost();
   const evaluateAptitudeAnswers = evaluateAnswersV1EvaluateAptitudePost();
-  const generateBehavioralQuestions = generateBehavioralQuestionsV1GenerateBehavioralQuestionsPost();
-  const evaluateBehavioralAnswers = evaluateBehavioralResponseV1EvaluateBehavioralPost();
+  const generateScenarioBasedQuestions = generateBehavioralQuestionsV1GenerateBehavioralQuestionsPost();
+  const evaluateScenarioBasedAnswers = evaluateBehavioralResponseV1EvaluateBehavioralPost();
   const generateCodingQuestion = generateQuestionV1CodingGenerateQuestionPost();
   const evaluateCodeSolution = evaluateCodeSolutionV1EvaluateCodePost();
   
@@ -688,6 +829,88 @@ const PersonalizedAssessment = () => {
       `</body>` +
       `</html>`
     );
+  };
+
+  // Local job suggestion helper based on extracted skills (no external API)
+  const createLocalJobRecommendations = (skills: string[]): any[] => {
+    if (!skills || skills.length === 0) return [];
+
+    const normalized = skills.map((s) => s.toLowerCase());
+    const has = (kw: string | string[]) =>
+      Array.isArray(kw)
+        ? kw.some((k) => normalized.some((s) => s.includes(k)))
+        : normalized.some((s) => s.includes(kw));
+
+    const jobs: any[] = [];
+
+    if (has(['react', 'frontend', 'javascript', 'typescript'])) {
+      jobs.push({
+        id: 'local-frontend',
+        title: 'Frontend Developer',
+        company_name: 'AIspire Partner Company',
+        location: 'Remote / Hybrid',
+        salary_min: 800000,
+        salary_max: 1400000,
+        match_score: 0.9,
+        description:
+          'Build modern web interfaces using React, TypeScript, and Tailwind CSS. Collaborate with designers and backend engineers.',
+        matched_skills: skills.filter((s) =>
+          s.toLowerCase().match(/react|javascript|typescript|frontend|ui|tailwind/)
+        ),
+      });
+    }
+
+    if (has(['python', 'pandas', 'numpy', 'data'])) {
+      jobs.push({
+        id: 'local-data-analyst',
+        title: 'Data Analyst',
+        company_name: 'Growth Analytics Labs',
+        location: 'Bangalore / Remote',
+        salary_min: 700000,
+        salary_max: 1300000,
+        match_score: 0.88,
+        description:
+          'Work with product and business teams to analyze data, build dashboards, and generate insights using Python and SQL.',
+        matched_skills: skills.filter((s) =>
+          s.toLowerCase().match(/python|pandas|numpy|sql|excel|power bi|tableau|data/)
+        ),
+      });
+    }
+
+    if (has(['ml', 'machine learning', 'deep learning', 'pytorch', 'tensorflow'])) {
+      jobs.push({
+        id: 'local-ml-engineer',
+        title: 'Machine Learning Engineer',
+        company_name: 'Intelligent Systems Lab',
+        location: 'Remote',
+        salary_min: 1200000,
+        salary_max: 2200000,
+        match_score: 0.92,
+        description:
+          'Design, train, and deploy ML models for recommendation, scoring, and prediction use cases.',
+        matched_skills: skills.filter((s) =>
+          s.toLowerCase().match(/machine learning|ml|deep learning|pytorch|tensorflow|sklearn/)
+        ),
+      });
+    }
+
+    // Fallback generic role if nothing matched
+    if (jobs.length === 0) {
+      jobs.push({
+        id: 'local-generic',
+        title: 'Graduate Trainee / Software Engineer',
+        company_name: 'Fast-growing Tech Startup',
+        location: 'Remote / Onsite',
+        salary_min: 600000,
+        salary_max: 1000000,
+        match_score: 0.75,
+        description:
+          'Entry-level role where you work across product, engineering, and analytics teams based on your strengths.',
+        matched_skills: skills.slice(0, 6),
+      });
+    }
+
+    return jobs;
   };
 
   // Helper: Load jsPDF from CDN and return the constructor
@@ -897,198 +1120,57 @@ const PersonalizedAssessment = () => {
     setIsGeneratingQuickTestAnalysis(true);
     
     try {
-      // Load stored test data from localStorage
-      const aptitudeTestData = localStorage.getItem('aptitudeTestData');
-      const behavioralTestData = localStorage.getItem('behavioralTestData');
-      const codingTestData = localStorage.getItem('codingTestData');
-      
+      // Use test results from state (already evaluated when tests were submitted)
       let allResults = {
-        aptitudeResults: null,
-        behavioralResults: null,
-        codingResults: null
+        aptitudeResults: aptitudeResults,
+        scenarioBasedResults: scenarioBasedResults,
+        codingResults: codingResults
       };
       
       let totalScore = 0;
       let completedTests = 0;
       
-      // Evaluate aptitude test using Quiz Microservice
-      if (aptitudeTestData) {
-        const aptitudeData = JSON.parse(aptitudeTestData);
-        
-        try {
-          // Prepare data for evaluation - use stable question IDs and normalize answers
-          const questionIds = aptitudeData.questions.map((q: any, index: number) => (
-            q?.id ?? q?.question_id ?? q?.uuid ?? index
-          ));
-
-          const selectedOptions = aptitudeData.answers.map((answer: any, idx: number) => {
-            const value = (answer ?? '').toString().trim();
-            // If already a letter A-D
-            if (/^[A-D]$/i.test(value)) return value.toUpperCase();
-            // If numeric index → convert to A-D
-            const num = Number(value);
-            if (!Number.isNaN(num) && num >= 0 && num < 26) {
-              return String.fromCharCode(65 + num);
-            }
-            // If text option, try to match against question options
-            const question = aptitudeData.questions[idx];
-            const options: string[] = Array.isArray(question?.options) ? question.options : [];
-            const matchIdx = options.findIndex((opt) =>
-              typeof value === 'string' && opt?.toLowerCase?.() === value.toLowerCase()
-            );
-            if (matchIdx >= 0) return String.fromCharCode(65 + matchIdx);
-            // Fallback
-            return value || 'A';
-          });
-
-          const evaluationResponse = await apiClient("POST", "/quiz/evaluate_aptitude", {
-            question_ids: questionIds,
-            selected_options: selectedOptions
-          });
-          
-          allResults.aptitudeResults = {
-            score: evaluationResponse.score || 0,
-            correctAnswers: evaluationResponse.results?.filter((r: any) => r.is_correct).length || 0,
-            totalQuestions: evaluationResponse.total || aptitudeData.questions.length,
-            evaluation: `Aptitude test completed with ${evaluationResponse.score || 0}% accuracy. You answered ${evaluationResponse.results?.filter((r: any) => r.is_correct).length || 0} out of ${evaluationResponse.total || aptitudeData.questions.length} questions correctly.`,
-            detailedResults: evaluationResponse.results || []
-          };
-          
-          totalScore += evaluationResponse.score || 0;
-          completedTests++;
-        } catch (error) {
-          console.error('Aptitude evaluation failed:', error);
-          // Fallback to basic scoring
-          const correctAnswers = aptitudeData.answers.filter(answer => answer && answer.trim() !== '').length;
-          const totalQuestions = aptitudeData.questions.length;
-          const aptitudeScore = Math.round((correctAnswers / totalQuestions) * 100);
-          
-          allResults.aptitudeResults = {
-            score: aptitudeScore,
-            correctAnswers,
-            totalQuestions,
-            evaluation: `Aptitude test completed with ${aptitudeScore}% accuracy. You answered ${correctAnswers} out of ${totalQuestions} questions correctly.`
-          };
-          
-          totalScore += aptitudeScore;
-          completedTests++;
-        }
+      // If results are not in state, they should have been evaluated when tests were submitted
+      // But if for some reason they're missing, we can re-evaluate from stored questions/answers
+      // However, we should NOT use localStorage - only use state variables
+      
+      // Use results directly from state (already evaluated when tests were submitted)
+      if (aptitudeResults) {
+        allResults.aptitudeResults = aptitudeResults;
+        totalScore += aptitudeResults.score || 0;
+        completedTests++;
+        console.log('Using aptitude results from state:', aptitudeResults);
       }
       
-      // Evaluate behavioral test using Quiz Microservice
-      if (behavioralTestData) {
-        const behavioralData = JSON.parse(behavioralTestData);
-        
-        try {
-          // Evaluate each behavioral response
-          const evaluations = [];
-          let totalBehavioralScore = 0;
-          
-          for (let i = 0; i < behavioralData.questions.length; i++) {
-            const question = behavioralData.questions[i];
-            const response = behavioralData.answers[i];
-            
-            if (response && response.trim() !== '') {
-              const evaluationResponse = await apiClient("POST", "/quiz/evaluate_behavioral", {
-                question: question.text || question.question || question,
-                response: response
-              });
-              
-              evaluations.push({
-                question: question.text || question.question || question,
-                response: response,
-                evaluation: evaluationResponse.evaluation
-              });
-              
-              // Extract score from evaluation text (basic parsing)
-              const scoreMatch = evaluationResponse.evaluation.match(/(\d+)\s*out\s*of\s*10|score\s*of\s*(\d+)|(\d+)\/10/);
-              const score = scoreMatch ? parseInt(scoreMatch[1] || scoreMatch[2] || scoreMatch[3]) : 5;
-              totalBehavioralScore += score;
-            }
-          }
-          
-          const answeredQuestions = evaluations.length;
-          const behavioralScore = answeredQuestions > 0 ? Math.round(totalBehavioralScore / answeredQuestions * 10) : 0;
-          
-          allResults.behavioralResults = {
-            score: behavioralScore,
-            answeredQuestions,
-            totalQuestions: behavioralData.questions.length,
-            evaluation: `Behavioral assessment completed with ${behavioralScore}% average score. You provided detailed responses to ${answeredQuestions} out of ${behavioralData.questions.length} questions.`,
-            detailedEvaluations: evaluations
-          };
-          
-          totalScore += behavioralScore;
-          completedTests++;
-        } catch (error) {
-          console.error('Behavioral evaluation failed:', error);
-          // Fallback to basic scoring
-          const answeredQuestions = behavioralData.answers.filter(answer => answer && answer.trim() !== '').length;
-          const totalQuestions = behavioralData.questions.length;
-          const behavioralScore = Math.round((answeredQuestions / totalQuestions) * 100);
-          
-          allResults.behavioralResults = {
-            score: behavioralScore,
-            answeredQuestions,
-            totalQuestions,
-            evaluation: `Behavioral assessment completed with ${behavioralScore}% completion. You provided detailed responses to ${answeredQuestions} out of ${totalQuestions} questions.`
-          };
-          
-          totalScore += behavioralScore;
-          completedTests++;
-        }
+      if (scenarioBasedResults) {
+        allResults.scenarioBasedResults = scenarioBasedResults;
+        totalScore += scenarioBasedResults.score || 0;
+        completedTests++;
+        console.log('Using scenario based results from state:', scenarioBasedResults);
       }
       
-      // Evaluate coding test using Quiz Microservice
-      if (codingTestData) {
-        const codingData = JSON.parse(codingTestData);
-        
-        try {
-          if (codingData.solution && codingData.solution.trim() !== '') {
-            const evaluationResponse = await apiClient("POST", "/quiz/evaluate_code", {
-              challenge: codingData.challenge.challenge,
-              solution: codingData.solution
-            });
-            
-            allResults.codingResults = {
-              score: evaluationResponse.score || 75,
-              hasSolution: true,
-              evaluation: evaluationResponse.evaluation || `Coding challenge completed. You provided a solution for the given problem.`,
-              detailedEvaluation: evaluationResponse
-            };
-          } else {
-            allResults.codingResults = {
-              score: 0,
-              hasSolution: false,
-              evaluation: `Coding challenge not completed. No solution was provided.`
-            };
-          }
-          
-          totalScore += allResults.codingResults.score;
-          completedTests++;
-        } catch (error) {
-          console.error('Coding evaluation failed:', error);
-          // Fallback to basic scoring
-          const hasSolution = codingData.solution && codingData.solution.trim() !== '';
-          const codingScore = hasSolution ? 75 : 0;
-          
-          allResults.codingResults = {
-            score: codingScore,
-            hasSolution,
-            evaluation: hasSolution 
-              ? `Coding challenge completed. You provided a solution for the given problem.`
-              : `Coding challenge not completed. No solution was provided.`
-          };
-          
-          totalScore += codingScore;
-          completedTests++;
-        }
+      if (codingResults) {
+        allResults.codingResults = codingResults;
+        totalScore += codingResults.score || 0;
+        completedTests++;
+        console.log('Using coding results from state:', codingResults);
       }
       
       const overallScore = completedTests > 0 ? Math.round(totalScore / completedTests) : 0;
       
       // Store results
       setQuickTestResults(allResults);
+      
+      // Also set the actual test result state variables so charts can use them
+      if (allResults.aptitudeResults) {
+        setAptitudeResults(allResults.aptitudeResults);
+      }
+      if (allResults.scenarioBasedResults) {
+        setScenarioBasedResults(allResults.scenarioBasedResults);
+      }
+      if (allResults.codingResults) {
+        setCodingResults(allResults.codingResults);
+      }
       
       // Generate analysis using API
       const performanceGapsData = {
@@ -1162,23 +1244,23 @@ const PersonalizedAssessment = () => {
       }
     }
     
-    if (results.behavioralResults) {
-      if (results.behavioralResults.score >= 80) {
+    if (results.scenarioBasedResults) {
+      if (results.scenarioBasedResults.score >= 80) {
         recommendations.push({
-          category: 'Behavioral',
-          message: 'Strong communication and behavioral competencies!',
+          category: 'Scenario Based',
+          message: 'Strong communication and scenario-based competencies!',
           type: 'strength'
         });
-      } else if (results.behavioralResults.score >= 60) {
+      } else if (results.scenarioBasedResults.score >= 60) {
         recommendations.push({
-          category: 'Behavioral',
-          message: 'Good behavioral skills. Practice articulating your experiences more clearly.',
+          category: 'Scenario Based',
+          message: 'Good scenario-based skills. Practice articulating your experiences more clearly.',
           type: 'improvement'
         });
       } else {
         recommendations.push({
-          category: 'Behavioral',
-          message: 'Work on developing stronger behavioral examples and communication skills.',
+          category: 'Scenario Based',
+          message: 'Work on developing stronger scenario-based examples and communication skills.',
           type: 'improvement'
         });
       }
@@ -1275,118 +1357,13 @@ const PersonalizedAssessment = () => {
           
           setExtractedSkills(skills);
           
-          // Fetch job recommendations based on extracted skills
+          // Build job recommendations locally from extracted skills (no external jobs API)
           if (skills && skills.length > 0) {
-            console.log('🎯 Fetching job recommendations for skills:', skills);
-            console.log('🔗 API Endpoint: /jobs/api/v1/listings/recommend');
-            console.log('📤 Request payload:', { skills: Array.isArray(skills) ? skills : [skills] });
-            
-            recommendJobs(
-              { skills: Array.isArray(skills) ? skills : [skills] },
-              {
-                onSuccess: (data: any) => {
-                  console.log('✅ Job recommendations received - Raw response:', data);
-                  console.log('📋 Response type:', typeof data);
-                  console.log('📋 Is array:', Array.isArray(data));
-                  console.log('📋 Has primary_match:', !!data?.primary_match);
-                  console.log('📋 Has jobs property:', !!data?.jobs);
-                  
-                  // Transform API response format to array of jobs
-                  // API returns: { primary_match, second_match, third_match, ... }
-                  let jobs: any[] = [];
-                  
-                  if (data?.primary_match || data?.second_match || data?.third_match) {
-                    // Handle recommend API response format
-                    console.log('✅ Using recommend API format (primary/second/third match)');
-                    const matches = [
-                      data.primary_match,
-                      data.second_match,
-                      data.third_match
-                    ].filter(Boolean); // Remove null/undefined
-                    
-                    console.log(`📊 Found ${matches.length} matches`);
-                    
-                    jobs = matches.map((match: any, index: number) => ({
-                      id: match.id || `recommend-${index}`,
-                      title: match.job_title || match.title || 'Job Title',
-                      company_name: match.company || 'Company',
-                      company: typeof match.company === 'string' ? match.company : match.company?.name || 'Company',
-                      location: match.location || 'Location',
-                      country: match.location?.split(',')[1]?.trim() || match.location,
-                      city: match.location?.split(',')[0]?.trim() || match.location,
-                      salary_min: match.salary_min,
-                      salary_max: match.salary_max,
-                      description: match.description || '',
-                      skills: match.matched_skills || match.skills || [],
-                      matchScore: match.match_score || match.matchScore || 0,
-                      url: match.url || match.application_url || '',
-                      created_at: match.created || match.posted_at || new Date().toISOString(),
-                      employment_type: match.employment_type || 'full_time',
-                      work_type: match.work_type || 'onsite',
-                      seniority_level: match.seniority_level || 'entry'
-                    }));
-                  } else if (Array.isArray(data)) {
-                    // Handle array response
-                    console.log('✅ Using array response format');
-                    jobs = data;
-                  } else if (data?.jobs && Array.isArray(data.jobs)) {
-                    // Handle search API response format: { jobs: [...], total_found, ... }
-                    console.log('✅ Using search API format (jobs array)');
-                    jobs = data.jobs;
-                  } else {
-                    // Fallback: try to use listJobs API or searchJobs API
-                    console.log('⚠️ Recommend API returned unexpected format:', data);
-                    console.log('🔄 Attempting fallback: using searchJobs API with skills...');
-                    
-                    // Try searchJobs as fallback
-                    const skillsString = Array.isArray(skills) ? skills.join(',') : skills;
-                    searchJobs(
-                      { skills: Array.isArray(skills) ? skills : [skills] },
-                      {
-                        onSuccess: (searchData: any) => {
-                          console.log('✅ Search jobs response:', searchData);
-                          const searchJobs = Array.isArray(searchData) ? searchData : searchData?.jobs || [];
-                          setRecommendedJobs(searchJobs);
-                          localStorage.setItem('recommendedJobs', JSON.stringify(searchJobs));
-                        },
-                        onError: (searchError: any) => {
-                          console.error('❌ Search jobs also failed:', searchError);
-                        }
-                      }
-                    );
-                    return; // Exit early since we're using fallback
-                  }
-                  
-                  console.log(`📊 Processed ${jobs.length} jobs:`, jobs);
-                  if (jobs.length === 0) {
-                    console.warn('⚠️ No jobs found! Response was:', data);
-                  }
-                  setRecommendedJobs(jobs);
-                  // Store in localStorage for other pages
-                  localStorage.setItem('recommendedJobs', JSON.stringify(jobs));
-                },
-                onError: (error: any) => {
-                  console.error('❌ Error fetching job recommendations:', error);
-                  console.error('❌ Error details:', error?.response || error?.message);
-                  // Fallback: try to fetch jobs using searchJobs API
-                  console.log('🔄 Attempting fallback: using searchJobs API...');
-                  searchJobs(
-                    { skills: Array.isArray(skills) ? skills : [skills] },
-                    {
-                      onSuccess: (searchData: any) => {
-                        console.log('✅ Fallback search jobs response:', searchData);
-                        const searchJobs = Array.isArray(searchData) ? searchData : searchData?.jobs || [];
-                        setRecommendedJobs(searchJobs);
-                        localStorage.setItem('recommendedJobs', JSON.stringify(searchJobs));
-                      },
-                      onError: (searchError: any) => {
-                        console.error('❌ Fallback search jobs also failed:', searchError);
-                      }
-                    }
-                  );
-                }
-              }
-            );
+            console.log('🎯 Building local job recommendations for skills:', skills);
+            const localJobs = createLocalJobRecommendations(skills);
+            console.log('✅ Local job recommendations:', localJobs);
+            setRecommendedJobs(localJobs);
+            localStorage.setItem('recommendedJobs', JSON.stringify(localJobs));
           }
           
           // Generate job role suggestions using the new Resume Microservice
@@ -1394,12 +1371,6 @@ const PersonalizedAssessment = () => {
             await generateJobRoleSuggestions(extractedText);
           }
           
-          // Only auto-advance to jobs if we haven't already done so (first time analysis completes)
-          if (!hasAutoAdvancedToJobs.current) {
-            setCurrentStep('jobs');
-            hasAutoAdvancedToJobs.current = true;
-            scrollToTop();
-          }
           setIsAnalyzing(false);
         } else if (analysisData.status === 'FAILED') {
           const errorMsg = analysisData.error_message;
@@ -1435,6 +1406,18 @@ const PersonalizedAssessment = () => {
       setIsAnalyzing(false);
     }
   }, [analysisError, currentStep]);
+
+  // Check for stored resume on component mount
+  useEffect(() => {
+    const stored = hasStoredResume();
+    setHasResume(stored);
+    if (stored) {
+      const storedFile = getStoredResumeAsFile();
+      if (storedFile) {
+        setUploadedFile(storedFile);
+      }
+    }
+  }, []);
 
   // Initialize TTS on component mount
   useEffect(() => {
@@ -1517,7 +1500,16 @@ const PersonalizedAssessment = () => {
       console.log('Response type:', typeof response);
       console.log('Response keys:', Object.keys(response || {}));
 
-      // Store the latest upload response in localStorage
+      // Store resume file in localStorage (replaces previous resume)
+      try {
+        await storeResume(file, response?.id, response);
+        setHasResume(true);
+        console.log('✅ Resume stored in localStorage');
+      } catch (error) {
+        console.error('Failed to store resume in localStorage:', error);
+      }
+
+      // Store the latest upload response in localStorage (for backward compatibility)
       try {
         const uploadResponse = {
           ...response,
@@ -1577,6 +1569,98 @@ const PersonalizedAssessment = () => {
     setIsAnalyzing(true);
     // The analysis will be handled by the useEffect hook that watches analysisData
     // This function just sets the analyzing state and the hook will handle the rest
+  };
+
+  const handleResumeReuploadFromJobs = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowedTypes.includes(file.type)) {
+      setUploadError('Please upload a PDF, DOC, or DOCX file.');
+      return;
+    }
+
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('File size must be less than 10MB.');
+      return;
+    }
+
+    setUploadedFile(file);
+    setIsUploading(true);
+    setUploadError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await uploadResume.mutateAsync(formData);
+
+      console.log('Reupload response:', response);
+
+      // Store resume file in localStorage (replaces previous resume)
+      try {
+        await storeResume(file, response?.id, response);
+        setHasResume(true);
+        console.log('✅ Resume stored in localStorage');
+      } catch (error) {
+        console.error('Failed to store resume in localStorage:', error);
+      }
+
+      // Store the latest upload response in localStorage (for backward compatibility)
+      try {
+        const uploadResponse = {
+          ...response,
+          uploadedAt: new Date().toISOString(),
+          resumeId: response?.id
+        };
+        localStorage.setItem('latestResumeUpload', JSON.stringify(uploadResponse));
+        console.log('✅ Latest resume upload stored in localStorage:', uploadResponse);
+      } catch (error) {
+        console.error('Failed to store latest resume upload in localStorage:', error);
+      }
+
+      if (response && response.id) {
+        setResumeId(response.id.toString());
+        // Don't change the current step - keep user on job listings
+        // Clear previous jobs to trigger regeneration
+        setRecommendedJobs([]);
+        localStorage.removeItem('recommendedJobs');
+        // Trigger job regeneration by setting hasRequestedJobs
+        setHasRequestedJobs(true);
+        // Start analysis in background (for future job matching)
+        await startResumeAnalysis(response.id.toString());
+      } else {
+        console.error('Unexpected response structure:', response);
+        throw new Error('No resume ID returned from upload');
+      }
+    } catch (error: any) {
+      console.error('Reupload failed:', error);
+      
+      // Handle different error response formats
+      let errorMessage = 'Failed to reupload resume. Please try again.';
+      
+      if (error?.response) {
+        // Handle validation errors (422)
+        if (Array.isArray(error.response.detail)) {
+          errorMessage = error.response.detail.map((err: any) => {
+            return err.msg || err.message || 'Validation error';
+          }).join(', ');
+        } else if (typeof error.response.detail === 'string') {
+          errorMessage = error.response.detail;
+        } else if (error.response.message) {
+          errorMessage = error.response.message;
+        }
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      setUploadError(errorMessage);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   // Commented out until Resume Microservice endpoints are available
@@ -1640,34 +1724,139 @@ const PersonalizedAssessment = () => {
     try {
       setIsSubmittingAptitude(true);
       
-      // Store aptitude test data for later evaluation in analytics page
-      const aptitudeTestData = {
-        questions: aptitudeQuestions,
-        answers: aptitudeAnswers,
-        completedAt: new Date().toISOString(),
-        testType: 'aptitude'
+      // Validate we have questions and answers
+      if (!aptitudeQuestions || aptitudeQuestions.length === 0) {
+        throw new Error('No aptitude questions found. Please start the test again.');
+      }
+      
+      if (!aptitudeAnswers || aptitudeAnswers.length === 0) {
+        throw new Error('No answers provided. Please answer the questions first.');
+      }
+      
+      if (aptitudeAnswers.length !== aptitudeQuestions.length) {
+        console.warn(`Answer count (${aptitudeAnswers.length}) doesn't match question count (${aptitudeQuestions.length})`);
+      }
+      
+      // Evaluate aptitude test immediately using API endpoint
+      const questionIds = aptitudeQuestions.map((q: any, index: number) => {
+        const id = q?.id ?? q?.question_id ?? q?.uuid ?? q?.question_id ?? index;
+        return String(id); // Ensure it's a string
+      });
+
+      const selectedOptions = aptitudeAnswers.map((answer: any, idx: number) => {
+        const value = (answer ?? '').toString().trim();
+        // If already a letter A-D
+        if (/^[A-D]$/i.test(value)) return value.toUpperCase();
+        // If numeric index → convert to A-D
+        const num = Number(value);
+        if (!Number.isNaN(num) && num >= 0 && num < 26) {
+          return String.fromCharCode(65 + num);
+        }
+        // If text option, try to match against question options
+        const question = aptitudeQuestions[idx];
+        const options: string[] = Array.isArray(question?.options) ? question.options : [];
+        const matchIdx = options.findIndex((opt) =>
+          typeof value === 'string' && opt?.toLowerCase?.() === value.toLowerCase()
+        );
+        if (matchIdx >= 0) return String.fromCharCode(65 + matchIdx);
+        // Fallback
+        return value || 'A';
+      });
+      
+      // Ensure arrays are the same length
+      const minLength = Math.min(questionIds.length, selectedOptions.length);
+      const finalQuestionIds = questionIds.slice(0, minLength);
+      const finalSelectedOptions = selectedOptions.slice(0, minLength);
+
+      const requestPayload = {
+        question_ids: finalQuestionIds,
+        selected_options: finalSelectedOptions
       };
       
-      // Store in localStorage for analytics page to access
-      localStorage.setItem('aptitudeTestData', JSON.stringify(aptitudeTestData));
+      console.log('Evaluating aptitude test with API endpoint /v1/evaluate_aptitude');
+      console.log('Request payload:', requestPayload);
+      console.log('Question IDs:', finalQuestionIds);
+      console.log('Selected options:', finalSelectedOptions);
+      console.log('Question count:', finalQuestionIds.length);
+      console.log('Answer count:', finalSelectedOptions.length);
       
-      console.log('Aptitude test completed, data stored for evaluation');
+      // Use the generated API hook to ensure correct format
+      const evaluationResponse = await evaluateAptitudeAnswers.mutateAsync(requestPayload);
       
-      // Move to next test without immediate evaluation
-      setCurrentStep('behavioral');
+      console.log('Aptitude evaluation API response:', evaluationResponse);
+      
+      // Extract score directly from API response
+      let aptitudeScore = 0;
+      if (evaluationResponse.score !== undefined && evaluationResponse.score !== null) {
+        aptitudeScore = Number(evaluationResponse.score);
+      } else if (evaluationResponse.percentage !== undefined && evaluationResponse.percentage !== null) {
+        aptitudeScore = Number(evaluationResponse.percentage);
+      } else if (evaluationResponse.accuracy !== undefined && evaluationResponse.accuracy !== null) {
+        aptitudeScore = Number(evaluationResponse.accuracy);
+      } else if (evaluationResponse.results && Array.isArray(evaluationResponse.results)) {
+        const correctCount = evaluationResponse.results.filter((r: any) => r.is_correct === true || r.correct === true).length;
+        const total = evaluationResponse.results.length;
+        aptitudeScore = total > 0 ? Math.round((correctCount / total) * 100) : 0;
+      }
+      
+      if (isNaN(aptitudeScore) || aptitudeScore < 0) {
+        aptitudeScore = 0;
+      }
+      
+      const correctAnswers = evaluationResponse.results?.filter((r: any) => r.is_correct === true || r.correct === true).length || 0;
+      const totalQuestions = evaluationResponse.total || evaluationResponse.results?.length || aptitudeQuestions.length;
+      
+      // Store results in state immediately
+      const aptitudeResult = {
+        score: aptitudeScore,
+        correctAnswers,
+        totalQuestions,
+        evaluation: `Aptitude test completed with ${aptitudeScore}% accuracy. You answered ${correctAnswers} out of ${totalQuestions} questions correctly.`,
+        detailedResults: evaluationResponse.results || [],
+        rawResponse: evaluationResponse
+      };
+      
+      setAptitudeResults(aptitudeResult);
+      console.log('Aptitude test evaluated and stored in state:', aptitudeResult);
+      
+      // Move to next test
+      setCurrentStep('scenario-based');
       scrollToTop();
       
-    } catch (error) {
-      console.error('Error storing aptitude test data:', error);
+    } catch (error: any) {
+      console.error('Error evaluating aptitude test:', error);
+      console.error('Error details:', {
+        message: error?.message,
+        response: error?.response,
+        status: error?.response?.status,
+        detail: error?.response?.detail
+      });
+      
+      let errorMessage = 'Failed to evaluate aptitude test. ';
+      if (error?.response?.detail) {
+        if (typeof error.response.detail === 'string') {
+          errorMessage += error.response.detail;
+        } else if (Array.isArray(error.response.detail)) {
+          errorMessage += error.response.detail.map((d: any) => d.msg || d).join(', ');
+        } else {
+          errorMessage += JSON.stringify(error.response.detail);
+        }
+      } else if (error?.message) {
+        errorMessage += error.message;
+      } else {
+        errorMessage += 'Please check the console for details.';
+      }
+      
+      alert(errorMessage);
     } finally {
       setIsSubmittingAptitude(false);
     }
   };
 
-  // Behavioral Test Functions
-  const startBehavioralTest = async () => {
+  // Scenario Based Test Functions
+  const startScenarioBasedTest = async () => {
     try {
-      setIsGeneratingBehavioral(true);
+      setIsGeneratingScenarioBased(true);
       
       // Sanitize skills data to prevent JSON parsing issues
       // Get skills array and ensure all items are valid strings
@@ -1729,7 +1918,7 @@ const PersonalizedAssessment = () => {
         skills: sanitizedSkills,
         level: 'intermediate',
         job_role: sanitizedJobRole,
-        test_type: 'behavioral',
+        test_type: 'scenario-based',
         company: 'Tech Company'
       };
       
@@ -1745,7 +1934,7 @@ const PersonalizedAssessment = () => {
         requestData.job_role = 'Software Engineer';
       }
       
-      console.log('Sending behavioral questions request:', requestData);
+      console.log('Sending scenario based questions request:', requestData);
       console.log('Sanitized skills:', sanitizedSkills);
       console.log('Sanitized job role:', sanitizedJobRole);
       
@@ -1760,12 +1949,12 @@ const PersonalizedAssessment = () => {
           skills: 'JavaScript, React, Node.js, Python, SQL',
           level: 'intermediate',
           job_role: 'Software Engineer',
-          test_type: 'behavioral',
+          test_type: 'scenario-based',
           company: 'Tech Company'
         };
       }
       
-      const response = await generateBehavioralQuestions.mutateAsync(finalRequestData);
+      const response = await generateScenarioBasedQuestions.mutateAsync(finalRequestData);
       
       // Validate response is valid
       if (!response) {
@@ -1791,7 +1980,7 @@ const PersonalizedAssessment = () => {
         }
       }
       
-      console.log('Behavioral questions generated:', response);
+      console.log('Scenario based questions generated:', response);
       console.log('Questions array:', questions);
       console.log('First question:', questions?.[0]);
       
@@ -1799,19 +1988,19 @@ const PersonalizedAssessment = () => {
         throw new Error('No questions received from API');
       }
       
-      setBehavioralQuestions(questions);
-      setCurrentBehavioralQuestion(0);
-      setBehavioralAnswers(new Array(questions.length).fill(''));
+      setScenarioBasedQuestions(questions);
+      setCurrentScenarioBasedQuestion(0);
+      setScenarioBasedAnswers(new Array(questions.length).fill(''));
       
       // Scroll to questions after they are loaded
       scrollToQuestions();
       
     } catch (error: any) {
-      console.error('Error generating behavioral questions:', error);
+      console.error('Error generating scenario based questions:', error);
       console.error('Error details:', error?.response || error?.message);
       
       // More detailed error message
-      let errorMessage = 'Failed to generate behavioral questions. ';
+      let errorMessage = 'Failed to generate scenario based questions. ';
       if (error?.message) {
         if (error.message.includes('JSON') || error.message.includes('delimiter')) {
           errorMessage += 'The server returned invalid data. Please try again.';
@@ -1827,35 +2016,96 @@ const PersonalizedAssessment = () => {
       alert(errorMessage);
       
     } finally {
-      setIsGeneratingBehavioral(false);
+      setIsGeneratingScenarioBased(false);
     }
   };
 
-  const submitBehavioralTest = async () => {
+  const submitScenarioBasedTest = async () => {
     try {
-      setIsSubmittingBehavioral(true);
+      setIsSubmittingScenarioBased(true);
       
-      // Store behavioral test data for later evaluation in analytics page
-      const behavioralTestData = {
-        questions: behavioralQuestions,
-        answers: behavioralAnswers,
-        completedAt: new Date().toISOString(),
-        testType: 'behavioral'
+      // Evaluate scenario based test immediately using API endpoint
+      const evaluations = [];
+      let totalScenarioBasedScore = 0;
+      
+      for (let i = 0; i < scenarioBasedQuestions.length; i++) {
+        const question = scenarioBasedQuestions[i];
+        const response = scenarioBasedAnswers[i];
+        
+        if (response && response.trim() !== '') {
+          console.log(`Evaluating scenario based question ${i + 1} with API endpoint /v1/evaluate_behavioral`);
+          const evaluationResponse = await evaluateScenarioBasedAnswers.mutateAsync({
+            question: question.text || question.question || question,
+            response: response
+          });
+          
+          console.log(`Scenario based evaluation API response for question ${i + 1}:`, evaluationResponse);
+          
+          // Extract score directly from API response
+          let score = 0;
+          if (evaluationResponse.score !== undefined && evaluationResponse.score !== null) {
+            score = Number(evaluationResponse.score);
+            if (score <= 10) {
+              score = score * 10; // Convert 0-10 to 0-100
+            }
+          } else if (evaluationResponse.rating !== undefined && evaluationResponse.rating !== null) {
+            score = Number(evaluationResponse.rating);
+            if (score <= 10) {
+              score = score * 10;
+            }
+          } else if (evaluationResponse.percentage !== undefined && evaluationResponse.percentage !== null) {
+            score = Number(evaluationResponse.percentage);
+          } else if (evaluationResponse.evaluation) {
+            const scoreMatch = evaluationResponse.evaluation.match(/(\d+)\s*out\s*of\s*10|score\s*of\s*(\d+)|(\d+)\/10|rating[:\s]+(\d+)|(\d+)%/i);
+            if (scoreMatch) {
+              score = parseInt(scoreMatch[1] || scoreMatch[2] || scoreMatch[3] || scoreMatch[4] || scoreMatch[5]) || 0;
+              if (score <= 10 && !scoreMatch[5]) {
+                score = score * 10;
+              }
+            }
+          }
+          
+          if (isNaN(score) || score < 0) {
+            score = 0;
+          }
+          score = Math.max(0, Math.min(100, score));
+          
+          evaluations.push({
+            question: question.text || question.question || question,
+            response: response,
+            evaluation: evaluationResponse.evaluation,
+            score: score,
+            rawResponse: evaluationResponse
+          });
+          
+          totalScenarioBasedScore += score;
+        }
+      }
+      
+      const answeredQuestions = evaluations.length;
+      const scenarioBasedScore = answeredQuestions > 0 ? Math.round(totalScenarioBasedScore / answeredQuestions) : 0;
+      
+      // Store results in state immediately
+      const scenarioBasedResult = {
+        score: scenarioBasedScore,
+        answeredQuestions,
+        totalQuestions: scenarioBasedQuestions.length,
+        evaluation: `Scenario based assessment completed with ${scenarioBasedScore}% average score. You provided detailed responses to ${answeredQuestions} out of ${scenarioBasedQuestions.length} questions.`,
+        detailedEvaluations: evaluations
       };
       
-      // Store in localStorage for analytics page to access
-      localStorage.setItem('behavioralTestData', JSON.stringify(behavioralTestData));
+      setScenarioBasedResults(scenarioBasedResult);
+      console.log('Scenario based test evaluated and stored in state:', scenarioBasedResult);
       
-      console.log('Behavioral test completed, data stored for evaluation');
-      
-      // Move to next test without immediate evaluation
+      // Move to next test
       setCurrentStep('coding');
       scrollToTop();
       
     } catch (error) {
-      console.error('Error storing behavioral test data:', error);
+      console.error('Error evaluating scenario based test:', error);
+      alert('Failed to evaluate scenario based test. Please try again.');
     } finally {
-      setIsSubmittingBehavioral(false);
+      setIsSubmittingScenarioBased(false);
     }
   };
 
@@ -1973,56 +2223,50 @@ const PersonalizedAssessment = () => {
         solution: userCodeSolution
       };
 
-      console.log('Evaluating code solution:', evaluationData);
+      console.log('Evaluating code solution with API endpoint /v1/evaluate_code:', evaluationData);
+      // Use the generated API hook to ensure correct format
       const result = await evaluateCodeSolution.mutateAsync(evaluationData);
       
-      // Parse the evaluation response (same logic as CodingRoundPage)
-      const evaluationText = result.evaluation || result.evaluation_text || '';
+      console.log('Coding evaluation API response:', result);
       
-      // Try to extract score from evaluation text (format: "Score: X/10" or similar)
-      let extractedScore: number | undefined;
-      const scoreMatch = evaluationText.match(/score[:\s]+(\d+(?:\.\d+)?)\s*(?:\/|\s*out\s*of\s*)?\s*10/i);
-      if (scoreMatch) {
-        extractedScore = parseFloat(scoreMatch[1]);
+      // Extract score directly from API response
+      let codingScore = 0;
+      if (result.score !== undefined && result.score !== null) {
+        codingScore = Number(result.score);
+      } else if (result.percentage !== undefined && result.percentage !== null) {
+        codingScore = Number(result.percentage);
+      } else if (result.rating !== undefined && result.rating !== null) {
+        codingScore = Number(result.rating);
+        if (codingScore <= 10) {
+          codingScore = codingScore * 10; // Convert 0-10 to 0-100
+        }
       } else {
-        // Try to find any number between 0-10
-        const numberMatch = evaluationText.match(/\b([0-9](?:\.[0-9]+)?|10)\b/);
-        if (numberMatch) {
-          const num = parseFloat(numberMatch[1]);
-          if (num >= 0 && num <= 10) {
-            extractedScore = num;
-          }
+        // Try to extract from evaluation text as last resort
+        const evaluationText = result.evaluation || result.evaluation_text || '';
+        const scoreMatch = evaluationText.match(/score[:\s]+(\d+(?:\.\d+)?)\s*(?:\/|\s*out\s*of\s*)?\s*10/i);
+        if (scoreMatch) {
+          codingScore = parseFloat(scoreMatch[1]) * 10; // Convert 0-10 to 0-100
         }
       }
       
-      // If no score found, estimate based on solution length and time
-      const finalScore = extractedScore !== undefined 
-        ? extractedScore 
-        : Math.min(10, Math.max(5, 10 - (elapsedTime / 60) / 2));
+      if (isNaN(codingScore) || codingScore < 0) {
+        codingScore = 0;
+      }
+      codingScore = Math.max(0, Math.min(100, codingScore));
+      
+      const evaluationText = result.evaluation || result.evaluation_text || "Evaluation completed successfully.";
       
       const evaluationResult = { 
-        evaluation: evaluationText || "Evaluation completed successfully.",
-        score: finalScore,
-        feedback: evaluationText
+        evaluation: evaluationText,
+        score: codingScore,
+        feedback: evaluationText,
+        rawResponse: result
       };
       
       setCodeEvaluation(evaluationResult);
       setCodingResults(evaluationResult);
       
-      // Store coding test data for later evaluation in analytics page
-      const codingTestData = {
-        challenge: codingChallenge,
-        solution: userCodeSolution,
-        evaluation: evaluationResult,
-        completedAt: new Date().toISOString(),
-        testType: 'coding'
-      };
-      
-      // Store in localStorage for analytics page to access
-      localStorage.setItem('codingTestData', JSON.stringify(codingTestData));
-      
-      console.log('Code evaluation completed:', result);
-      console.log('Coding test completed, data stored for evaluation');
+      console.log('Coding test evaluated and stored in state:', evaluationResult);
       
       // Move to results for quick-test path, or interview for ai-interview path
       if (selectedPath === 'quick-test') {
@@ -2051,7 +2295,7 @@ const PersonalizedAssessment = () => {
       setIsStartingInterview(true);
       
       const interviewRequest = {
-        interview_type: 'behavioral',
+        interview_type: 'scenario-based',
         position: suggestedRole || 'Software Engineer',
         experience_level: 'intermediate',
         preferred_language: 'English',
@@ -2091,7 +2335,7 @@ const PersonalizedAssessment = () => {
       // Try with minimal required fields
       try {
         const minimalRequest = {
-          interview_type: 'behavioral',
+          interview_type: 'scenario-based',
           position: 'Software Engineer',
           experience_level: 'intermediate',
           preferred_language: 'English',
@@ -2118,7 +2362,7 @@ const PersonalizedAssessment = () => {
         // Try with absolute minimal fields
         try {
           const basicRequest = {
-            interview_type: 'behavioral',
+            interview_type: 'scenario-based',
             position: 'Software Engineer',
             experience_level: 'intermediate',
             preferred_language: 'English',
@@ -2205,7 +2449,7 @@ const PersonalizedAssessment = () => {
           feedback: response.feedback,
           completedAt: new Date().toISOString(),
           testType: 'ai_interview',
-          interviewType: 'behavioral',
+          interviewType: 'scenario-based',
           position: suggestedRole || 'Software Engineer',
           experienceLevel: 'intermediate'
         };
@@ -2529,39 +2773,80 @@ const PersonalizedAssessment = () => {
             form.append("file", blob, "answer.webm");
             
             console.log("Sending audio for transcription...");
-            const res = await apiClient("POST", "/interview/audio/transcribe", form, false);
+            const res = await apiClient("POST", "/v1/audio/transcribe", form, false);
             console.log("Transcribe result:", res);
+            console.log("Transcribe result type:", typeof res);
+            console.log("Transcribe result keys:", res && typeof res === "object" ? Object.keys(res) : "N/A");
             
-            // Handle different response formats
-            if (res && typeof res === "object") {
-              if ("transcript" in res) {
-                const tr = (res as any).transcript as string;
-                setUserInterviewResponse(tr);
-                return;
-              } else if ("transcription" in res) {
-                const tr = (res as any).transcription as string;
-                setUserInterviewResponse(tr);
-                return;
-              } else if (typeof res === "string") {
-                setUserInterviewResponse(res);
+            // Handle different response formats - more comprehensive
+            if (res) {
+              // Case 1: Direct string response
+              if (typeof res === "string" && res.trim().length > 0) {
+                setUserInterviewResponse(res.trim());
+                setIsRecordingAudio(false);
                 return;
               }
+              
+              // Case 2: Object with transcript field
+              if (typeof res === "object" && res !== null) {
+                // Try common field names
+                const transcript = (res as any).transcript || 
+                                  (res as any).transcription || 
+                                  (res as any).text || 
+                                  (res as any).result ||
+                                  (res as any).data?.transcript ||
+                                  (res as any).data?.transcription ||
+                                  (res as any).data?.text;
+                
+                if (transcript && typeof transcript === "string" && transcript.trim().length > 0) {
+                  setUserInterviewResponse(transcript.trim());
+                  setIsRecordingAudio(false);
+                  return;
+                }
+                
+                // Try to find any string value in the response
+                for (const key in res) {
+                  const value = (res as any)[key];
+                  if (typeof value === "string" && value.trim().length > 0) {
+                    // If it looks like a transcript (not an error message)
+                    if (!value.toLowerCase().includes("error") && !value.toLowerCase().includes("failed")) {
+                      setUserInterviewResponse(value.trim());
+                      setIsRecordingAudio(false);
+                      return;
+                    }
+                  }
+                }
+              }
             }
-          } catch (apiErr) {
+            
+            // If we get here, response format wasn't recognized
+            console.warn("Unrecognized transcription response format:", res);
+            throw new Error("Unrecognized response format from transcription API");
+          } catch (apiErr: any) {
             console.error("API transcription failed:", apiErr);
+            console.error("Error details:", {
+              message: apiErr?.message,
+              response: apiErr?.response,
+              status: apiErr?.response?.status,
+              data: apiErr?.response?.data
+            });
             
-            // Fallback: Create a download link for manual transcription
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'interview-audio.webm';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            // Fallback to browser speech recognition if available
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+              console.log("Falling back to browser speech recognition...");
+              // Note: Browser speech recognition needs to be started before recording
+              // So we'll just show an error and let user type manually
+            }
             
-            alert("Audio API not available. Audio file downloaded. Please type your answer manually.");
+            // Show user-friendly error message
+            const errorMsg = apiErr?.response?.data?.detail || 
+                           apiErr?.response?.data?.message || 
+                           apiErr?.message || 
+                           "Audio transcription failed";
+            
+            alert(`Audio transcription failed: ${errorMsg}. Please type your answer in the textbox below.`);
             setUserInterviewResponse(""); // Clear the answer field for manual input
+            setIsRecordingAudio(false);
           }
         } catch (err) {
           console.error("Audio processing failed:", err);
@@ -2746,7 +3031,7 @@ const PersonalizedAssessment = () => {
     }
   };
 
-  // Speech recognition functions for behavioral assessment
+  // Speech recognition functions for scenario based assessment
   const startSpeechRecognition = async (fieldName: string) => {
     try {
       setActiveField(fieldName);
@@ -2817,8 +3102,9 @@ const PersonalizedAssessment = () => {
             if (token) {
               headers["Authorization"] = `Bearer ${token}`;
             }
+            // Don't set Content-Type for FormData - browser will set it automatically with boundary
 
-            const resp = await fetch(getApiUrl("/interview/audio/transcribe"), {
+            const resp = await fetch(getApiUrl("/v1/audio/transcribe"), {
               method: "POST",
               headers,
               body: form,
@@ -2830,27 +3116,61 @@ const PersonalizedAssessment = () => {
 
             const res = await resp.json();
             console.log("Transcribe result:", res);
+            console.log("Transcribe result type:", typeof res);
+            console.log("Transcribe result keys:", res && typeof res === "object" ? Object.keys(res) : "N/A");
             
-            // Handle different response formats
-            if (res && typeof res === "object") {
-              if ("transcript" in res) {
-                const tr = (res as any).transcript as string;
-                setTranscript(tr);
-                setIsTranscribing(false);
-                return;
-              } else if ("transcription" in res) {
-                const tr = (res as any).transcription as string;
-                setTranscript(tr);
-                setIsTranscribing(false);
-                return;
-              } else if (typeof res === "string") {
-                setTranscript(res);
+            // Handle different response formats - more comprehensive
+            if (res) {
+              // Case 1: Direct string response
+              if (typeof res === "string" && res.trim().length > 0) {
+                setTranscript(res.trim());
                 setIsTranscribing(false);
                 return;
               }
+              
+              // Case 2: Object with transcript field
+              if (typeof res === "object" && res !== null) {
+                // Try common field names
+                const transcript = (res as any).transcript || 
+                                  (res as any).transcription || 
+                                  (res as any).text || 
+                                  (res as any).result ||
+                                  (res as any).data?.transcript ||
+                                  (res as any).data?.transcription ||
+                                  (res as any).data?.text;
+                
+                if (transcript && typeof transcript === "string" && transcript.trim().length > 0) {
+                  setTranscript(transcript.trim());
+                  setIsTranscribing(false);
+                  return;
+                }
+                
+                // Try to find any string value in the response
+                for (const key in res) {
+                  const value = (res as any)[key];
+                  if (typeof value === "string" && value.trim().length > 0) {
+                    // If it looks like a transcript (not an error message)
+                    if (!value.toLowerCase().includes("error") && !value.toLowerCase().includes("failed")) {
+                      setTranscript(value.trim());
+                      setIsTranscribing(false);
+                      return;
+                    }
+                  }
+                }
+              }
             }
-          } catch (apiErr) {
+            
+            // If we get here, response format wasn't recognized
+            console.warn("Unrecognized transcription response format:", res);
+            throw new Error("Unrecognized response format from transcription API");
+          } catch (apiErr: any) {
             console.error("API transcription failed:", apiErr);
+            console.error("Error details:", {
+              message: apiErr?.message,
+              response: apiErr?.response,
+              status: apiErr?.response?.status,
+              data: apiErr?.response?.data
+            });
             setIsTranscribing(false);
             // Fallback to browser speech recognition
             startBrowserSpeechRecognition(fieldName);
@@ -2951,10 +3271,10 @@ const PersonalizedAssessment = () => {
   };
 
   const applyTranscript = () => {
-    if (transcript && activeField === 'behavioral') {
-      const newAnswers = [...behavioralAnswers];
-      newAnswers[currentBehavioralQuestion] = transcript;
-      setBehavioralAnswers(newAnswers);
+    if (transcript && activeField === 'scenario-based') {
+      const newAnswers = [...scenarioBasedAnswers];
+      newAnswers[currentScenarioBasedQuestion] = transcript;
+      setScenarioBasedAnswers(newAnswers);
       setTranscript('');
     }
   };
@@ -3046,13 +3366,13 @@ const PersonalizedAssessment = () => {
       console.log('Going back to jobs step from aptitude');
       setCurrentStep('jobs');
       scrollToTop();
-    } else if (currentStep === 'behavioral') {
+    } else if (currentStep === 'scenario-based') {
       console.log('Going back to aptitude step');
       setCurrentStep('aptitude');
       scrollToTop();
     } else if (currentStep === 'coding') {
-      console.log('Going back to behavioral step');
-      setCurrentStep('behavioral');
+      console.log('Going back to scenario-based step');
+      setCurrentStep('scenario-based');
       scrollToTop();
     } else if (currentStep === 'results') {
       // If coming from quick test results, go back to jobs
@@ -3070,7 +3390,7 @@ const PersonalizedAssessment = () => {
   };
 
   const getStepNumber = (step: string) => {
-    const steps = ['welcome', 'upload', 'analysis', 'jobs', 'aptitude', 'behavioral', 'coding', 'interview'];
+    const steps = ['welcome', 'upload', 'analysis', 'jobs', 'aptitude', 'scenario-based', 'coding', 'interview'];
     return steps.indexOf(step) + 1;
   };
 
@@ -3197,7 +3517,7 @@ const PersonalizedAssessment = () => {
                       let steps = ['upload', 'analysis', 'jobs'];
                       
                       if (selectedPath === 'quick-test') {
-                        steps = ['upload', 'analysis', 'jobs', 'aptitude', 'behavioral', 'coding', 'results'];
+                        steps = ['upload', 'analysis', 'jobs', 'aptitude', 'scenario-based', 'coding', 'results'];
                       } else if (selectedPath === 'ai-interview') {
                         steps = ['upload', 'analysis', 'jobs', 'interview'];
                       } else {
@@ -3224,7 +3544,7 @@ const PersonalizedAssessment = () => {
                           currentStep === step ? 'text-primary font-semibold' : 'text-gray-600'
                         }`}>
                           {step === 'aptitude' ? 'Aptitude' : 
-                           step === 'behavioral' ? 'Behavioral' :
+                           step === 'scenario-based' ? 'Scenario Based' :
                            step === 'coding' ? 'Coding' :
                              step === 'interview' ? 'AI Interview' :
                              step === 'jobs' ? 'Jobs' :
@@ -3299,7 +3619,7 @@ const PersonalizedAssessment = () => {
                             Uploading Resume...
                           </>
                         ) : (
-                          'Choose Resume File'
+                          hasResume ? 'Reupload Resume' : 'Choose Resume File'
                         )}
                       </label>
                     </div>
@@ -3325,6 +3645,22 @@ const PersonalizedAssessment = () => {
                     <p className="text-xs text-gray-500 mt-2">Maximum file size: 10MB</p>
                   </div>
                 </div>
+
+                {(uploadedFile || hasResume) && !isUploading && (
+                  <div className="mt-8 flex justify-center">
+                    <Button
+                      size="lg"
+                      className="px-8 py-3 rounded-2xl bg-primary text-white hover:bg-primary/90 flex items-center gap-2"
+                      onClick={() => {
+                        setCurrentStep('analysis');
+                        scrollToTop();
+                      }}
+                    >
+                      Continue to Analysis
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </Card>
             )}
 
@@ -3384,7 +3720,7 @@ const PersonalizedAssessment = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     {resumeAnalysis.extractedText && (
                       <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200">
                         <div className="mb-6">
@@ -3398,6 +3734,23 @@ const PersonalizedAssessment = () => {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Manual Next button to move to Jobs & AI options */}
+                {!isAnalyzing && !analysisLoading && (
+                  <div className="mt-10 flex justify-center">
+                    <Button
+                      size="lg"
+                      className="px-8 py-3 rounded-2xl bg-primary text-white hover:bg-primary/90 flex items-center gap-2"
+                      onClick={() => {
+                        setCurrentStep('jobs');
+                        scrollToTop();
+                      }}
+                    >
+                      Next: View Jobs & AI Practice Options
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
                   </div>
                 )}
               </Card>
@@ -3421,31 +3774,85 @@ const PersonalizedAssessment = () => {
                   </div>
                 ) : (
                   <div className="space-y-8">
-                    {/* Actual Job Listings from API */}
-                    {recommendedJobs && recommendedJobs.length > 0 && (
+                    {/* Trigger button to generate jobs from analyzed resume */}
+                    <div className="flex justify-center mb-4">
+                      <Button
+                        size="lg"
+                        variant="outline"
+                        onClick={() => {
+                          setHasRequestedJobs(true);
+                          // Clear previous jobs so effect can repopulate
+                          setRecommendedJobs([]);
+                        }}
+                      >
+                        Generate Jobs from My Resume
+                      </Button>
+                    </div>
+
+                    {/* Job Listings */}
+                    {hasRequestedJobs && recommendedJobs && recommendedJobs.length > 0 && (
                       <div className="mt-8 bg-white rounded-2xl p-6 shadow-lg border border-gray-200">
                         <div className="mb-6">
-                          <h4 className="text-xl font-semibold text-gray-900">Job Opportunities</h4>
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-xl font-semibold text-gray-900">Job Opportunities</h4>
+                            <div className="relative">
+                              <input
+                                type="file"
+                                accept=".pdf,.doc,.docx"
+                                onChange={handleResumeReuploadFromJobs}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                id="resume-reupload-jobs"
+                                disabled={isUploading}
+                              />
+                              <label
+                                htmlFor="resume-reupload-jobs"
+                                className="flex items-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-all duration-300 cursor-pointer border border-primary/20 hover:border-primary/40 font-medium text-sm"
+                              >
+                                {isUploading ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Uploading...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="w-4 h-4" />
+                                    Reupload Resume
+                                  </>
+                                )}
+                              </label>
+                            </div>
+                          </div>
                           <p className="text-gray-600">Based on your skills and experience, here are job opportunities that match your profile.</p>
+                          {uploadError && (
+                            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm flex items-center gap-2">
+                              <AlertCircle className="w-4 h-4" />
+                              {uploadError}
+                            </div>
+                          )}
                         </div>
                         <div className="grid gap-4">
-                          {recommendedJobs.map((job: any, index: number) => (
-                            <Card key={job.id || index} className="p-6 hover:shadow-lg transition-all duration-300 border-primary/10 hover:border-primary/30">
-                              <div className="flex justify-between items-start">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <h5 className="font-bold text-xl text-[#2D3253]">
-                                      {job.title || job.job_title || 'Job Title'}
-                                    </h5>
-                                    {job.matchScore > 0 && (
-                                      <Badge 
-                                        variant={job.matchScore > 70 ? "default" : job.matchScore > 40 ? "secondary" : "outline"}
-                                        className="text-xs"
-                                      >
-                                        {Math.round(job.matchScore)}% Match
-                                      </Badge>
-                                    )}
-                                  </div>
+                          {recommendedJobs.map((job: any, index: number) => {
+                            // Rank-based match percentages: first = 100, second = 80, third = 70, others = 60
+                            const rankScores = [100, 80, 70];
+                            const displayScore = rankScores[index] ?? 60;
+
+                            return (
+                              <Card key={job.id || index} className="p-6 hover:shadow-lg transition-all duration-300 border-primary/10 hover:border-primary/30">
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <h5 className="font-bold text-xl text-[#2D3253]">
+                                        {job.title || job.job_title || 'Job Title'}
+                                      </h5>
+                                      {displayScore > 0 && (
+                                        <Badge 
+                                          variant={displayScore > 70 ? "default" : displayScore > 40 ? "secondary" : "outline"}
+                                          className="text-xs"
+                                        >
+                                          {displayScore}% Match
+                                        </Badge>
+                                      )}
+                                    </div>
                                   <p className="text-primary font-medium mb-1">
                                     {job.company_name || (typeof job.company === 'string' ? job.company : job.company?.name) || 'Company'}
                                   </p>
@@ -3477,29 +3884,62 @@ const PersonalizedAssessment = () => {
                                       ))}
                                     </div>
                                   )}
+                                  </div>
                                 </div>
-                              </div>
-                              {job.url && (
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  className="mt-4"
-                                  onClick={() => window.open(job.url, '_blank')}
-                                >
-                                  View Job Details
-                                  <ArrowRight className="ml-2 h-4 w-4" />
-                                </Button>
-                              )}
-                            </Card>
-                          ))}
+                                <div className="flex gap-2 mt-4">
+                                  {job.url && (
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm"
+                                      onClick={() => window.open(job.url, '_blank')}
+                                    >
+                                      View Job Details
+                                      <ArrowRight className="ml-2 h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  <Button 
+                                    variant={selectedJobForInterview?.id === job.id ? "default" : "secondary"}
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedJobForInterview(job);
+                                      localStorage.setItem('selectedJobForInterview', JSON.stringify({
+                                        id: job.id,
+                                        job_description: job.description,
+                                        job_title: job.title || job.job_title,
+                                        company_name: job.company_name || (typeof job.company === 'string' ? job.company : job.company?.name),
+                                        skills: job.skills,
+                                        location: job.location || job.city || job.country,
+                                        salary: job.salary_min && job.salary_max 
+                                          ? `${job.salary_min} - ${job.salary_max}` 
+                                          : job.salary_min || job.salary_max,
+                                      }));
+                                    }}
+                                    className={selectedJobForInterview?.id === job.id ? 'bg-green-600 hover:bg-green-700' : ''}
+                                  >
+                                    {selectedJobForInterview?.id === job.id ? (
+                                      <>
+                                        <CheckCircle className="mr-2 h-4 w-4" />
+                                        Selected for Practice
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Target className="mr-2 h-4 w-4" />
+                                        Prepare for this Job
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
+                              </Card>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
 
-                    {(!recommendedJobs || recommendedJobs.length === 0) && (
+                    {hasRequestedJobs && (!recommendedJobs || recommendedJobs.length === 0) && (
                       <div className="mt-8 bg-yellow-50 border border-yellow-200 rounded-xl p-6">
                         <p className="text-yellow-800 text-center">
-                          No job listings available yet. Jobs will appear here once they are fetched from the API.
+                          No job listings available yet. Try adjusting your resume or skills, then generate again.
                         </p>
                       </div>
                     )}
@@ -3525,7 +3965,7 @@ const PersonalizedAssessment = () => {
                             <span className="font-medium text-gray-700 text-sm">Aptitude Test</span>
                           </div>
                           <div className="p-2.5 bg-green-50 rounded-lg">
-                            <span className="font-medium text-gray-700 text-sm">Behavioral Assessment</span>
+                            <span className="font-medium text-gray-700 text-sm">Scenario Based Assessment</span>
                           </div>
                           <div className="p-2.5 bg-green-50 rounded-lg">
                             <span className="font-medium text-gray-700 text-sm">Coding Challenge</span>
@@ -3551,6 +3991,32 @@ const PersonalizedAssessment = () => {
                     {/* AI Interview Option */}
                     <Card className="p-8 border-2 border-blue-200 hover:border-blue-400 transition-all duration-300 hover:shadow-2xl bg-gradient-to-br from-white to-blue-50">
                       <div className="text-center">
+                        {selectedJobForInterview && (
+                          <div className="mb-4 p-4 bg-green-50 border-2 border-green-200 rounded-xl">
+                            <div className="flex items-center gap-3">
+                              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                              <div className="flex-1 text-left">
+                                <p className="text-sm font-semibold text-green-800">
+                                  Job Selected: {selectedJobForInterview.job_title || selectedJobForInterview.title}
+                                </p>
+                                <p className="text-xs text-green-600">
+                                  Your AI interview will be tailored for this position
+                                </p>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedJobForInterview(null);
+                                  localStorage.removeItem('selectedJobForInterview');
+                                }}
+                                className="flex-shrink-0"
+                              >
+                                Clear
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                         <h4 className="text-2xl font-bold mb-3 text-gray-900">AI Interview</h4>
                         <p className="text-gray-600 mb-6">
                           Real-time AI interview with instant feedback.
@@ -3569,13 +4035,18 @@ const PersonalizedAssessment = () => {
                         <Button 
                           size="lg" 
                           onClick={() => {
-                            setSelectedPath('ai-interview');
-                            setCurrentStep('interview');
-                            scrollToTop();
+                            const resumeData = localStorage.getItem('parsedResumeData');
+                            
+                            // Navigate to AI Interview with query params to indicate job-based interview
+                            if (selectedJobForInterview && resumeData) {
+                              navigate('/interview-page?mode=job-specific&hasJobData=true');
+                            } else {
+                              navigate('/interview-page');
+                            }
                           }}
                           className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-lg py-6 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
                         >
-                          Start AI Interview
+                          {selectedJobForInterview ? 'Start Job-Specific Interview' : 'Start AI Interview'}
                           <ArrowRight className="ml-2 h-5 w-5" />
                         </Button>
                       </div>
@@ -3750,13 +4221,13 @@ const PersonalizedAssessment = () => {
               </Card>
             )}
 
-            {/* Behavioral Test Step */}
-            {currentStep === 'behavioral' && !behavioralQuestions.length && (
+            {/* Scenario Based Test Step */}
+            {currentStep === 'scenario-based' && !scenarioBasedQuestions.length && (
               <Card className="p-8 max-w-4xl mx-auto">
                 <div className="text-center mb-8">
                   <h3 className="text-2xl font-bold mb-4">Scenario-Based Assessment</h3>
                   <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
-                    Assess your behavioral competencies, leadership skills, and workplace personality traits.
+                    Assess your scenario-based competencies, leadership skills, and workplace personality traits.
                   </p>
                 </div>
 
@@ -3780,18 +4251,18 @@ const PersonalizedAssessment = () => {
                 <div className="text-center">
                   <Button 
                     size="lg" 
-                    onClick={startBehavioralTest}
-                    disabled={isGeneratingBehavioral}
+                    onClick={startScenarioBasedTest}
+                    disabled={isGeneratingScenarioBased}
                     className="px-8 py-3 text-lg rounded-2xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
                   >
-                    {isGeneratingBehavioral ? (
+                    {isGeneratingScenarioBased ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
                         Generating Questions...
                       </>
                     ) : (
                       <>
-                        Start Behavioral Test
+                        Start Scenario Based Test
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </>
                     )}
@@ -3800,14 +4271,14 @@ const PersonalizedAssessment = () => {
               </Card>
             )}
 
-            {/* Behavioral Test Questions */}
-            {currentStep === 'behavioral' && behavioralQuestions.length > 0 && behavioralQuestions[currentBehavioralQuestion] && (
+            {/* Scenario Based Test Questions */}
+            {currentStep === 'scenario-based' && scenarioBasedQuestions.length > 0 && scenarioBasedQuestions[currentScenarioBasedQuestion] && (
               <Card className="p-8 max-w-4xl mx-auto">
                 <div className="text-center mb-8">
                   <h3 className="text-2xl font-bold mb-4">Scenario-Based Assessment</h3>
                   <div className="flex justify-center items-center gap-4 mb-6">
                     <p className="text-muted-foreground">
-                      Question {currentBehavioralQuestion + 1} of {behavioralQuestions.length}
+                      Question {currentScenarioBasedQuestion + 1} of {scenarioBasedQuestions.length}
                     </p>
                     {selectedPath === 'quick-test' && (
                       <div className="flex items-center gap-2 text-primary">
@@ -3822,7 +4293,7 @@ const PersonalizedAssessment = () => {
                   <div className="bg-gray-50 p-6 rounded-lg mb-6">
                     <h4 className="font-semibold text-lg mb-4">
                       {(() => {
-                        const currentQuestion = behavioralQuestions[currentBehavioralQuestion];
+                        const currentQuestion = scenarioBasedQuestions[currentScenarioBasedQuestion];
                         console.log('Current question object:', currentQuestion);
                         return currentQuestion?.text || currentQuestion?.question || 'No question text available';
                       })()}
@@ -3834,18 +4305,18 @@ const PersonalizedAssessment = () => {
                       </label>
                       <div className="relative">
                         <textarea
-                          value={behavioralAnswers[currentBehavioralQuestion] || ''}
+                          value={scenarioBasedAnswers[currentScenarioBasedQuestion] || ''}
                           onChange={(e) => {
-                            const newAnswers = [...behavioralAnswers];
-                            newAnswers[currentBehavioralQuestion] = e.target.value;
-                            setBehavioralAnswers(newAnswers);
+                            const newAnswers = [...scenarioBasedAnswers];
+                            newAnswers[currentScenarioBasedQuestion] = e.target.value;
+                            setScenarioBasedAnswers(newAnswers);
                           }}
                           placeholder="Describe your experience and approach..."
                           className="w-full p-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
                           rows={4}
                         />
                         <div className="absolute right-2 top-2 flex items-center gap-1">
-                          {activeField === 'behavioral' && isRecordingSpeech ? (
+                          {activeField === 'scenario-based' && isRecordingSpeech ? (
                             <div className="flex items-center gap-1">
                               <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                               <Button
@@ -3867,7 +4338,7 @@ const PersonalizedAssessment = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => startSpeechRecognition('behavioral')}
+                              onClick={() => startSpeechRecognition('scenario-based')}
                               className="h-8 w-8 p-0"
                               title="Start voice recording"
                               disabled={isTranscribing}
@@ -3879,7 +4350,7 @@ const PersonalizedAssessment = () => {
                       </div>
                       
                       {/* Transcript Display */}
-                      {activeField === 'behavioral' && transcript && (
+                      {activeField === 'scenario-based' && transcript && (
                         <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                           <div className="text-sm text-blue-800 mb-2">
                             <strong>Voice Transcript:</strong> {transcript}
@@ -3904,7 +4375,7 @@ const PersonalizedAssessment = () => {
                       )}
                       
                       <div className="text-xs text-gray-500 mt-1">
-                        {behavioralAnswers[currentBehavioralQuestion]?.length || 0} characters
+                        {scenarioBasedAnswers[currentScenarioBasedQuestion]?.length || 0} characters
                       </div>
                     </div>
                   </div>
@@ -3913,24 +4384,24 @@ const PersonalizedAssessment = () => {
                     <Button
                       variant="outline"
                       onClick={() => {
-                        if (currentBehavioralQuestion > 0) {
-                          setCurrentBehavioralQuestion(currentBehavioralQuestion - 1);
+                        if (currentScenarioBasedQuestion > 0) {
+                          setCurrentScenarioBasedQuestion(currentScenarioBasedQuestion - 1);
                         }
                       }}
-                      disabled={currentBehavioralQuestion === 0}
+                      disabled={currentScenarioBasedQuestion === 0}
                     >
                       Previous
                     </Button>
 
                     <div className="flex space-x-2">
-                      {behavioralQuestions.map((_, index) => (
+                      {scenarioBasedQuestions.map((_, index) => (
                         <button
                           key={index}
-                          onClick={() => setCurrentBehavioralQuestion(index)}
+                          onClick={() => setCurrentScenarioBasedQuestion(index)}
                           className={`w-8 h-8 rounded-full text-sm font-medium ${
-                            index === currentBehavioralQuestion
+                            index === currentScenarioBasedQuestion
                               ? 'bg-primary text-white'
-                              : behavioralAnswers[index]
+                              : scenarioBasedAnswers[index]
                               ? 'bg-green-100 text-green-700'
                               : 'bg-gray-100 text-gray-600'
                           }`}
@@ -3940,13 +4411,13 @@ const PersonalizedAssessment = () => {
                       ))}
                     </div>
 
-                    {currentBehavioralQuestion === behavioralQuestions.length - 1 ? (
+                    {currentScenarioBasedQuestion === scenarioBasedQuestions.length - 1 ? (
                       <Button
-                        onClick={submitBehavioralTest}
-                        disabled={isSubmittingBehavioral || !behavioralAnswers[currentBehavioralQuestion]}
+                        onClick={submitScenarioBasedTest}
+                        disabled={isSubmittingScenarioBased || !scenarioBasedAnswers[currentScenarioBasedQuestion]}
                         className="bg-green-600 hover:bg-green-700"
                       >
-                        {isSubmittingBehavioral ? (
+                        {isSubmittingScenarioBased ? (
                           <>
                             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
                             Submitting...
@@ -3958,11 +4429,11 @@ const PersonalizedAssessment = () => {
                     ) : (
                       <Button
                         onClick={() => {
-                          if (currentBehavioralQuestion < behavioralQuestions.length - 1) {
-                            setCurrentBehavioralQuestion(currentBehavioralQuestion + 1);
+                          if (currentScenarioBasedQuestion < scenarioBasedQuestions.length - 1) {
+                            setCurrentScenarioBasedQuestion(currentScenarioBasedQuestion + 1);
                           }
                         }}
-                        disabled={!behavioralAnswers[currentBehavioralQuestion]}
+                        disabled={!scenarioBasedAnswers[currentScenarioBasedQuestion]}
                       >
                         Next
                       </Button>
@@ -4300,7 +4771,7 @@ const PersonalizedAssessment = () => {
                     </div>
                     <h3 className="text-2xl font-bold mb-4">Assessment Complete!</h3>
                     <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
-                      You have successfully completed all three tests: Aptitude, Behavioral, and Coding. Here's a summary of your performance.
+                      You have successfully completed all three tests: Aptitude, Scenario Based, and Coding. Here's a summary of your performance.
                     </p>
                   </div>
 
@@ -4315,12 +4786,12 @@ const PersonalizedAssessment = () => {
                       <div className="text-2xl font-bold text-blue-600">✓</div>
                     </div>
 
-                    {/* Behavioral Test Results */}
+                    {/* Scenario Based Test Results */}
                     <div className="text-center p-6 bg-green-50 rounded-lg">
                       <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
                         <Users className="h-6 w-6 text-green-600" />
                       </div>
-                      <h4 className="font-semibold mb-2">Behavioral Test</h4>
+                      <h4 className="font-semibold mb-2">Scenario Based Test</h4>
                       <p className="text-sm text-muted-foreground mb-4">Completed</p>
                       <div className="text-2xl font-bold text-green-600">✓</div>
                     </div>
@@ -4380,13 +4851,31 @@ const PersonalizedAssessment = () => {
                         <div className="flex items-center justify-center gap-8">
                           <div className="text-center">
                             <div className="text-4xl font-bold text-primary mb-2">
-                              {quickTestAnalysis.overallScore}%
+                              {(() => {
+                                // Calculate overall score from actual test results if available
+                                const scores = [];
+                                if (aptitudeResults?.score !== undefined) scores.push(aptitudeResults.score);
+                                if (scenarioBasedResults?.score !== undefined) scores.push(scenarioBasedResults.score);
+                                if (codingResults?.score !== undefined) scores.push(codingResults.score);
+                                
+                                if (scores.length > 0) {
+                                  const actualOverall = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+                                  return actualOverall;
+                                }
+                                return quickTestAnalysis.overallScore;
+                              })()}%
                             </div>
                             <div className="text-sm text-gray-600">Overall Score</div>
                           </div>
                           <div className="text-center">
                             <div className="text-4xl font-bold text-green-600 mb-2">
-                              {quickTestAnalysis.completedTests}/{quickTestAnalysis.totalTests}
+                              {(() => {
+                                let completed = 0;
+                                if (aptitudeResults) completed++;
+                                if (scenarioBasedResults) completed++;
+                                if (codingResults) completed++;
+                                return completed > 0 ? `${completed}/3` : `${quickTestAnalysis.completedTests}/${quickTestAnalysis.totalTests}`;
+                              })()}
                             </div>
                             <div className="text-sm text-gray-600">Tests Completed</div>
                           </div>
@@ -4410,24 +4899,29 @@ const PersonalizedAssessment = () => {
                             <BarChart
                               data={(() => {
                                 const chartData = [];
-                                if (quickTestResults.aptitudeResults) {
+                                // Use actual test results if available, otherwise use quickTestResults
+                                const aptitudeScore = aptitudeResults?.score ?? quickTestResults?.aptitudeResults?.score ?? 0;
+                                const scenarioBasedScore = scenarioBasedResults?.score ?? quickTestResults?.scenarioBasedResults?.score ?? 0;
+                                const codingScore = codingResults?.score ?? quickTestResults?.codingResults?.score ?? 0;
+                                
+                                if (aptitudeResults || quickTestResults?.aptitudeResults) {
                                   chartData.push({
                                     name: 'Aptitude',
-                                    score: quickTestResults.aptitudeResults.score || 0,
+                                    score: aptitudeScore,
                                     fullMark: 100
                                   });
                                 }
-                                if (quickTestResults.behavioralResults) {
+                                if (scenarioBasedResults || quickTestResults?.scenarioBasedResults) {
                                   chartData.push({
-                                    name: 'Behavioral',
-                                    score: quickTestResults.behavioralResults.score || 0,
+                                    name: 'Scenario Based',
+                                    score: scenarioBasedScore,
                                     fullMark: 100
                                   });
                                 }
-                                if (quickTestResults.codingResults) {
+                                if (codingResults || quickTestResults?.codingResults) {
                                   chartData.push({
                                     name: 'Coding',
-                                    score: quickTestResults.codingResults.score || 0,
+                                    score: codingScore,
                                     fullMark: 100
                                   });
                                 }
@@ -4442,12 +4936,18 @@ const PersonalizedAssessment = () => {
                               <Legend />
                               <Bar dataKey="score" fill="#00D2FF" radius={[8, 8, 0, 0]}>
                                 {(() => {
-                                  const results = [];
-                                  if (quickTestResults.aptitudeResults) results.push(quickTestResults.aptitudeResults);
-                                  if (quickTestResults.behavioralResults) results.push(quickTestResults.behavioralResults);
-                                  if (quickTestResults.codingResults) results.push(quickTestResults.codingResults);
-                                  return results.map((result, index) => {
-                                    const score = result?.score || 0;
+                                  // Use actual test results if available, otherwise use quickTestResults
+                                  const scores = [];
+                                  if (aptitudeResults || quickTestResults?.aptitudeResults) {
+                                    scores.push(aptitudeResults?.score ?? quickTestResults?.aptitudeResults?.score ?? 0);
+                                  }
+                                  if (scenarioBasedResults || quickTestResults?.scenarioBasedResults) {
+                                    scores.push(scenarioBasedResults?.score ?? quickTestResults?.scenarioBasedResults?.score ?? 0);
+                                  }
+                                  if (codingResults || quickTestResults?.codingResults) {
+                                    scores.push(codingResults?.score ?? quickTestResults?.codingResults?.score ?? 0);
+                                  }
+                                  return scores.map((score, index) => {
                                     let color = '#00D2FF';
                                     if (score >= 80) color = '#10B981';
                                     else if (score >= 60) color = '#F59E0B';
@@ -4471,24 +4971,29 @@ const PersonalizedAssessment = () => {
                               <Pie
                                 data={(() => {
                                   const pieData = [];
-                                  if (quickTestResults.aptitudeResults) {
+                                  // Use actual test results if available, otherwise use quickTestResults
+                                  const aptitudeScore = aptitudeResults?.score ?? quickTestResults?.aptitudeResults?.score ?? 0;
+                                  const scenarioBasedScore = scenarioBasedResults?.score ?? quickTestResults?.scenarioBasedResults?.score ?? 0;
+                                  const codingScore = codingResults?.score ?? quickTestResults?.codingResults?.score ?? 0;
+                                  
+                                  if (aptitudeResults || quickTestResults?.aptitudeResults) {
                                     pieData.push({
                                       name: 'Aptitude',
-                                      value: quickTestResults.aptitudeResults.score || 0,
+                                      value: aptitudeScore,
                                       color: '#3B82F6'
                                     });
                                   }
-                                  if (quickTestResults.behavioralResults) {
+                                  if (scenarioBasedResults || quickTestResults?.scenarioBasedResults) {
                                     pieData.push({
-                                      name: 'Behavioral',
-                                      value: quickTestResults.behavioralResults.score || 0,
+                                      name: 'Scenario Based',
+                                      value: scenarioBasedScore,
                                       color: '#10B981'
                                     });
                                   }
-                                  if (quickTestResults.codingResults) {
+                                  if (codingResults || quickTestResults?.codingResults) {
                                     pieData.push({
                                       name: 'Coding',
-                                      value: quickTestResults.codingResults.score || 0,
+                                      value: codingScore,
                                       color: '#8B5CF6'
                                     });
                                   }
@@ -4505,7 +5010,7 @@ const PersonalizedAssessment = () => {
                                 {(() => {
                                   const results = [];
                                   if (quickTestResults.aptitudeResults) results.push({ color: '#3B82F6' });
-                                  if (quickTestResults.behavioralResults) results.push({ color: '#10B981' });
+                                  if (quickTestResults.scenarioBasedResults) results.push({ color: '#10B981' });
                                   if (quickTestResults.codingResults) results.push({ color: '#8B5CF6' });
                                   return results.map((item, index) => (
                                     <Cell key={`cell-${index}`} fill={item.color} />
@@ -4564,7 +5069,7 @@ const PersonalizedAssessment = () => {
                         )}
 
                         {/* Overall Performance Radar Chart */}
-                        {(quickTestResults.aptitudeResults || quickTestResults.behavioralResults || quickTestResults.codingResults) && (
+                        {(quickTestResults.aptitudeResults || quickTestResults.scenarioBasedResults || quickTestResults.codingResults) && (
                           <Card className="p-6 shadow-lg border-0 bg-white">
                             <div className="flex items-center gap-2 mb-6">
                               <Activity className="w-5 h-5 text-primary" />
@@ -4577,8 +5082,8 @@ const PersonalizedAssessment = () => {
                                   value: quickTestResults.aptitudeResults?.score || 0,
                                   fullMark: 100
                                 }, {
-                                  category: 'Behavioral',
-                                  value: quickTestResults.behavioralResults?.score || 0,
+                                  category: 'Scenario Based',
+                                  value: quickTestResults.scenarioBasedResults?.score || 0,
                                   fullMark: 100
                                 }, {
                                   category: 'Coding',
@@ -4644,33 +5149,33 @@ const PersonalizedAssessment = () => {
                         </Card>
                       )}
 
-                      {/* Behavioral Test Details */}
-                      {quickTestResults?.behavioralResults && (
+                      {/* Scenario Based Test Details */}
+                      {quickTestResults?.scenarioBasedResults && (
                           <Card className="p-6 shadow-lg border-0 bg-gradient-to-br from-green-50 to-green-100">
                             <div className="text-center mb-4">
-                              <h4 className="text-lg font-semibold text-gray-900">Behavioral Test</h4>
+                              <h4 className="text-lg font-semibold text-gray-900">Scenario Based Test</h4>
                             </div>
                           <div className="space-y-3">
                             <div className="text-center">
                               <div className="text-2xl font-bold text-green-600 mb-1">
-                                {quickTestResults.behavioralResults.score}%
+                                {quickTestResults.scenarioBasedResults.score}%
                               </div>
                               <div className="text-sm text-gray-600">Score</div>
                             </div>
                             <div className="text-sm text-gray-700 text-center">
-                              {quickTestResults.behavioralResults.answeredQuestions} / {quickTestResults.behavioralResults.totalQuestions} answered
+                              {quickTestResults.scenarioBasedResults.answeredQuestions} / {quickTestResults.scenarioBasedResults.totalQuestions} answered
                             </div>
                             <div className="text-xs text-gray-600 text-center">
-                              {quickTestResults.behavioralResults.evaluation}
+                              {quickTestResults.scenarioBasedResults.evaluation}
                             </div>
-                            {quickTestResults.behavioralResults.detailedEvaluations && quickTestResults.behavioralResults.detailedEvaluations.length > 0 && (
+                            {quickTestResults.scenarioBasedResults.detailedEvaluations && quickTestResults.scenarioBasedResults.detailedEvaluations.length > 0 && (
                               <div className="mt-4">
                                 <Button
                                   variant="outline"
                                   size="sm"
                                   onClick={() => setShowDetailedResults({
-                                    type: 'behavioral',
-                                    data: quickTestResults.behavioralResults.detailedEvaluations
+                                    type: 'scenario-based',
+                                    data: quickTestResults.scenarioBasedResults.detailedEvaluations
                                   })}
                                   className="w-full text-xs"
                                 >
@@ -4797,7 +5302,7 @@ const PersonalizedAssessment = () => {
                     {skillRecommendations && (
                       <Card className="p-8 shadow-xl border-0 bg-gradient-to-br from-indigo-50 to-purple-50">
                         <h3 className="text-xl font-bold mb-6 text-gray-900 text-center">Skill-Based Recommendations</h3>
-                        <div className="space-y-4">
+                        <div className="space-y-6">
                           {skillRecommendations.learning_paths && skillRecommendations.learning_paths.length > 0 && (
                             <div>
                               <h4 className="text-lg font-semibold text-indigo-800 mb-3">Learning Paths</h4>
@@ -4810,6 +5315,189 @@ const PersonalizedAssessment = () => {
                                   </div>
                                 ))}
                               </div>
+                            </div>
+                          )}
+
+                          {/* Courses & Resources Section */}
+                          {skillRecommendations.courses_resources && (
+                            <div>
+                              <h4 className="text-lg font-semibold text-purple-800 mb-4">Courses & Learning Resources</h4>
+                              {typeof skillRecommendations.courses_resources === 'object' ? (
+                                <div className="space-y-6">
+                                  {Object.entries(skillRecommendations.courses_resources).map(([category, resources]: [string, any], index) => {
+                                    if (!resources || (Array.isArray(resources) && resources.length === 0)) {
+                                      return null;
+                                    }
+
+                                    return (
+                                      <div key={index} className="space-y-3">
+                                        <h5 className="text-md font-semibold text-purple-700 capitalize flex items-center gap-2">
+                                          <span className="w-2 h-2 bg-purple-600 rounded-full"></span>
+                                          {category.replace(/_/g, ' ')}
+                                        </h5>
+                                        {Array.isArray(resources) ? (
+                                          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                        {resources.map((resource: any, resourceIndex: number) => {
+                                            // Parse JSON string if resource is a string that looks like JSON
+                                            let parsedResource = resource;
+                                            if (typeof resource === 'string' && resource.trim().startsWith('{')) {
+                                              try {
+                                                parsedResource = JSON.parse(resource);
+                                              } catch (e) {
+                                                // If parsing fails, use original string
+                                                parsedResource = resource;
+                                              }
+                                            }
+                                            
+                                            // Handle structured objects with title, url, thumbnail_url, channel, duration
+                                            const isStructuredObject = typeof parsedResource === 'object' && parsedResource !== null && !Array.isArray(parsedResource) && (parsedResource.title || parsedResource.url);
+                                            
+                                            // Extract data from structured object or string
+                                            const resourceUrl = isStructuredObject ? (parsedResource.url || parsedResource.link) : (typeof parsedResource === 'string' ? parsedResource : '');
+                                            const resourceTitle = isStructuredObject ? (parsedResource.title || parsedResource.name || 'Untitled') : (typeof parsedResource === 'string' ? parsedResource : '');
+                                            const isYouTube = isStructuredObject 
+                                              ? (resourceUrl && isYouTubeLink(resourceUrl))
+                                              : (typeof parsedResource === 'string' && isYouTubeLink(parsedResource));
+                                            const videoId = resourceUrl ? getYouTubeVideoId(resourceUrl) : null;
+                                            
+                                            // Get thumbnail URL - prioritize API provided, then extract from URL for YouTube videos
+                                            let thumbnailUrl = isStructuredObject && parsedResource.thumbnail_url 
+                                              ? parsedResource.thumbnail_url 
+                                              : null;
+                                            
+                                            // For YouTube videos, always try to get a thumbnail
+                                            if (isYouTube && !thumbnailUrl && videoId) {
+                                              thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+                                            } else if (!isYouTube && !thumbnailUrl) {
+                                              // For non-YouTube resources, try to get thumbnail from URL
+                                              thumbnailUrl = resourceUrl ? getYouTubeThumbnail(resourceUrl) : null;
+                                            }
+                                            
+                                            const channel = isStructuredObject ? parsedResource.channel : null;
+                                            const duration = isStructuredObject ? parsedResource.duration : null;
+                                            
+                                            // Skip rendering if it's a YouTube video but we can't get a thumbnail
+                                            if (isYouTube && !thumbnailUrl && !videoId) {
+                                              return null;
+                                            }
+
+                                            // Normalize YouTube URL to ensure it's valid
+                                            const normalizedResourceUrl = isYouTube && resourceUrl 
+                                              ? normalizeYouTubeUrl(resourceUrl) 
+                                              : (resourceUrl && (resourceUrl.startsWith('http://') || resourceUrl.startsWith('https://')) ? resourceUrl : null);
+
+                                              return (
+                                                <div 
+                                                  key={resourceIndex} 
+                                                  className="group relative overflow-hidden bg-white border border-purple-200 rounded-lg shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer"
+                                                  onClick={() => {
+                                                    if (normalizedResourceUrl) {
+                                                      window.open(normalizedResourceUrl, '_blank', 'noopener,noreferrer');
+                                                    } else {
+                                                      console.warn('Invalid URL:', resourceUrl);
+                                                    }
+                                                  }}
+                                                >
+                                                  {/* Thumbnail Section - Real YouTube thumbnails only */}
+                                                  {thumbnailUrl && (
+                                                    <div className="relative aspect-video overflow-hidden bg-gray-100">
+                                                      <img 
+                                                        src={thumbnailUrl} 
+                                                        alt={resourceTitle}
+                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                        loading="lazy"
+                                                        onError={(e) => {
+                                                          const target = e.target as HTMLImageElement;
+                                                          // Fallback to hqdefault if maxresdefault fails
+                                                          if (videoId && !target.src.includes('hqdefault')) {
+                                                            target.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+                                                          } else if (videoId && target.src.includes('hqdefault')) {
+                                                            // If hqdefault also fails, try mqdefault
+                                                            target.src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                                                          } else {
+                                                            target.style.display = 'none';
+                                                          }
+                                                        }}
+                                                      />
+                                                      {isYouTube && (
+                                                        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 group-hover:bg-opacity-10 transition-opacity">
+                                                          <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center opacity-90 group-hover:opacity-100">
+                                                            <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                                              <path d="M8 5v14l11-7z"/>
+                                                            </svg>
+                                                          </div>
+                                                        </div>
+                                                      )}
+                                                      {duration && (
+                                                        <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs font-semibold px-2 py-1 rounded">
+                                                          {duration}
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  )}
+                                                  
+                                                  {/* Content Section */}
+                                                  <div className="p-3">
+                                                    <h6 className="text-xs font-semibold text-gray-800 line-clamp-2 group-hover:text-purple-700 transition-colors mb-1">
+                                                      {resourceTitle.length > 80 ? `${resourceTitle.substring(0, 80)}...` : resourceTitle}
+                                                    </h6>
+                                                    {channel && (
+                                                      <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                                                        <Users className="w-3 h-3" />
+                                                        {channel}
+                                                      </p>
+                                                    )}
+                                                    <div className="flex items-center justify-between mt-2">
+                                                      {isYouTube && normalizedResourceUrl ? (
+                                                        <a 
+                                                          href={normalizedResourceUrl} 
+                                                          target="_blank" 
+                                                          rel="noopener noreferrer"
+                                                          onClick={(e) => e.stopPropagation()}
+                                                          className="inline-flex items-center text-xs text-red-600 hover:text-red-800 font-medium"
+                                                        >
+                                                          Watch on YouTube
+                                                          <ArrowRight className="w-3 h-3 ml-1" />
+                                                        </a>
+                                                      ) : (
+                                                        normalizedResourceUrl && (
+                                                          <a 
+                                                            href={normalizedResourceUrl} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="inline-flex items-center text-xs text-purple-600 hover:text-purple-800 font-medium"
+                                                          >
+                                                            View
+                                                            <ArrowRight className="w-3 h-3 ml-1" />
+                                                          </a>
+                                                        )
+                                                      )}
+                                                      {duration && (
+                                                        <Badge variant="outline" className="text-xs bg-gray-100">
+                                                          ⏱️ {duration}
+                                                        </Badge>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        ) : (
+                                          <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                                            <p className="text-sm text-purple-700">{resources}</p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                                  <p className="text-sm text-purple-700">{skillRecommendations.courses_resources}</p>
+                                </div>
+                              )}
                             </div>
                           )}
                           
@@ -4855,7 +5543,7 @@ const PersonalizedAssessment = () => {
                                 analysis: {
                                   assessment_results: {
                                     aptitude: quickTestResults?.aptitudeResults,
-                                    behavioral: quickTestResults?.behavioralResults,
+                                    scenarioBased: quickTestResults?.scenarioBasedResults,
                                     coding: quickTestResults?.codingResults,
                                     overall_score: quickTestAnalysis?.overallScore,
                                     total_tests: quickTestAnalysis?.totalTests
@@ -5567,26 +6255,381 @@ const PersonalizedAssessment = () => {
                       {/* Learning Resources */}
                       {performanceGaps.learning_resources && (
                         <div className="mb-6">
-                          <h4 className="text-lg font-semibold text-purple-800 mb-3">Learning Resources</h4>
-                          <div className="space-y-3">
+                          <h4 className="text-lg font-semibold text-purple-800 mb-4">Learning Resources</h4>
+                          <div className="space-y-6">
                             {typeof performanceGaps.learning_resources === 'object' ? (
-                              Object.entries(performanceGaps.learning_resources).map(([category, resources]: [string, any], index) => (
-                                <div key={index} className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                                  <h5 className="font-semibold text-purple-800 mb-2 capitalize">{category.replace('_', ' ')}</h5>
+                              Object.entries(performanceGaps.learning_resources).map(([category, resources]: [string, any], index) => {
+                                // Special handling for youtube_courses array (case-insensitive matching)
+                                const categoryLower = category.toLowerCase();
+                                if ((categoryLower === 'youtube_courses' || categoryLower === 'youtubecourses' || categoryLower.includes('youtube')) && Array.isArray(resources) && resources.length > 0) {
+                                  console.log('Processing youtube_courses:', resources);
+                                  
+                                  // Process all courses and collect valid ones
+                                  const validCourses: any[] = [];
+                                  
+                                  resources.forEach((course: any, courseIndex: number) => {
+                                    // Parse JSON string if course is a string that looks like JSON
+                                    let parsedCourse = course;
+                                    if (typeof course === 'string') {
+                                      if (course.trim().startsWith('{')) {
+                                        try {
+                                          parsedCourse = JSON.parse(course);
+                                          console.log('Parsed course:', parsedCourse);
+                                        } catch (e) {
+                                          console.warn('Failed to parse course JSON:', e, course);
+                                          // Try to extract URL from string as fallback
+                                          const urlMatch = course.match(/https?:\/\/[^\s"']+/);
+                                          if (urlMatch) {
+                                            validCourses.push({
+                                              url: urlMatch[0],
+                                              title: 'YouTube Video',
+                                              isFallback: true
+                                            });
+                                          }
+                                          return;
+                                        }
+                                      } else {
+                                        // If it's a plain string, try to extract URL
+                                        const urlMatch = course.match(/https?:\/\/[^\s"']+/);
+                                        if (urlMatch) {
+                                          validCourses.push({
+                                            url: urlMatch[0],
+                                            title: course.length > 100 ? course.substring(0, 100) + '...' : course,
+                                            isFallback: true
+                                          });
+                                        }
+                                        return;
+                                      }
+                                    }
+                                    
+                                    // Ensure parsedCourse is an object
+                                    if (!parsedCourse || typeof parsedCourse !== 'object' || Array.isArray(parsedCourse)) {
+                                      console.warn('Invalid course format:', parsedCourse);
+                                      return;
+                                    }
+                                    
+                                    // Handle structured YouTube course objects
+                                    const courseUrl = parsedCourse?.url || parsedCourse?.link || '';
+                                    const courseTitle = parsedCourse?.title || parsedCourse?.name || 'Untitled Video';
+                                    
+                                    // Always add if we have at least a URL
+                                    if (courseUrl || courseTitle) {
+                                      validCourses.push({
+                                        url: courseUrl,
+                                        title: courseTitle,
+                                        thumbnail_url: parsedCourse?.thumbnail_url,
+                                        channel: parsedCourse?.channel,
+                                        duration: parsedCourse?.duration,
+                                        isFallback: !courseUrl
+                                      });
+                                    }
+                                  });
+                                  
+                                  console.log('Valid courses after processing:', validCourses);
+                                  
+                                  if (validCourses.length === 0) {
+                                    return null;
+                                  }
+                                  
+                                  return (
+                                    <div key={index} className="space-y-3">
+                                      <h5 className="text-md font-semibold text-purple-700 capitalize flex items-center gap-2">
+                                        <span className="w-2 h-2 bg-purple-600 rounded-full"></span>
+                                        YouTube Courses
+                                      </h5>
+                                      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                        {validCourses.map((course: any, courseIndex: number) => {
+                                          const courseUrl = course?.url || '';
+                                          const courseTitle = course?.title || 'Untitled Video';
+                                          const videoId = courseUrl ? getYouTubeVideoId(courseUrl) : null;
+                                          
+                                          // Get thumbnail URL - prioritize API provided, then extract from URL
+                                          let thumbnailUrl = course?.thumbnail_url || null;
+                                          if (!thumbnailUrl && videoId) {
+                                            // Use maxresdefault for best quality, will fallback to hqdefault on error
+                                            thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+                                          } else if (!thumbnailUrl && courseUrl && isYouTubeLink(courseUrl)) {
+                                            // If we have a YouTube URL but no videoId extracted, try to get it again
+                                            const extractedId = getYouTubeVideoId(courseUrl);
+                                            if (extractedId) {
+                                              thumbnailUrl = `https://img.youtube.com/vi/${extractedId}/maxresdefault.jpg`;
+                                            }
+                                          }
+                                          
+                                          const isYouTube = courseUrl && isYouTubeLink(courseUrl);
+                                          const channel = course?.channel || null;
+                                          const duration = course?.duration || null;
+                                          
+                                          // Normalize YouTube URL to ensure it's valid
+                                          const normalizedUrl = isYouTube && courseUrl 
+                                            ? normalizeYouTubeUrl(courseUrl) 
+                                            : (courseUrl && (courseUrl.startsWith('http://') || courseUrl.startsWith('https://')) ? courseUrl : null);
+                                          
+                                          // Only render if we have a valid URL (thumbnail will be generated or use fallback)
+                                          if (!courseUrl || !normalizedUrl) {
+                                            return null;
+                                          }
+                                          
+                                          // If still no thumbnail but we have videoId, generate it
+                                          if (!thumbnailUrl && videoId) {
+                                            thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+                                          }
+
+                                          return (
+                                            <div 
+                                              key={courseIndex} 
+                                              className="group relative overflow-hidden bg-white border border-purple-200 rounded-lg shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer"
+                                              onClick={() => {
+                                                if (normalizedUrl) {
+                                                  window.open(normalizedUrl, '_blank', 'noopener,noreferrer');
+                                                } else {
+                                                  console.warn('Invalid YouTube URL:', courseUrl);
+                                                }
+                                              }}
+                                            >
+                                              {/* Thumbnail Section - Always show real YouTube thumbnail */}
+                                              {thumbnailUrl ? (
+                                                <div className="relative aspect-video overflow-hidden bg-gray-100">
+                                                  <img 
+                                                    src={thumbnailUrl} 
+                                                    alt={courseTitle}
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                    loading="lazy"
+                                                    onError={(e) => {
+                                                      const target = e.target as HTMLImageElement;
+                                                      // Fallback to hqdefault if maxresdefault fails
+                                                      if (videoId && !target.src.includes('hqdefault')) {
+                                                        target.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+                                                      } else if (videoId && target.src.includes('hqdefault')) {
+                                                        // If hqdefault also fails, try mqdefault
+                                                        target.src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                                                      } else {
+                                                        // Last resort: hide the image
+                                                        target.style.display = 'none';
+                                                      }
+                                                    }}
+                                                  />
+                                                  {isYouTube && (
+                                                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 group-hover:bg-opacity-10 transition-opacity">
+                                                      <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center opacity-90 group-hover:opacity-100">
+                                                        <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                                          <path d="M8 5v14l11-7z"/>
+                                                        </svg>
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                  {duration && (
+                                                    <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs font-semibold px-2 py-1 rounded">
+                                                      {duration}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              ) : videoId ? (
+                                                // Fallback: Show thumbnail even if not set yet
+                                                <div className="relative aspect-video overflow-hidden bg-gray-100">
+                                                  <img 
+                                                    src={`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`}
+                                                    alt={courseTitle}
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                    loading="lazy"
+                                                    onError={(e) => {
+                                                      const target = e.target as HTMLImageElement;
+                                                      if (videoId && !target.src.includes('hqdefault')) {
+                                                        target.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+                                                      } else if (videoId && target.src.includes('hqdefault')) {
+                                                        target.src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                                                      }
+                                                    }}
+                                                  />
+                                                  {isYouTube && (
+                                                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 group-hover:bg-opacity-10 transition-opacity">
+                                                      <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center opacity-90 group-hover:opacity-100">
+                                                        <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                                          <path d="M8 5v14l11-7z"/>
+                                                        </svg>
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                  {duration && (
+                                                    <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs font-semibold px-2 py-1 rounded">
+                                                      {duration}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              ) : null}
+                                              
+                                              {/* Content Section */}
+                                              <div className="p-3">
+                                                <h6 className="text-xs font-semibold text-gray-800 line-clamp-2 group-hover:text-purple-700 transition-colors mb-1">
+                                                  {courseTitle.length > 80 ? `${courseTitle.substring(0, 80)}...` : courseTitle}
+                                                </h6>
+                                                {channel && (
+                                                  <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                                                    <Users className="w-3 h-3" />
+                                                    {channel}
+                                                  </p>
+                                                )}
+                                                <div className="flex items-center justify-between mt-2">
+                                                  {isYouTube && normalizedUrl ? (
+                                                    <a 
+                                                      href={normalizedUrl} 
+                                                      target="_blank" 
+                                                      rel="noopener noreferrer"
+                                                      onClick={(e) => e.stopPropagation()}
+                                                      className="inline-flex items-center text-xs text-red-600 hover:text-red-800 font-medium"
+                                                    >
+                                                      Watch on YouTube
+                                                      <ArrowRight className="w-3 h-3 ml-1" />
+                                                    </a>
+                                                  ) : (
+                                                    normalizedUrl && (
+                                                      <a 
+                                                        href={normalizedUrl} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="inline-flex items-center text-xs text-purple-600 hover:text-purple-800 font-medium"
+                                                      >
+                                                        View
+                                                        <ArrowRight className="w-3 h-3 ml-1" />
+                                                      </a>
+                                                    )
+                                                  )}
+                                                  {duration && (
+                                                    <Badge variant="outline" className="text-xs bg-gray-100">
+                                                      ⏱️ {duration}
+                                                    </Badge>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                      
+                                      {/* Fallback: Simple clickable links list */}
+                                      <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                                        <h6 className="text-sm font-semibold text-purple-800 mb-2">Quick Links:</h6>
+                                        <ul className="space-y-2">
+                                          {validCourses.map((course: any, linkIndex: number) => {
+                                            const courseUrl = course?.url || '';
+                                            const courseTitle = course?.title || 'YouTube Video';
+                                            const isYouTube = courseUrl && isYouTubeLink(courseUrl);
+                                            const normalizedLinkUrl = isYouTube && courseUrl 
+                                              ? normalizeYouTubeUrl(courseUrl) 
+                                              : (courseUrl && (courseUrl.startsWith('http://') || courseUrl.startsWith('https://')) ? courseUrl : null);
+                                            
+                                            if (!normalizedLinkUrl) return null;
+                                            
+                                            return (
+                                              <li key={linkIndex} className="flex items-center gap-2">
+                                                <span className="text-purple-600">•</span>
+                                                <a
+                                                  href={normalizedLinkUrl}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className={`text-sm ${isYouTube ? 'text-red-600 hover:text-red-800' : 'text-purple-700 hover:text-purple-900'} hover:underline flex items-center gap-1`}
+                                                >
+                                                  {courseTitle}
+                                                  <ArrowRight className="w-3 h-3" />
+                                                </a>
+                                                {course?.duration && (
+                                                  <span className="text-xs text-gray-500">({course.duration})</span>
+                                                )}
+                                              </li>
+                                            );
+                                          })}
+                                        </ul>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                
+                                // Default handling for other resource types
+                                if (!resources || (Array.isArray(resources) && resources.length === 0)) {
+                                  return null;
+                                }
+
+                                return (
+                                  <div key={index} className="space-y-3">
+                                    <h5 className="text-md font-semibold text-purple-700 capitalize flex items-center gap-2">
+                                      <span className="w-2 h-2 bg-purple-600 rounded-full"></span>
+                                      {category.replace(/_/g, ' ')}
+                                    </h5>
                                   {Array.isArray(resources) ? (
                                     <ul className="space-y-1">
-                                      {resources.map((resource: string, resourceIndex: number) => (
+                                        {resources.map((resource: any, resourceIndex: number) => {
+                                          // Try to parse JSON string first
+                                          let parsedResource = resource;
+                                          if (typeof resource === 'string' && resource.trim().startsWith('{')) {
+                                            try {
+                                              parsedResource = JSON.parse(resource);
+                                            } catch (e) {
+                                              // Keep as string if parsing fails
+                                              parsedResource = resource;
+                                            }
+                                          }
+                                          
+                                          // Handle object resources - ensure we always get a string
+                                          const isStructuredObject = typeof parsedResource === 'object' && parsedResource !== null && !Array.isArray(parsedResource) && (parsedResource.title || parsedResource.url || parsedResource.name);
+                                          
+                                          // Extract URL
+                                          let resourceUrl = '';
+                                          if (isStructuredObject) {
+                                            resourceUrl = parsedResource.url || parsedResource.link || '';
+                                          } else if (typeof parsedResource === 'string') {
+                                            const urlMatch = parsedResource.match(/https?:\/\/[^\s"']+/);
+                                            resourceUrl = urlMatch ? urlMatch[0] : '';
+                                          } else if (typeof parsedResource === 'object' && parsedResource !== null) {
+                                            resourceUrl = parsedResource.url || parsedResource.link || '';
+                                          }
+                                          
+                                          // Extract text - always ensure it's a string
+                                          let resourceText = '';
+                                          if (isStructuredObject) {
+                                            resourceText = parsedResource.title || parsedResource.name || parsedResource.url || 'Resource';
+                                          } else if (typeof parsedResource === 'string') {
+                                            resourceText = parsedResource;
+                                          } else if (typeof parsedResource === 'object' && parsedResource !== null) {
+                                            resourceText = parsedResource.title || parsedResource.name || parsedResource.url || parsedResource.link || JSON.stringify(parsedResource);
+                                          } else {
+                                            resourceText = String(parsedResource || 'Resource');
+                                          }
+                                          
+                                          const isYouTube = resourceUrl && isYouTubeLink(resourceUrl);
+                                          const normalizedListUrl = isYouTube && resourceUrl 
+                                            ? normalizeYouTubeUrl(resourceUrl) 
+                                            : (resourceUrl && (resourceUrl.startsWith('http://') || resourceUrl.startsWith('https://')) ? resourceUrl : null);
+                                          
+                                          return (
                                         <li key={resourceIndex} className="flex items-start gap-2">
                                           <span className="text-purple-600 mt-1">•</span>
-                                          <span className="text-sm text-purple-700">{resource}</span>
+                                              {normalizedListUrl ? (
+                                                <a 
+                                                  href={normalizedListUrl} 
+                                                  target="_blank" 
+                                                  rel="noopener noreferrer"
+                                                  className={`text-sm ${isYouTube ? 'text-red-600 hover:text-red-800' : 'text-purple-700 hover:text-purple-900'} hover:underline flex items-center gap-1`}
+                                                >
+                                                  {resourceText}
+                                                  <ArrowRight className="w-3 h-3" />
+                                                  {isYouTube && (
+                                                    <span className="text-xs bg-red-100 text-red-700 px-1 rounded ml-1">YouTube</span>
+                                                  )}
+                                                </a>
+                                              ) : (
+                                                <span className="text-sm text-purple-700">{resourceText}</span>
+                                              )}
                                         </li>
-                                      ))}
+                                          );
+                                        })}
                                     </ul>
                                   ) : (
                                     <p className="text-sm text-purple-700">{resources}</p>
                                   )}
                                 </div>
-                              ))
+                                );
+                              })
                             ) : (
                           <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
                                 <p className="text-sm text-purple-700">{performanceGaps.learning_resources}</p>
@@ -5620,116 +6663,500 @@ const PersonalizedAssessment = () => {
                   </Card>
                 )}
 
-                {/* Skill Recommendations */}
+                {/* Skill Recommendations - Enhanced with Tabs */}
                 {skillRecommendations && (
                   <Card className="p-6 bg-gradient-card border-primary/10 mb-8">
-                    <h3 className="text-xl font-semibold mb-4 flex items-center">
-                      Skill-Based Recommendations
-                    </h3>
-                    <div className="space-y-4">
-                      {/* Assessment Summary */}
-                      {skillRecommendations.assessment_summary && (
-                        <div className="mb-6">
-                          <h4 className="text-lg font-semibold text-blue-800 mb-3">Assessment Summary</h4>
-                          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                            <p className="text-sm text-blue-700">{skillRecommendations.assessment_summary}</p>
-                          </div>
-                        </div>
-                      )}
+                    <div className="mb-6">
+                      <h3 className="text-2xl font-bold mb-2 flex items-center gap-2">
+                        <Target className="w-6 h-6 text-primary" />
+                        Personalized Learning Recommendations
+                      </h3>
+                      <p className="text-sm text-gray-600">Your customized learning path based on assessment results</p>
+                    </div>
 
-                      {/* Learning Paths */}
-                      {skillRecommendations.learning_paths && skillRecommendations.learning_paths.length > 0 && (
-                        <div className="mb-6">
-                          <h4 className="text-lg font-semibold text-green-800 mb-3">Learning Paths</h4>
-                          <div className="space-y-3">
-                            {skillRecommendations.learning_paths.map((path: any, index: number) => (
-                              <div key={index} className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                                <h5 className="font-semibold text-green-800 mb-2">{path.title || path.name || `Learning Path ${index + 1}`}</h5>
-                                <p className="text-sm text-green-700 mb-2">{path.description || path.details || path}</p>
-                                {path.duration && (
-                                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                                    Duration: {path.duration}
-                                  </span>
-                                )}
+                    <Tabs defaultValue="summary" className="w-full">
+                      <TabsList className="grid w-full grid-cols-6 mb-6">
+                        <TabsTrigger value="summary" className="text-xs sm:text-sm">
+                          <BarChart3 className="w-4 h-4 mr-1" />
+                          Summary
+                        </TabsTrigger>
+                        <TabsTrigger value="career" className="text-xs sm:text-sm">
+                          <TrendingUp className="w-4 h-4 mr-1" />
+                          Career
+                        </TabsTrigger>
+                        <TabsTrigger value="courses" className="text-xs sm:text-sm">
+                          <BookOpen className="w-4 h-4 mr-1" />
+                          Courses
+                        </TabsTrigger>
+                        <TabsTrigger value="paths" className="text-xs sm:text-sm">
+                          <MapPin className="w-4 h-4 mr-1" />
+                          Paths
+                        </TabsTrigger>
+                        <TabsTrigger value="projects" className="text-xs sm:text-sm">
+                          <Code className="w-4 h-4 mr-1" />
+                          Projects
+                        </TabsTrigger>
+                        <TabsTrigger value="timeline" className="text-xs sm:text-sm">
+                          <Clock className="w-4 h-4 mr-1" />
+                          Timeline
+                        </TabsTrigger>
+                      </TabsList>
+
+                      {/* Assessment Summary Tab */}
+                      <TabsContent value="summary" className="space-y-4">
+                        {skillRecommendations.assessment_summary && (
+                          <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl shadow-sm">
+                            <div className="flex items-start gap-3">
+                              <div className="p-2 bg-blue-100 rounded-lg">
+                                <BarChart3 className="w-6 h-6 text-blue-600" />
                               </div>
-                            ))}
+                              <div className="flex-1">
+                                <h4 className="text-lg font-bold text-blue-900 mb-2">Assessment Summary</h4>
+                                <p className="text-base text-blue-800 leading-relaxed whitespace-pre-wrap">{skillRecommendations.assessment_summary}</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Quick Overview of Available Resources */}
+                        <div className="mt-6 p-6 bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-200 rounded-xl">
+                          <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <Eye className="w-5 h-5" />
+                            Available Resources Overview
+                          </h4>
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                            {skillRecommendations.learning_paths && skillRecommendations.learning_paths.length > 0 && (
+                              <div className="p-3 bg-green-100 border border-green-300 rounded-lg text-center">
+                                <MapPin className="w-5 h-5 text-green-700 mx-auto mb-1" />
+                                <p className="text-xs font-semibold text-green-900">{skillRecommendations.learning_paths.length}</p>
+                                <p className="text-xs text-green-700">Learning Paths</p>
+                              </div>
+                            )}
+                            {skillRecommendations.courses_resources && typeof skillRecommendations.courses_resources === 'object' && (
+                              Object.entries(skillRecommendations.courses_resources).map(([category, resources]: [string, any]) => {
+                                const count = Array.isArray(resources) ? resources.length : (resources ? 1 : 0);
+                                if (count === 0) return null;
+                                return (
+                                  <div key={category} className="p-3 bg-purple-100 border border-purple-300 rounded-lg text-center">
+                                    <BookOpen className="w-5 h-5 text-purple-700 mx-auto mb-1" />
+                                    <p className="text-xs font-semibold text-purple-900">{count}</p>
+                                    <p className="text-xs text-purple-700 capitalize">{category.replace(/_/g, ' ')}</p>
+                                  </div>
+                                );
+                              })
+                            )}
+                            {skillRecommendations.practice_projects && skillRecommendations.practice_projects.length > 0 && (
+                              <div className="p-3 bg-orange-100 border border-orange-300 rounded-lg text-center">
+                                <Code className="w-5 h-5 text-orange-700 mx-auto mb-1" />
+                                <p className="text-xs font-semibold text-orange-900">{skillRecommendations.practice_projects.length}</p>
+                                <p className="text-xs text-orange-700">Projects</p>
+                              </div>
+                            )}
+                            {skillRecommendations.career_advancement && Array.isArray(skillRecommendations.career_advancement) && skillRecommendations.career_advancement.length > 0 && (
+                              <div className="p-3 bg-emerald-100 border border-emerald-300 rounded-lg text-center">
+                                <TrendingUp className="w-5 h-5 text-emerald-700 mx-auto mb-1" />
+                                <p className="text-xs font-semibold text-emerald-900">{skillRecommendations.career_advancement.length}</p>
+                                <p className="text-xs text-emerald-700">Career Tips</p>
+                              </div>
+                            )}
+                            {skillRecommendations.timeline && typeof skillRecommendations.timeline === 'object' && Object.keys(skillRecommendations.timeline).length > 0 && (
+                              <div className="p-3 bg-indigo-100 border border-indigo-300 rounded-lg text-center">
+                                <Clock className="w-5 h-5 text-indigo-700 mx-auto mb-1" />
+                                <p className="text-xs font-semibold text-indigo-900">{Object.keys(skillRecommendations.timeline).length}</p>
+                                <p className="text-xs text-indigo-700">Timeline</p>
+                              </div>
+                            )}
                           </div>
                         </div>
-                      )}
+                      </TabsContent>
 
-                      {/* Courses & Resources */}
-                      {skillRecommendations.courses_resources && (
-                        <div className="mb-6">
-                          <h4 className="text-lg font-semibold text-purple-800 mb-3">Courses & Resources</h4>
+                      {/* Career Advancement Tab */}
+                      <TabsContent value="career" className="space-y-4">
+                        {skillRecommendations.career_advancement && Array.isArray(skillRecommendations.career_advancement) && skillRecommendations.career_advancement.length > 0 ? (
                           <div className="space-y-3">
+                            <div className="flex items-center gap-2 mb-4">
+                              <TrendingUp className="w-5 h-5 text-green-600" />
+                              <h4 className="text-xl font-bold text-gray-800">Career Advancement Opportunities</h4>
+                            </div>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              {skillRecommendations.career_advancement.map((advice: string, index: number) => (
+                                <div key={index} className="p-5 bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                                  <div className="flex items-start gap-3">
+                                    <div className="flex-shrink-0 w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                                      <span className="text-green-700 font-bold text-sm">{index + 1}</span>
+                                    </div>
+                                    <p className="text-sm text-gray-700 leading-relaxed flex-1 whitespace-pre-wrap">{advice}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-8 text-center bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl">
+                            <TrendingUp className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                            <p className="text-gray-600">No career advancement recommendations available at this time.</p>
+                          </div>
+                        )}
+                      </TabsContent>
+
+                      {/* Courses & Resources Tab */}
+                      <TabsContent value="courses" className="space-y-6">
+                        {skillRecommendations.courses_resources ? (
+                          <div>
+                            <div className="flex items-center gap-2 mb-6">
+                              <BookOpen className="w-5 h-5 text-purple-600" />
+                              <h4 className="text-xl font-bold text-gray-800">Courses & Learning Resources</h4>
+                            </div>
                             {typeof skillRecommendations.courses_resources === 'object' ? (
-                              Object.entries(skillRecommendations.courses_resources).map(([category, resources]: [string, any], index) => (
-                                <div key={index} className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                                  <h5 className="font-semibold text-purple-800 mb-2 capitalize">{category.replace('_', ' ')}</h5>
-                                  {Array.isArray(resources) ? (
-                                    <ul className="space-y-1">
-                                      {resources.map((resource: string, resourceIndex: number) => (
-                                        <li key={resourceIndex} className="flex items-start gap-2">
-                                          <span className="text-purple-600 mt-1">•</span>
-                                          <span className="text-sm text-purple-700">{resource}</span>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  ) : (
-                                    <p className="text-sm text-purple-700">{resources}</p>
+                              <div className="space-y-8">
+                                {Object.entries(skillRecommendations.courses_resources).map(([category, resources]: [string, any], index) => {
+                                  // Skip if resources is empty or null
+                                  if (!resources || (Array.isArray(resources) && resources.length === 0)) {
+                                    return null;
+                                  }
+
+                                  const categoryIcons: Record<string, any> = {
+                                    'online_courses': BookOpen,
+                                    'tutorials_guides': BookOpen,
+                                    'books': BookOpen,
+                                    'workshops_conferences': Users,
+                                    'communities_forums': Users,
+                                  };
+
+                                  const IconComponent = categoryIcons[category] || BookOpen;
+                                  const categoryColors: Record<string, string> = {
+                                    'online_courses': 'from-blue-50 to-blue-100 border-blue-200 text-blue-800',
+                                    'tutorials_guides': 'from-purple-50 to-purple-100 border-purple-200 text-purple-800',
+                                    'books': 'from-green-50 to-green-100 border-green-200 text-green-800',
+                                    'workshops_conferences': 'from-orange-50 to-orange-100 border-orange-200 text-orange-800',
+                                    'communities_forums': 'from-pink-50 to-pink-100 border-pink-200 text-pink-800',
+                                  };
+
+                                  const colorClass = categoryColors[category] || 'from-purple-50 to-purple-100 border-purple-200 text-purple-800';
+
+                                  return (
+                                    <div key={index} className="space-y-4">
+                                      <div className={`p-4 bg-gradient-to-r ${colorClass} rounded-lg border-2 flex items-center gap-3`}>
+                                        <IconComponent className="w-6 h-6" />
+                                        <h5 className="text-lg font-bold capitalize">
+                                          {category.replace(/_/g, ' ')}
+                                        </h5>
+                                        <Badge variant="outline" className="ml-auto bg-white/50">
+                                          {Array.isArray(resources) ? resources.length : 1} {Array.isArray(resources) && resources.length === 1 ? 'resource' : 'resources'}
+                                        </Badge>
+                                      </div>
+                                      {Array.isArray(resources) ? (
+                                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                          {resources.map((resource: any, resourceIndex: number) => {
+                                            // Parse JSON string if resource is a string that looks like JSON
+                                            let parsedResource = resource;
+                                            if (typeof resource === 'string' && resource.trim().startsWith('{')) {
+                                              try {
+                                                parsedResource = JSON.parse(resource);
+                                              } catch (e) {
+                                                // If parsing fails, use original string
+                                                parsedResource = resource;
+                                              }
+                                            }
+                                            
+                                            // Handle structured objects with title, url, thumbnail_url, channel, duration
+                                            const isStructuredObject = typeof parsedResource === 'object' && parsedResource !== null && !Array.isArray(parsedResource) && (parsedResource.title || parsedResource.url);
+                                            
+                                            // Extract data from structured object or string
+                                            const resourceUrl = isStructuredObject ? (parsedResource.url || parsedResource.link) : (typeof parsedResource === 'string' ? parsedResource : '');
+                                            const resourceTitle = isStructuredObject ? (parsedResource.title || parsedResource.name || 'Untitled') : (typeof parsedResource === 'string' ? parsedResource : '');
+                                            const isYouTube = isStructuredObject 
+                                              ? (resourceUrl && isYouTubeLink(resourceUrl))
+                                              : (typeof parsedResource === 'string' && isYouTubeLink(parsedResource));
+                                            const videoId = resourceUrl ? getYouTubeVideoId(resourceUrl) : null;
+                                            
+                                            // Get thumbnail URL - prioritize API provided, then extract from URL for YouTube videos
+                                            let thumbnailUrl = isStructuredObject && parsedResource.thumbnail_url 
+                                              ? parsedResource.thumbnail_url 
+                                              : null;
+                                            
+                                            // For YouTube videos, always try to get a thumbnail
+                                            if (isYouTube && !thumbnailUrl && videoId) {
+                                              thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+                                            } else if (!isYouTube && !thumbnailUrl) {
+                                              // For non-YouTube resources, try to get thumbnail from URL
+                                              thumbnailUrl = resourceUrl ? getYouTubeThumbnail(resourceUrl) : null;
+                                            }
+                                            
+                                            const channel = isStructuredObject ? parsedResource.channel : null;
+                                            const duration = isStructuredObject ? parsedResource.duration : null;
+                                            
+                                            // Normalize YouTube URL to ensure it's valid
+                                            const normalizedTabUrl = isYouTube && resourceUrl 
+                                              ? normalizeYouTubeUrl(resourceUrl) 
+                                              : (resourceUrl && (resourceUrl.startsWith('http://') || resourceUrl.startsWith('https://')) ? resourceUrl : null);
+                                            
+                                            // If still no thumbnail but we have videoId, generate it
+                                            if (isYouTube && !thumbnailUrl && videoId) {
+                                              thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+                                            }
+
+                                            return (
+                                              <div 
+                                                key={resourceIndex} 
+                                                className="group relative overflow-hidden bg-white border-2 border-gray-200 rounded-xl shadow-sm hover:shadow-xl transition-all duration-300 hover:border-purple-400 cursor-pointer"
+                                                onClick={() => {
+                                                  if (normalizedTabUrl) {
+                                                    window.open(normalizedTabUrl, '_blank', 'noopener,noreferrer');
+                                                  } else {
+                                                    console.warn('Invalid URL:', resourceUrl);
+                                                  }
+                                                }}
+                                              >
+                                                {/* Thumbnail Section - Always show real YouTube thumbnails */}
+                                                {thumbnailUrl || (isYouTube && videoId) ? (
+                                                  <div className="relative aspect-video overflow-hidden bg-gray-100">
+                                                    <img 
+                                                      src={thumbnailUrl || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`}
+                                                      alt={resourceTitle}
+                                                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                                      loading="lazy"
+                                                      onError={(e) => {
+                                                        // Fallback to hqdefault if maxresdefault fails
+                                                        const target = e.target as HTMLImageElement;
+                                                        if (videoId && !target.src.includes('hqdefault')) {
+                                                          target.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+                                                        } else if (videoId && target.src.includes('hqdefault')) {
+                                                          // If hqdefault also fails, try mqdefault
+                                                          target.src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                                                        } else {
+                                                          target.style.display = 'none';
+                                                        }
+                                                      }}
+                                                    />
+                                                    {isYouTube && (
+                                                      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 group-hover:bg-opacity-10 transition-opacity">
+                                                        <div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center opacity-90 group-hover:opacity-100 shadow-lg group-hover:scale-110 transition-all">
+                                                          <svg className="w-10 h-10 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                                            <path d="M8 5v14l11-7z"/>
+                                                          </svg>
+                                                        </div>
+                                                      </div>
+                                                    )}
+                                                    {isYouTube && (
+                                                      <div className="absolute top-2 right-2 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
+                                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                                                          <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                                                        </svg>
+                                                        YouTube
+                                                      </div>
+                                                    )}
+                                                    {duration && (
+                                                      <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs font-semibold px-2 py-1 rounded">
+                                                        {duration}
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                ) : (
+                                                  <div className={`aspect-video bg-gradient-to-br ${colorClass.split(' ')[0]} ${colorClass.split(' ')[1]} flex items-center justify-center relative`}>
+                                                    <IconComponent className="w-16 h-16 opacity-50" />
+                                                  </div>
+                                                )}
+                                                
+                                                {/* Content Section */}
+                                                <div className="p-4">
+                                                  <h6 className="text-sm font-semibold text-gray-800 line-clamp-2 group-hover:text-purple-700 transition-colors mb-2">
+                                                    {resourceTitle.length > 100 ? `${resourceTitle.substring(0, 100)}...` : resourceTitle}
+                                                  </h6>
+                                                  {channel && (
+                                                    <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                                                      <Users className="w-3 h-3" />
+                                                      {channel}
+                                                    </p>
+                                                  )}
+                                                  {isStructuredObject && parsedResource.description && (
+                                                    <p className="text-xs text-gray-600 line-clamp-2 mb-2">
+                                                      {parsedResource.description}
+                                                    </p>
+                                                  )}
+                                                  <div className="flex items-center justify-between mt-3">
+                                                    {isYouTube && normalizedTabUrl ? (
+                                                      <a 
+                                                        href={normalizedTabUrl} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="inline-flex items-center text-xs text-red-600 hover:text-red-800 font-semibold group/link"
+                                                      >
+                                                        <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                                          <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                                                        </svg>
+                                                        Watch on YouTube
+                                                        <ArrowRight className="w-3 h-3 ml-1 group-hover/link:translate-x-1 transition-transform" />
+                                                      </a>
+                                                    ) : (
+                                                      normalizedTabUrl && (
+                                                        <a 
+                                                          href={normalizedTabUrl} 
+                                                          target="_blank" 
+                                                          rel="noopener noreferrer"
+                                                          onClick={(e) => e.stopPropagation()}
+                                                          className="inline-flex items-center text-xs text-purple-600 hover:text-purple-800 font-semibold group/link"
+                                                        >
+                                                          View Resource
+                                                          <ArrowRight className="w-3 h-3 ml-1 group-hover/link:translate-x-1 transition-transform" />
+                                                        </a>
+                                                      )
+                                                    )}
+                                                    {duration && (
+                                                      <Badge variant="outline" className="text-xs bg-gray-100">
+                                                        ⏱️ {duration}
+                                                      </Badge>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : (
+                                        <div className={`p-4 bg-gradient-to-r ${colorClass} border-2 rounded-lg`}>
+                                          <p className="text-sm">{resources}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                                <p className="text-sm text-purple-700 whitespace-pre-wrap">{skillRecommendations.courses_resources}</p>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="p-8 text-center bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl">
+                            <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                            <p className="text-gray-600">No courses or learning resources available at this time.</p>
+                          </div>
+                        )}
+                      </TabsContent>
+
+                      {/* Learning Paths Tab */}
+                      <TabsContent value="paths" className="space-y-4">
+                        {skillRecommendations.learning_paths && skillRecommendations.learning_paths.length > 0 ? (
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-2 mb-4">
+                              <MapPin className="w-5 h-5 text-green-600" />
+                              <h4 className="text-xl font-bold text-gray-800">Recommended Learning Paths</h4>
+                            </div>
+                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                              {skillRecommendations.learning_paths.map((path: any, index: number) => (
+                                <div key={index} className="p-5 bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl shadow-sm hover:shadow-md transition-all">
+                                  <div className="flex items-start gap-3 mb-3">
+                                    <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                      <span className="text-green-700 font-bold">{index + 1}</span>
+                                    </div>
+                                    <div className="flex-1">
+                                      <h5 className="font-bold text-green-900 mb-2">
+                                        {typeof path === 'string' ? path : (path.title || path.name || `Learning Path ${index + 1}`)}
+                                      </h5>
+                                      {typeof path !== 'string' && path.description && (
+                                        <p className="text-sm text-green-700 whitespace-pre-wrap">{path.description}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {typeof path !== 'string' && path.duration && (
+                                    <div className="mt-3 pt-3 border-t border-green-200">
+                                      <span className="text-xs bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium">
+                                        ⏱️ {path.duration}
+                                      </span>
+                                    </div>
                                   )}
                                 </div>
-                              ))
-                            ) : (
-                          <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                                <p className="text-sm text-purple-700">{skillRecommendations.courses_resources}</p>
-                              </div>
-                            )}
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
-
-                      {/* Practice Projects */}
-                      {skillRecommendations.practice_projects && skillRecommendations.practice_projects.length > 0 && (
-                        <div className="mb-6">
-                          <h4 className="text-lg font-semibold text-orange-800 mb-3">Practice Projects</h4>
-                          <div className="space-y-3">
-                            {skillRecommendations.practice_projects.map((project: any, index: number) => (
-                              <div key={index} className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                                <h5 className="font-semibold text-orange-800 mb-2">{project.title || project.name || `Project ${index + 1}`}</h5>
-                                <p className="text-sm text-orange-700 mb-2">{project.description || project.details || project}</p>
-                                {project.difficulty && (
-                                  <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
-                                    Difficulty: {project.difficulty}
-                                  </span>
-                                )}
-                              </div>
-                            ))}
+                        ) : (
+                          <div className="p-8 text-center bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl">
+                            <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                            <p className="text-gray-600">No learning paths available at this time.</p>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </TabsContent>
 
-                      {/* Timeline */}
-                      {skillRecommendations.timeline && (
-                        <div className="mb-6">
-                          <h4 className="text-lg font-semibold text-indigo-800 mb-3">Learning Timeline</h4>
-                          <div className="space-y-3">
-                            {typeof skillRecommendations.timeline === 'object' ? (
-                              Object.entries(skillRecommendations.timeline).map(([period, description]: [string, any], index) => (
-                                <div key={index} className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-                                  <h5 className="font-semibold text-indigo-800 mb-2 capitalize">{period.replace('_', ' ')}</h5>
-                                  <p className="text-sm text-indigo-700">{description}</p>
+                      {/* Practice Projects Tab */}
+                      <TabsContent value="projects" className="space-y-4">
+                        {skillRecommendations.practice_projects && skillRecommendations.practice_projects.length > 0 ? (
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-2 mb-4">
+                              <Code className="w-5 h-5 text-orange-600" />
+                              <h4 className="text-xl font-bold text-gray-800">Practice Projects</h4>
+                            </div>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              {skillRecommendations.practice_projects.map((project: any, index: number) => (
+                                <div key={index} className="p-5 bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-200 rounded-xl shadow-sm hover:shadow-md transition-all">
+                                  <div className="flex items-start gap-3">
+                                    <div className="flex-shrink-0 w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                                      <Code className="w-5 h-5 text-orange-600" />
+                                    </div>
+                                    <div className="flex-1">
+                                      <h5 className="font-bold text-orange-900 mb-2">
+                                        {typeof project === 'string' ? project : (project.title || project.name || `Project ${index + 1}`)}
+                                      </h5>
+                                      {typeof project !== 'string' && project.description && (
+                                        <p className="text-sm text-orange-700 mb-3 whitespace-pre-wrap">{project.description}</p>
+                                      )}
+                                      {typeof project !== 'string' && project.difficulty && (
+                                        <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-300">
+                                          Difficulty: {project.difficulty}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
-                              ))
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-8 text-center bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl">
+                            <Code className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                            <p className="text-gray-600">No practice projects available at this time.</p>
+                          </div>
+                        )}
+                      </TabsContent>
+
+                      {/* Timeline Tab */}
+                      <TabsContent value="timeline" className="space-y-4">
+                        {skillRecommendations.timeline ? (
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-2 mb-4">
+                              <Clock className="w-5 h-5 text-indigo-600" />
+                              <h4 className="text-xl font-bold text-gray-800">Learning Timeline</h4>
+                            </div>
+                            {typeof skillRecommendations.timeline === 'object' ? (
+                              <div className="space-y-4">
+                                {Object.entries(skillRecommendations.timeline).map(([period, description]: [string, any], index) => (
+                                  <div key={index} className="relative pl-8 pb-6 border-l-2 border-indigo-200 last:border-0 last:pb-0">
+                                    <div className="absolute -left-2 top-0 w-4 h-4 bg-indigo-500 rounded-full border-2 border-white shadow-md"></div>
+                                    <div className="p-5 bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl shadow-sm">
+                                      <h5 className="font-bold text-indigo-900 mb-2 capitalize text-lg">
+                                        {period.replace(/_/g, ' ')}
+                                      </h5>
+                                      <p className="text-sm text-indigo-800 leading-relaxed whitespace-pre-wrap">{description}</p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
                             ) : (
-                          <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-                                <p className="text-sm text-indigo-700">{skillRecommendations.timeline}</p>
+                              <div className="p-5 bg-indigo-50 border border-indigo-200 rounded-xl">
+                                <p className="text-sm text-indigo-700 whitespace-pre-wrap">{skillRecommendations.timeline}</p>
                               </div>
                             )}
                           </div>
-                        </div>
-                      )}
-                    </div>
+                        ) : (
+                          <div className="p-8 text-center bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl">
+                            <Clock className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                            <p className="text-gray-600">No timeline information available at this time.</p>
+                          </div>
+                        )}
+                      </TabsContent>
+                    </Tabs>
                   </Card>
                 )}
 
@@ -5968,7 +7395,7 @@ const PersonalizedAssessment = () => {
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold text-gray-900">
                   {showDetailedResults.type === 'aptitude' && 'Aptitude Test Detailed Results'}
-                  {showDetailedResults.type === 'behavioral' && 'Behavioral Test AI Evaluations'}
+                  {showDetailedResults.type === 'scenario-based' && 'Scenario Based Test AI Evaluations'}
                   {showDetailedResults.type === 'coding' && 'Coding Test AI Evaluation'}
                 </h3>
                 <Button
@@ -6009,7 +7436,7 @@ const PersonalizedAssessment = () => {
                 </div>
               )}
               
-              {showDetailedResults.type === 'behavioral' && (
+              {showDetailedResults.type === 'scenario-based' && (
                 <div className="space-y-4">
                   {showDetailedResults.data.map((evaluation: any, index: number) => (
                     <div key={index} className="p-4 border border-gray-200 rounded-lg">
