@@ -39,7 +39,7 @@
   ],
   "headers": [
     {
-      "source": "/*.mp4",
+      "source": "/:path*.mp4",
       "headers": [
         {
           "key": "Content-Type",
@@ -56,7 +56,7 @@
       ]
     },
     {
-      "source": "/*.webm",
+      "source": "/:path*.webm",
       "headers": [
         {
           "key": "Content-Type",
@@ -73,7 +73,7 @@
       ]
     },
     {
-      "source": "/*.mov",
+      "source": "/:path*.mov",
       "headers": [
         {
           "key": "Content-Type",
@@ -90,7 +90,7 @@
       ]
     },
     {
-      "source": "/*.avi",
+      "source": "/:path*.avi",
       "headers": [
         {
           "key": "Content-Type",
