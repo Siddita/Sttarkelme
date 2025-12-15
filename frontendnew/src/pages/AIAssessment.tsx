@@ -1,6 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { 
   Brain, 
   MessageSquare, 
@@ -56,6 +64,7 @@ import {
 } from "@/hooks/useApis";
 import './OutlinedText.css';
 import { useSearchParams } from 'react-router-dom';
+import { useAuth } from "@/contexts/AuthContext";
 
 const features = [
   {
@@ -120,6 +129,8 @@ const AIAssessment = () => {
   const [selectedJobData, setSelectedJobData] = useState<any | null>(null);
   const [isJobSpecificInterview, setIsJobSpecificInterview] = useState(false);
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
 
   // Quiz-related state
   const [selectedAssessment, setSelectedAssessment] = useState<any>(null);
@@ -490,20 +501,40 @@ const AIAssessment = () => {
     return []; // Jobs API removed, only using resume-based skill extraction
   };
 
-  // Assessment functions
+  // Assessment functions with authentication check
   const startSoftSkillsAssessment = () => {
+    if (!isAuthenticated) {
+      setShowAuthDialog(true);
+      return;
+    }
     // Navigate to the dedicated Soft Skills page
     navigate('/soft-skills');
   };
 
   const startCodingAssessment = () => {
+    if (!isAuthenticated) {
+      setShowAuthDialog(true);
+      return;
+    }
     // Navigate to the dedicated Coding Round page
     navigate('/coding-round');
   };
 
   const startWritingTest = () => {
+    if (!isAuthenticated) {
+      setShowAuthDialog(true);
+      return;
+    }
     // Navigate to the writing test page
     navigate('/writing-test');
+  };
+
+  const startAptitudeTest = () => {
+    if (!isAuthenticated) {
+      setShowAuthDialog(true);
+      return;
+    }
+    navigate('/assessment');
   };
 
   const submitQuizAnswers = async () => {
@@ -805,7 +836,7 @@ const AIAssessment = () => {
       title: "Aptitude Test",
       description: "Programming, algorithms, system design, and technical problem-solving",
       duration: "45-60 min",
-      questions: "15-20",
+      questions: "10",
       focus: "Aptitude Test",
       sectors: ['tech', 'finance', 'ecommerce', 'consulting'],
       difficulty: ['intermediate', 'advanced'],
@@ -816,7 +847,7 @@ const AIAssessment = () => {
       title: "Soft Skills",
       description: "Communication, leadership, teamwork, and problem-solving abilities",
       duration: "30-45 min",
-      questions: "10-15",
+      questions: "10",
       focus: "Interpersonal Skills",
       sectors: ['all'],
       difficulty: ['all'],
@@ -827,7 +858,7 @@ const AIAssessment = () => {
       title: "Coding Round Assessment",
       description: "Live coding challenges, algorithm problems, and programming assessments",
       duration: "60-90 min",
-      questions: "3-5",
+      questions: "5",
       focus: "Programming Skills",
       sectors: ['tech', 'finance', 'ecommerce'],
       difficulty: ['beginner', 'intermediate', 'advanced'],
@@ -839,7 +870,7 @@ const AIAssessment = () => {
       title: "Writing Test",
       description: "Technical writing and communication skills",
       duration: "20-30 min",
-      questions: "1-2",
+      questions: "2",
       focus: "Technical Writing",
       sectors: ['all'],
       difficulty: ['all'],
@@ -1205,7 +1236,7 @@ const AIAssessment = () => {
                             <ArrowRight className="ml-2 h-4 w-4" />
                           </Button>
                         ) : (
-                          <Button className="w-full" onClick={() => navigate('/assessment')}>
+                          <Button className="w-full" onClick={startAptitudeTest}>
                             Get Started
                             <ArrowRight className="ml-2 h-4 w-4" />
                           </Button>
@@ -1284,10 +1315,19 @@ const AIAssessment = () => {
                                     name={`question-${quizQuestions[currentQuestionIndex]?.id}`}
                                     value={index}
                                     checked={userAnswers[quizQuestions[currentQuestionIndex]?.id] === index}
-                                    onChange={(e) => setUserAnswers(prev => ({
-                                      ...prev,
-                                      [quizQuestions[currentQuestionIndex]?.id]: parseInt(e.target.value)
-                                    }))}
+                                    onChange={(e) => {
+                                      const idx = parseInt(e.target.value);
+                                      setUserAnswers(prev => {
+                                        const qid = quizQuestions[currentQuestionIndex]?.id;
+                                        const current = prev[qid];
+                                        if (current === idx) {
+                                          const copy: any = { ...prev };
+                                          delete copy[qid];
+                                          return copy;
+                                        }
+                                        return { ...prev, [qid]: idx };
+                                      });
+                                    }}
                                     className="w-4 h-4 text-primary"
                                   />
                                   <span className="text-sm">{typeof option === 'string' ? option : 'Option not available'}</span>
@@ -1860,7 +1900,7 @@ const AIAssessment = () => {
                             </div>
                             <div className="flex items-center gap-2 text-sm">
                               <Users className="h-4 w-4 text-primary" />
-                              <span>15-20 questions</span>
+                              <span>10 questions</span>
                             </div>
                             <div className="flex items-center gap-2 text-sm">
                               <Target className="h-4 w-4 text-primary" />
@@ -1939,7 +1979,7 @@ const AIAssessment = () => {
                           </div>
                           <div className="flex items-center gap-3">
                             <Users className="h-5 w-5 text-primary" />
-                            <span className="text-sm">15-20 questions</span>
+                            <span className="text-sm">10 questions</span>
                           </div>
                           <div className="flex items-center gap-3">
                             <Target className="h-5 w-5 text-primary" />
@@ -2194,6 +2234,37 @@ const AIAssessment = () => {
           </div>
         </div>
       </div>
+
+      {/* Authentication Dialog */}
+      <Dialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sign In Required</DialogTitle>
+            <DialogDescription>
+              Please sign in or sign up to access the assessment.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowAuthDialog(false);
+                navigate('/login');
+              }}
+            >
+              Sign In
+            </Button>
+            <Button
+              onClick={() => {
+                setShowAuthDialog(false);
+                navigate('/signup');
+              }}
+            >
+              Sign Up
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

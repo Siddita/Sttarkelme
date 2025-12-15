@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Navbar } from "@/components/ui/navbar-menu";
+import jsPDF from 'jspdf';
 import { 
   generateWritingPromptV1GenerateWritingPromptPost,
   evaluateWritingResponseV1EvaluateWritingPost,
@@ -1310,22 +1311,42 @@ export default function WritingTestPage() {
                 <div className="flex flex-col sm:flex-row gap-4 justify-center mt-6 pt-6 border-t border-gray-200">
                   <Button 
                     variant="outline"
-                    onClick={() => {
+                    onClick={async () => {
+                      if (!performanceGaps && !skillRecommendations && !writingEvaluation) {
+                        alert('Please generate results first, then try downloading.');
+                        return;
+                      }
                       const reportData = {
                         jobs: [], // Empty array as required by API
                         analysis: {
-                          assessment_results: writingEvaluation,
-                          performance_gaps: performanceGaps,
-                          skill_recommendations: skillRecommendations,
+                          assessment_results: writingEvaluation || {},
+                          performance_gaps: performanceGaps || {},
+                          skill_recommendations: skillRecommendations || {},
                           assessment_type: 'writing_test',
                           timestamp: new Date().toISOString()
                         }
                       };
                       console.log('Report Data being sent:', reportData);
-                      downloadReport(reportData);
+                      try {
+                        const data = await downloadReport(reportData);
+                        const reportText = data?.report ? data.report : JSON.stringify(data ?? reportData, null, 2);
+                        const blob = new Blob([reportText], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'writing-assessment-report.txt';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      } catch (err: any) {
+                        console.error('Failed to download report:', err);
+                        const msg = err?.response?.message || err?.message || 'Failed to download report. Please try again.';
+                        alert(msg);
+                      }
                     }}
                     className="px-8 py-3 border-gray-300 hover:bg-gray-50"
-                    disabled={!performanceGaps && !skillRecommendations}
+                    disabled={!performanceGaps && !skillRecommendations && !writingEvaluation}
                   >
                     Download Analysis Report
                   </Button>
@@ -1333,68 +1354,155 @@ export default function WritingTestPage() {
                   <Button 
                     variant="outline"
                     onClick={() => {
-                      // Generate PDF content locally
-                      const score = writingEvaluation?.score || 0;
-                      const timeTaken = elapsedTime;
-                      
-                      const pdfContent = `
-# Writing Assessment Report
+                      // Generate PDF using jsPDF
+                      try {
+                        const pdf = new jsPDF({
+                          orientation: 'portrait',
+                          unit: 'mm',
+                          format: 'a4'
+                        });
 
-## Assessment Summary
-- **Score**: ${score}/10
-- **Assessment Type**: WRITING TEST
-- **Time Taken**: ${Math.floor(timeTaken / 60)} minutes
-- **Date**: ${new Date().toLocaleDateString()}
+                        const pageWidth = pdf.internal.pageSize.getWidth();
+                        const pageHeight = pdf.internal.pageSize.getHeight();
+                        let yPosition = 20;
+                        const margin = 20;
+                        const lineHeight = 7;
 
-## Performance Analysis
-${performanceGaps ? `
-### Areas for Improvement
-${performanceGaps.areas_for_improvement ? performanceGaps.areas_for_improvement.map((area: any, index: number) => 
-  `${index + 1}. ${typeof area === 'string' ? area : area.title || area.area || JSON.stringify(area)}`
-).join('\n') : 'No specific areas identified'}
+                        // Helper function to add text with word wrap
+                        const addText = (text: string, fontSize: number = 12, isBold: boolean = false, color: string = '#000000') => {
+                          pdf.setFontSize(fontSize);
+                          pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+                          pdf.setTextColor(color);
+                          
+                          const lines = pdf.splitTextToSize(text, pageWidth - 2 * margin);
+                          for (let i = 0; i < lines.length; i++) {
+                            if (yPosition > pageHeight - 20) {
+                              pdf.addPage();
+                              yPosition = 20;
+                            }
+                            pdf.text(lines[i], margin, yPosition);
+                            yPosition += lineHeight;
+                          }
+                          yPosition += 3;
+                        };
 
-### Strengths
-${performanceGaps.strengths ? performanceGaps.strengths.map((strength: any, index: number) => 
-  `${index + 1}. ${typeof strength === 'string' ? strength : strength.title || strength.strength || JSON.stringify(strength)}`
-).join('\n') : 'No specific strengths identified'}
-` : ''}
+                        // Helper to strip markdown formatting
+                        const stripMarkdown = (text: string) => {
+                          return text
+                            .replace(/\*\*/g, '')
+                            .replace(/#{1,6}\s/g, '')
+                            .replace(/\*/g, '')
+                            .replace(/`/g, '')
+                            .trim();
+                        };
 
-## Skill Recommendations
-${skillRecommendations ? `
-### Assessment Summary
-${skillRecommendations.assessment_summary || 'No summary available'}
+                        // Header
+                        pdf.setFillColor(0, 210, 255);
+                        pdf.rect(0, 0, pageWidth, 15, 'F');
+                        pdf.setFontSize(24);
+                        pdf.setFont('helvetica', 'bold');
+                        pdf.setTextColor(255, 255, 255);
+                        pdf.text('Writing Assessment Report', pageWidth / 2, 10, { align: 'center' });
 
-### Learning Paths
-${skillRecommendations.learning_paths ? skillRecommendations.learning_paths.map((path: any, index: number) => 
-  `${index + 1}. ${typeof path === 'string' ? path : path.title || path.name || JSON.stringify(path)}`
-).join('\n') : 'No learning paths available'}
+                        yPosition = 30;
 
-### Practice Projects
-${skillRecommendations.practice_projects ? skillRecommendations.practice_projects.map((project: any, index: number) => 
-  `${index + 1}. ${typeof project === 'string' ? project : project.title || project.name || JSON.stringify(project)}`
-).join('\n') : 'No practice projects available'}
-` : ''}
+                        // Assessment Summary
+                        const score = writingEvaluation?.score || 0;
+                        const timeTaken = elapsedTime;
+                        
+                        addText('ASSESSMENT SUMMARY', 16, true, '#00D2FF');
+                        addText(`Score: ${score}/10`);
+                        addText(`Assessment Type: WRITING TEST`);
+                        addText(`Time Taken: ${Math.floor(timeTaken / 60)} minutes ${timeTaken % 60} seconds`);
+                        addText(`Date: ${new Date().toLocaleDateString()}`);
 
-## Next Steps
-1. Review the assessment results and identify areas for improvement
-2. Follow the recommended learning paths
-3. Practice with similar writing tasks
-4. Consider taking additional assessments to track progress
+                        yPosition += 5;
 
----
-Generated on ${new Date().toLocaleString()}
-                      `;
-                      
-                      // Create and download PDF
-                      const blob = new Blob([pdfContent], { type: 'text/plain' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `writing-assessment-report-${new Date().toISOString().split('T')[0]}.txt`;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      URL.revokeObjectURL(url);
+                        // Performance Analysis
+                        if (performanceGaps) {
+                          addText('PERFORMANCE ANALYSIS', 16, true, '#00D2FF');
+                          
+                          if (performanceGaps.areas_for_improvement && performanceGaps.areas_for_improvement.length > 0) {
+                            addText('Areas for Improvement:', 14, true);
+                            performanceGaps.areas_for_improvement.forEach((area: any, index: number) => {
+                              const areaText = typeof area === 'string' ? area : area.title || area.area || JSON.stringify(area);
+                              addText(`${index + 1}. ${stripMarkdown(areaText)}`);
+                            });
+                            yPosition += 3;
+                          }
+
+                          if (performanceGaps.strengths && performanceGaps.strengths.length > 0) {
+                            addText('Strengths:', 14, true);
+                            performanceGaps.strengths.forEach((strength: any, index: number) => {
+                              const strengthText = typeof strength === 'string' ? strength : strength.title || strength.strength || JSON.stringify(strength);
+                              addText(`${index + 1}. ${stripMarkdown(strengthText)}`);
+                            });
+                            yPosition += 3;
+                          }
+                        }
+
+                        // Skill Recommendations
+                        if (skillRecommendations) {
+                          addText('SKILL RECOMMENDATIONS', 16, true, '#00D2FF');
+                          
+                          if (skillRecommendations.assessment_summary) {
+                            addText('Assessment Summary:', 14, true);
+                            addText(stripMarkdown(skillRecommendations.assessment_summary));
+                            yPosition += 3;
+                          }
+
+                          if (skillRecommendations.learning_paths && skillRecommendations.learning_paths.length > 0) {
+                            addText('Learning Paths:', 14, true);
+                            skillRecommendations.learning_paths.forEach((path: any, index: number) => {
+                              const pathText = typeof path === 'string' ? path : path.title || path.name || JSON.stringify(path);
+                              addText(`${index + 1}. ${stripMarkdown(pathText)}`);
+                              if (path.description) {
+                                addText(`   ${stripMarkdown(path.description)}`, 10);
+                              }
+                            });
+                            yPosition += 3;
+                          }
+
+                          if (skillRecommendations.practice_projects && skillRecommendations.practice_projects.length > 0) {
+                            addText('Practice Projects:', 14, true);
+                            skillRecommendations.practice_projects.forEach((project: any, index: number) => {
+                              const projectText = typeof project === 'string' ? project : project.title || project.name || JSON.stringify(project);
+                              addText(`${index + 1}. ${stripMarkdown(projectText)}`);
+                              if (project.description) {
+                                addText(`   ${stripMarkdown(project.description)}`, 10);
+                              }
+                            });
+                          }
+                        }
+
+                        // Next Steps
+                        yPosition += 5;
+                        addText('NEXT STEPS', 16, true, '#00D2FF');
+                        addText('1. Review the assessment results and identify areas for improvement');
+                        addText('2. Follow the recommended learning paths');
+                        addText('3. Practice with similar writing tasks');
+                        addText('4. Consider taking additional assessments to track progress');
+
+                        // Footer
+                        const totalPages = pdf.getNumberOfPages();
+                        for (let i = 1; i <= totalPages; i++) {
+                          pdf.setPage(i);
+                          pdf.setFontSize(10);
+                          pdf.setTextColor(128, 128, 128);
+                          pdf.text(
+                            `Generated on ${new Date().toLocaleString()} - Page ${i} of ${totalPages}`,
+                            pageWidth / 2,
+                            pageHeight - 10,
+                            { align: 'center' }
+                          );
+                        }
+
+                        // Download PDF
+                        pdf.save(`writing-assessment-report-${new Date().toISOString().split('T')[0]}.pdf`);
+                      } catch (error) {
+                        console.error('Error generating PDF:', error);
+                        alert('Failed to generate PDF. Please try again.');
+                      }
                     }}
                     className="px-8 py-3 border-gray-300 hover:bg-gray-50"
                   >

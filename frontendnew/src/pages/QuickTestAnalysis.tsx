@@ -35,13 +35,15 @@ import {
   downloadReportV1DownloadReportPost,
   generateInterviewPdfV1GenerateInterviewPdfPost
 } from "@/hooks/useApis";
+import jsPDF from "jspdf";
 
 const QuickTestAnalysis = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
   const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState(false);
-  const [downloadedReport, setDownloadedReport] = useState<any>(null);
-  const [generatedPdf, setGeneratedPdf] = useState<any>(null);
+const [downloadedReport, setDownloadedReport] = useState<any>(null); // legacy, not shown
+const [generatedPdf, setGeneratedPdf] = useState<any>(null);
+const [isDownloadingReport, setIsDownloadingReport] = useState(false);
   const [testData, setTestData] = useState<any>(null);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
@@ -123,11 +125,63 @@ const QuickTestAnalysis = () => {
     return data;
   };
 
+  // Render YouTube-style course cards with thumbnail/link
+  const renderCourseGrid = (courses: any[]) => (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {courses.map((course, idx) => {
+        const url = course?.url || '';
+        const title = course?.title || 'YouTube Video';
+        const thumb = course?.thumbnail_url || '';
+        const channel = course?.channel;
+        const duration = course?.duration;
+        if (!url) return null;
+        return (
+          <div
+            key={idx}
+            className="bg-white border border-purple-200 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition"
+          >
+            {thumb ? (
+              <a href={url} target="_blank" rel="noreferrer">
+                <img
+                  src={thumb}
+                  alt={title}
+                  className="w-full aspect-video object-cover"
+                  loading="lazy"
+                />
+              </a>
+            ) : null}
+            <div className="p-3">
+              <a
+                href={url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm font-semibold text-purple-800 hover:underline line-clamp-2"
+              >
+                {title}
+              </a>
+              {(channel || duration) && (
+                <p className="text-xs text-gray-600 mt-1">
+                  {channel ? channel : ''} {channel && duration ? '•' : ''} {duration ? duration : ''}
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   // Helper function to format JSON objects as readable content
   const formatJsonContent = (content: any) => {
     const parsed = parseJsonSafely(content);
     
     if (Array.isArray(parsed)) {
+      const looksLikeCourses = parsed.some(
+        (item) => item && typeof item === 'object' && (item.url || item.thumbnail_url)
+      );
+      if (looksLikeCourses) {
+        return renderCourseGrid(parsed);
+      }
       return (
         <ul className="space-y-2">
           {parsed.map((item, index) => (
@@ -147,14 +201,24 @@ const QuickTestAnalysis = () => {
             <div key={key} className="p-3 bg-gray-50 rounded-lg">
               <h5 className="font-semibold text-sm mb-2 capitalize">{key.replace(/_/g, ' ')}</h5>
               {Array.isArray(value) ? (
-                <ul className="space-y-1">
-                  {value.map((item, index) => (
-                    <li key={index} className="flex items-start gap-2">
-                      <span className="text-xs mt-1 text-primary">•</span>
-                      <span className="text-sm">{typeof item === 'string' ? item : JSON.stringify(item)}</span>
-                    </li>
-                  ))}
-                </ul>
+                (() => {
+                  const looksLikeCourses = value.some(
+                    (item) => item && typeof item === 'object' && (item.url || item.thumbnail_url)
+                  );
+                  if (looksLikeCourses) {
+                    return renderCourseGrid(value);
+                  }
+                  return (
+                    <ul className="space-y-1">
+                      {value.map((item, index) => (
+                        <li key={index} className="flex items-start gap-2">
+                          <span className="text-xs mt-1 text-primary">•</span>
+                          <span className="text-sm">{typeof item === 'string' ? item : JSON.stringify(item)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  );
+                })()
               ) : (
                 <p className="text-sm">{typeof value === 'string' ? value : JSON.stringify(value)}</p>
               )}
@@ -853,8 +917,13 @@ const QuickTestAnalysis = () => {
                           <Button 
                             variant="outline" 
                             className="w-full justify-start" 
-                            onClick={() => {
-                              // Follow CodingRoundPage pattern for report data structure
+                            disabled={!overallAnalysis || isDownloadingReport}
+                            onClick={async () => {
+                              if (!overallAnalysis) {
+                                alert('Please generate analysis first, then try downloading.');
+                                return;
+                              }
+                              setIsDownloadingReport(true);
                               const reportData = {
                                 jobs: [], // Empty array as required by API
                                 analysis: {
@@ -872,110 +941,203 @@ const QuickTestAnalysis = () => {
                                 }
                               };
                               console.log('Report Data being sent:', reportData);
-                              downloadReport(reportData);
+                              try {
+                                const data = await downloadReport(reportData);
+                                const reportText = data?.report ? data.report : JSON.stringify(data ?? reportData, null, 2);
+                                const blob = new Blob([reportText], { type: 'text/plain' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = 'quick-test-analysis-report.txt';
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                              } catch (err: any) {
+                                console.error('Failed to download report:', err);
+                                const msg = err?.response?.message || err?.message || 'Failed to download report. Please try again.';
+                                alert(msg);
+                              } finally {
+                                setIsDownloadingReport(false);
+                              }
                             }}
-                            disabled={!overallAnalysis}
                           >
                             <Download className="w-4 h-4 mr-2" />
-                            Download Analysis Report
+                            {isDownloadingReport ? 'Downloading...' : 'Download Analysis Report'}
                           </Button>
                           <Button 
                             variant="outline" 
                             className="w-full justify-start"
                             onClick={() => {
-                              // Generate PDF content locally (following CodingRoundPage pattern)
-                              const score = overallScore;
-                              const total = totalTests;
-                              const percentage = overallScore;
-                              const timeTaken = 120; // 2 hours estimated
-                              
-                              const pdfContent = `
-# Quick Test Analysis Report
+                              try {
+                                const pdf = new jsPDF({
+                                  orientation: "portrait",
+                                  unit: "mm",
+                                  format: "a4"
+                                });
 
-## Assessment Summary
-- **Overall Score**: ${score}%
-- **Tests Completed**: ${total}/3
-- **Assessment Type**: QUICK TEST
-- **Time Taken**: ${Math.floor(timeTaken / 60)} minutes
-- **Date**: ${new Date().toLocaleDateString()}
+                                const pageWidth = pdf.internal.pageSize.getWidth();
+                                const pageHeight = pdf.internal.pageSize.getHeight();
+                                let yPosition = 20;
+                                const margin = 20;
+                                const lineHeight = 7;
 
-## Individual Test Results
-### Aptitude Test
-- Score: ${aptitudeScore}%
-- Status: ${testData?.aptitudeData ? 'Completed' : 'Not Taken'}
+                                const addText = (text: string, fontSize = 12, isBold = false, color = "#000000") => {
+                                  pdf.setFontSize(fontSize);
+                                  pdf.setFont("helvetica", isBold ? "bold" : "normal");
+                                  pdf.setTextColor(color);
 
-### Scenario Based Test
-- Score: ${scenarioBasedScore}%
-- Status: ${testData?.scenarioBasedData ? 'Completed' : 'Not Taken'}
+                                  const lines = pdf.splitTextToSize(text, pageWidth - 2 * margin);
+                                  for (let i = 0; i < lines.length; i++) {
+                                    if (yPosition > pageHeight - 20) {
+                                      pdf.addPage();
+                                      yPosition = 20;
+                                    }
+                                    pdf.text(lines[i], margin, yPosition);
+                                    yPosition += lineHeight;
+                                  }
+                                  yPosition += 3;
+                                };
 
-### Coding Test
-- Score: ${codingScore}%
-- Status: ${testData?.codingData ? 'Completed' : 'Not Taken'}
+                                const stripMarkdown = (text: string) =>
+                                  text
+                                    .replace(/\*\*/g, "")
+                                    .replace(/#{1,6}\s/g, "")
+                                    .replace(/\*/g, "")
+                                    .replace(/`/g, "")
+                                    .trim();
 
-## Performance Analysis
-${overallAnalysis ? `
-### Areas for Improvement
-${overallAnalysis.areas_for_improvement ? overallAnalysis.areas_for_improvement.map((area: any, index: number) => 
-  `${index + 1}. ${typeof area === 'string' ? area : area.title || area.area || JSON.stringify(area)}`
-).join('\n') : 'No specific areas identified'}
+                                // Header
+                                pdf.setFillColor(0, 210, 255);
+                                pdf.rect(0, 0, pageWidth, 15, "F");
+                                pdf.setFontSize(22);
+                                pdf.setFont("helvetica", "bold");
+                                pdf.setTextColor(255, 255, 255);
+                                pdf.text("Quick Test Analysis Report", pageWidth / 2, 10, { align: "center" });
 
-### Strengths
-${overallAnalysis.strengths ? overallAnalysis.strengths.map((strength: any, index: number) => 
-  `${index + 1}. ${typeof strength === 'string' ? strength : strength.title || strength.strength || JSON.stringify(strength)}`
-).join('\n') : 'No specific strengths identified'}
+                                yPosition = 30;
 
-### Action Items
-${overallAnalysis.action_items ? Object.entries(overallAnalysis.action_items).map(([category, items]: [string, any], index) => 
-  `${category.replace('_', ' ').toUpperCase()}:\n${Array.isArray(items) ? items.map((item: string, itemIndex: number) => `  ${itemIndex + 1}. ${item}`).join('\n') : `  ${items}`}`
-).join('\n\n') : 'No action items available'}
+                                // Summary
+                                addText("SUMMARY", 16, true, "#00D2FF");
+                                addText(`Overall Score: ${overallScore}%`);
+                                addText(`Tests Completed: ${totalTests}/3`);
+                                addText(`Assessment Type: QUICK TEST`);
+                                addText(`Aptitude Score: ${aptitudeScore}%`);
+                                addText(`Scenario Score: ${scenarioBasedScore}%`);
+                                addText(`Coding Score: ${codingScore}%`);
+                                addText(`Date: ${new Date().toLocaleDateString()}`);
 
-### Learning Resources
-${overallAnalysis.learning_resources ? Object.entries(overallAnalysis.learning_resources).map(([category, resources]: [string, any], index) => 
-  `${category.replace('_', ' ').toUpperCase()}:\n${Array.isArray(resources) ? resources.map((resource: string, resourceIndex: number) => `  ${resourceIndex + 1}. ${resource}`).join('\n') : `  ${resources}`}`
-).join('\n\n') : 'No learning resources available'}
-` : ''}
+                                yPosition += 4;
 
-## Skill Recommendations
-${overallAnalysis?.recommendations ? `
-### Assessment Summary
-${overallAnalysis.recommendations.assessment_summary || 'No summary available'}
+                                // Performance Analysis
+                                if (overallAnalysis) {
+                                  addText("PERFORMANCE ANALYSIS", 16, true, "#00D2FF");
 
-### Learning Paths
-${overallAnalysis.recommendations.learning_paths ? overallAnalysis.recommendations.learning_paths.map((path: any, index: number) => 
-  `${index + 1}. ${typeof path === 'string' ? path : path.title || path.name || JSON.stringify(path)}`
-).join('\n') : 'No learning paths available'}
+                                  if (overallAnalysis.areas_for_improvement?.length) {
+                                    addText("Areas for Improvement:", 14, true);
+                                    overallAnalysis.areas_for_improvement.forEach((area: any, index: number) => {
+                                      const text = typeof area === "string" ? area : area.title || area.area || JSON.stringify(area);
+                                      addText(`${index + 1}. ${stripMarkdown(text)}`);
+                                    });
+                                    yPosition += 3;
+                                  }
 
-### Practice Projects
-${overallAnalysis.recommendations.practice_projects ? overallAnalysis.recommendations.practice_projects.map((project: any, index: number) => 
-  `${index + 1}. ${typeof project === 'string' ? project : project.title || project.name || JSON.stringify(project)}`
-).join('\n') : 'No practice projects available'}
+                                  if (overallAnalysis.strengths?.length) {
+                                    addText("Strengths:", 14, true);
+                                    overallAnalysis.strengths.forEach((strength: any, index: number) => {
+                                      const text = typeof strength === "string" ? strength : strength.title || strength.strength || JSON.stringify(strength);
+                                      addText(`${index + 1}. ${stripMarkdown(text)}`);
+                                    });
+                                    yPosition += 3;
+                                  }
 
-### Learning Timeline
-${overallAnalysis.recommendations.timeline ? Object.entries(overallAnalysis.recommendations.timeline).map(([period, description]: [string, any], index) => 
-  `${period.replace('_', ' ').toUpperCase()}: ${description}`
-).join('\n') : 'No timeline available'}
-` : ''}
+                                  if (overallAnalysis.action_items) {
+                                    addText("Action Items:", 14, true);
+                                    Object.entries(overallAnalysis.action_items).forEach(([category, items]: [string, any]) => {
+                                      addText(`${category.replace("_", " ")}:`);
+                                      if (Array.isArray(items)) {
+                                        items.forEach((item: string, idx: number) => addText(`  ${idx + 1}. ${stripMarkdown(item)}`, 11));
+                                      } else {
+                                        addText(stripMarkdown(String(items)), 11);
+                                      }
+                                    });
+                                    yPosition += 3;
+                                  }
 
-## Next Steps
-1. Review the assessment results and identify areas for improvement
-2. Follow the recommended learning paths
-3. Practice with similar questions
-4. Consider taking additional assessments to track progress
+                                  if (overallAnalysis.learning_resources) {
+                                    addText("Learning Resources:", 14, true);
+                                    Object.entries(overallAnalysis.learning_resources).forEach(([category, resources]: [string, any]) => {
+                                      addText(`${category.replace("_", " ").toUpperCase()}:`);
+                                      if (Array.isArray(resources)) {
+                                        resources.forEach((res: string, idx: number) => addText(`  ${idx + 1}. ${stripMarkdown(res)}`, 11));
+                                      } else {
+                                        addText(stripMarkdown(String(resources)), 11);
+                                      }
+                                    });
+                                  }
+                                }
 
----
-Generated on ${new Date().toLocaleString()}
-                              `;
-                              
-                              // Create and download PDF (following CodingRoundPage pattern)
-                              const blob = new Blob([pdfContent], { type: 'text/plain' });
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement('a');
-                              a.href = url;
-                              a.download = `quick-test-analysis-report-${new Date().toISOString().split('T')[0]}.txt`;
-                              document.body.appendChild(a);
-                              a.click();
-                              document.body.removeChild(a);
-                              URL.revokeObjectURL(url);
+                                // Skill Recommendations
+                                if (overallAnalysis?.recommendations) {
+                                  addText("SKILL RECOMMENDATIONS", 16, true, "#00D2FF");
+
+                                  if (overallAnalysis.recommendations.assessment_summary) {
+                                    addText("Assessment Summary:", 14, true);
+                                    addText(stripMarkdown(overallAnalysis.recommendations.assessment_summary));
+                                    yPosition += 3;
+                                  }
+
+                                  if (overallAnalysis.recommendations.learning_paths?.length) {
+                                    addText("Learning Paths:", 14, true);
+                                    overallAnalysis.recommendations.learning_paths.forEach((path: any, index: number) => {
+                                      const text = typeof path === "string" ? path : path.title || path.name || JSON.stringify(path);
+                                      addText(`${index + 1}. ${stripMarkdown(text)}`);
+                                    });
+                                    yPosition += 3;
+                                  }
+
+                                  if (overallAnalysis.recommendations.practice_projects?.length) {
+                                    addText("Practice Projects:", 14, true);
+                                    overallAnalysis.recommendations.practice_projects.forEach((project: any, index: number) => {
+                                      const text = typeof project === "string" ? project : project.title || project.name || JSON.stringify(project);
+                                      addText(`${index + 1}. ${stripMarkdown(text)}`);
+                                    });
+                                    yPosition += 3;
+                                  }
+
+                                  if (overallAnalysis.recommendations.timeline) {
+                                    addText("Learning Timeline:", 14, true);
+                                    Object.entries(overallAnalysis.recommendations.timeline).forEach(([period, description]: [string, any]) => {
+                                      addText(`${period.replace("_", " ").toUpperCase()}: ${stripMarkdown(String(description))}`);
+                                    });
+                                  }
+                                }
+
+                                yPosition += 5;
+                                addText("NEXT STEPS", 16, true, "#00D2FF");
+                                addText("1. Review the assessment results and identify areas for improvement");
+                                addText("2. Follow the recommended learning paths");
+                                addText("3. Practice with similar questions");
+                                addText("4. Consider taking additional assessments to track progress");
+
+                                const totalPages = pdf.getNumberOfPages();
+                                for (let i = 1; i <= totalPages; i++) {
+                                  pdf.setPage(i);
+                                  pdf.setFontSize(10);
+                                  pdf.setTextColor(128, 128, 128);
+                                  pdf.text(
+                                    `Generated on ${new Date().toLocaleString()} - Page ${i} of ${totalPages}`,
+                                    pageWidth / 2,
+                                    pageHeight - 10,
+                                    { align: "center" }
+                                  );
+                                }
+
+                                pdf.save(`quick-test-analysis-report-${new Date().toISOString().split("T")[0]}.pdf`);
+                              } catch (err) {
+                                console.error("Error generating PDF:", err);
+                                alert("Failed to generate PDF. Please try again.");
+                              }
                             }}
                           >
                             <FileText className="w-4 h-4 mr-2" />

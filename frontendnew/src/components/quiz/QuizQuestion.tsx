@@ -11,7 +11,8 @@ import {
   Brain,
   Code,
   Users,
-  Building
+  Building,
+  Flag
 } from "lucide-react";
 
 interface QuizQuestionProps {
@@ -34,6 +35,8 @@ interface QuizQuestionProps {
   canGoPrevious: boolean;
   selectedAnswer?: any;
   type: 'aptitude' | 'coding' | 'mcq' | 'behavioral' | 'company';
+  onFlag?: () => void;
+  isFlagged?: boolean;
 }
 
 const QuizQuestion: React.FC<QuizQuestionProps> = ({
@@ -47,7 +50,9 @@ const QuizQuestion: React.FC<QuizQuestionProps> = ({
   canGoNext,
   canGoPrevious,
   selectedAnswer,
-  type
+  type,
+  onFlag,
+  isFlagged = false
 }) => {
   const [localAnswer, setLocalAnswer] = useState(selectedAnswer);
   const [timeLeft, setTimeLeft] = useState(timeRemaining);
@@ -146,6 +151,24 @@ const QuizQuestion: React.FC<QuizQuestionProps> = ({
           <div className="text-sm text-gray-600">
             Question {questionNumber} of {totalQuestions}
           </div>
+          {onFlag && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onFlag}
+              className={`${
+                isFlagged
+                  ? 'text-amber-500 bg-amber-50 hover:bg-amber-100 border-amber-200'
+                  : 'text-muted-foreground hover:text-amber-500'
+              } transition-colors`}
+              title={isFlagged ? 'Unflag question' : 'Flag for review'}
+            >
+              <Flag className={`w-4 h-4 ${isFlagged ? 'fill-amber-500' : ''}`} />
+              {isFlagged && (
+                <span className="ml-2 text-xs">Flagged</span>
+              )}
+            </Button>
+          )}
         </div>
       </div>
 

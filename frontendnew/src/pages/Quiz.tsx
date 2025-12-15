@@ -55,6 +55,8 @@ const Quiz: React.FC = () => {
   const [apiError, setApiError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
+  // Track flagged questions for review
+  const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set());
 
   // API hooks
   const generateAptitude = useGenerateAptitudeQuestions();
@@ -229,6 +231,21 @@ const Quiz: React.FC = () => {
         currentQuestion: currentQuestion - 1
       });
     }
+  };
+
+  // Flag question for review
+  const handleFlagQuestion = () => {
+    setFlaggedQuestions(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(currentQuestion)) {
+        newSet.delete(currentQuestion);
+        console.log(`Question ${currentQuestion + 1} unflagged`);
+      } else {
+        newSet.add(currentQuestion);
+        console.log(`Question ${currentQuestion + 1} flagged for review`);
+      }
+      return newSet;
+    });
   };
 
   // Submit quiz
@@ -569,6 +586,8 @@ const Quiz: React.FC = () => {
             canGoPrevious={currentQuestion > 0}
             selectedAnswer={answers[currentQuestion]}
             type={selectedQuizType!}
+            onFlag={handleFlagQuestion}
+            isFlagged={flaggedQuestions.has(currentQuestion)}
           />
         )}
 

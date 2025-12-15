@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Eye, EyeOff, Mail, Lock, ArrowLeft, CheckCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -18,10 +19,14 @@ import {
   loginLoginPost,
   registerRegisterPost,
   refreshTokenRefreshPost,
-  authMeMeGet,
-  introspectIntrospectPost,
-  authRoot_Get,
-  authHealthCheckHealthGet
+  getMeMeGet,
+  introspectTokenIntrospectPost,
+  root_Get,
+  healthCheckHealthGet,
+  loginGoogleLoginGooglePost,
+  loginLinkedinLoginLinkedinPost,
+  forgotPasswordForgotPasswordPost,
+  resetPasswordResetPasswordPost
 } from "../hooks/useApis";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -37,6 +42,9 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [showForgotPasswordDialog, setShowForgotPasswordDialog] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
+  const [isSendingResetEmail, setIsSendingResetEmail] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -104,22 +112,72 @@ const Login = () => {
     },
   });
 
+  // OAuth login mutations
+  const googleLoginMutation = loginGoogleLoginGooglePost({
+    onSuccess: (data) => {
+      const token = data?.access_token;
+      if (token) {
+        login(token);
+        toast.success("Login successful!");
+        navigate("/");
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || "Google login failed. Please try again.");
+    },
+  });
+
+  const linkedinLoginMutation = loginLinkedinLoginLinkedinPost({
+    onSuccess: (data) => {
+      const token = data?.access_token;
+      if (token) {
+        login(token);
+        toast.success("Login successful!");
+        navigate("/");
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || "LinkedIn login failed. Please try again.");
+    },
+  });
+
+  // Forgot password mutation
+  const forgotPasswordMutation = forgotPasswordForgotPasswordPost({
+    onSuccess: () => {
+      toast.success("Password reset email sent! Please check your inbox.");
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || "Failed to send password reset email.");
+    },
+  });
+
+  // Reset password mutation
+  const resetPasswordMutation = resetPasswordResetPasswordPost({
+    onSuccess: () => {
+      toast.success("Password reset successfully! Please login with your new password.");
+      navigate("/login");
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || "Failed to reset password.");
+    },
+  });
+
   // Health check and user info hooks - completely disabled to prevent 401 errors
-  const { data: userInfo, refetch: refetchUserInfo } = authMeMeGet({
+  const { data: userInfo, refetch: refetchUserInfo } = getMeMeGet({
     enabled: false,
     retry: false,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     refetchOnReconnect: false
   });
-  const { data: authHealth, refetch: refetchAuthHealth } = authHealthCheckHealthGet({
+  const { data: authHealth, refetch: refetchAuthHealth } = healthCheckHealthGet({
     enabled: false,
     retry: false,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     refetchOnReconnect: false
   });
-  const { data: authRoot, refetch: refetchAuthRoot } = authRoot_Get({
+  const { data: authRoot, refetch: refetchAuthRoot } = root_Get({
     enabled: false,
     retry: false,
     refetchOnWindowFocus: false,
@@ -136,6 +194,105 @@ const Login = () => {
     loginMutation.mutate(formData, {
       onSettled: () => setIsLoading(false),
     });
+  };
+
+  const handleGoogleLogin = () => {
+    // Google OAuth 2.0 flow
+    // Note: You'll need to configure Google OAuth Client ID in environment variables
+    const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const redirectUri = `${window.location.origin}/auth/google/callback`;
+    
+    if (!googleClientId) {
+      toast.error("Google OAuth is not configured. Please contact support.");
+      console.warn("VITE_GOOGLE_CLIENT_ID not set in environment variables");
+      return;
+    }
+
+    // Generate state for CSRF protection
+    const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    sessionStorage.setItem('oauth_state', state);
+
+    // Generate nonce for token validation
+    const nonce = Math.random().toString(36).substring(2, 15);
+
+    // Redirect to Google OAuth consent screen
+    // Using implicit flow (response_type=id_token) - Google returns id_token directly
+    // NOTE: Google deprecated implicit flow for web apps, but it may still work for some configurations
+    // Backend will decode the token but NOT verify signature (dev/demo only)
+    // For production: backend should verify token signature using Google's public keys
+    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${googleClientId}&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `response_type=id_token&` +
+      `scope=openid email profile&` +
+      `state=${state}&` +
+      `nonce=${nonce}`;
+    
+    console.log("Redirecting to Google OAuth:", {
+      clientId: googleClientId.substring(0, 20) + "...",
+      redirectUri,
+      state,
+      nonce,
+    });
+    
+    window.location.href = googleAuthUrl;
+  };
+
+  const handleLinkedInLogin = () => {
+    // LinkedIn OAuth 2.0 flow
+    // Note: You'll need to configure LinkedIn OAuth Client ID in environment variables
+    const linkedInClientId = import.meta.env.VITE_LINKEDIN_CLIENT_ID;
+    const redirectUri = `${window.location.origin}/auth/linkedin/callback`;
+    
+    if (!linkedInClientId) {
+      toast.error("LinkedIn OAuth is not configured. Please contact support.");
+      console.warn("VITE_LINKEDIN_CLIENT_ID not set in environment variables");
+      return;
+    }
+
+    // Generate state for CSRF protection
+    const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    sessionStorage.setItem('oauth_state', state);
+
+    // Redirect to LinkedIn OAuth consent screen
+    const linkedInAuthUrl = `https://www.linkedin.com/oauth/v2/authorization?` +
+      `response_type=code&` +
+      `client_id=${linkedInClientId}&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `state=${state}&` +
+      `scope=r_liteprofile r_emailaddress`;
+    
+    window.location.href = linkedInAuthUrl;
+  };
+
+  const handleForgotPassword = () => {
+    // Pre-fill email if user has entered it
+    if (formData.email) {
+      setForgotPasswordEmail(formData.email);
+    }
+    setShowForgotPasswordDialog(true);
+  };
+
+  const handleSendResetEmail = () => {
+    if (!forgotPasswordEmail || !forgotPasswordEmail.includes("@")) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    setIsSendingResetEmail(true);
+    forgotPasswordMutation.mutate(
+      { email: forgotPasswordEmail },
+      {
+        onSuccess: () => {
+          setIsSendingResetEmail(false);
+          setShowForgotPasswordDialog(false);
+          setForgotPasswordEmail("");
+        },
+        onError: () => {
+          setIsSendingResetEmail(false);
+        },
+      }
+    );
   };
 
   
@@ -307,13 +464,69 @@ const Login = () => {
                       Remember me
                     </Label>
                   </div>
-                  <Link
-                    to="/forgot-password"
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
                     className="text-sm text-cyan-600 hover:text-cyan-500 hover:underline transition-colors"
                   >
                     Forgot password?
-                  </Link>
+                  </button>
                 </motion.div>
+
+                {/* Forgot Password Dialog */}
+                <Dialog open={showForgotPasswordDialog} onOpenChange={setShowForgotPasswordDialog}>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Reset Password</DialogTitle>
+                      <DialogDescription>
+                        Enter your email address and we'll send you a link to reset your password.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="reset-email">Email Address</Label>
+                        <Input
+                          id="reset-email"
+                          type="email"
+                          placeholder="your.email@example.com"
+                          value={forgotPasswordEmail}
+                          onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                          className="w-full"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && forgotPasswordEmail) {
+                              handleSendResetEmail();
+                            }
+                          }}
+                        />
+                      </div>
+                      <div className="flex justify-end space-x-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setShowForgotPasswordDialog(false);
+                            setForgotPasswordEmail("");
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={handleSendResetEmail}
+                          disabled={isSendingResetEmail || !forgotPasswordEmail}
+                          className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600"
+                        >
+                          {isSendingResetEmail ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                              Sending...
+                            </>
+                          ) : (
+                            "Send Reset Link"
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
 
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -356,7 +569,7 @@ const Login = () => {
                   <Button
                     variant="outline"
                     className="w-full border-cyan-200/50 bg-white/80 hover:bg-cyan-50 text-[#2D3253] hover:text-[#2D3253] backdrop-blur-sm"
-                    onClick={() => toast.info("Google sign-in coming soon!")}
+                    onClick={handleGoogleLogin}
                   >
                     <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
                       <path
@@ -381,7 +594,7 @@ const Login = () => {
                   <Button
                     variant="outline"
                     className="w-full border-cyan-200/50 bg-white/80 hover:bg-cyan-50 text-[#2D3253] hover:text-[#2D3253] backdrop-blur-sm"
-                    onClick={() => toast.info("LinkedIn sign-in coming soon!")}
+                    onClick={handleLinkedInLogin}
                   >
                     <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>

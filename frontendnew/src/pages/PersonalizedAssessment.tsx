@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { FeatureSteps } from "@/components/new_ui/feature-section2";
 import { Progress } from "@/components/ui/progress";
+import jsPDF from 'jspdf';
 import { 
   Brain, 
   MessageSquare, 
@@ -45,7 +46,8 @@ import {
   BookOpen,
   RefreshCw,
   Square,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  Flag
 } from "lucide-react";
 import {
   BarChart,
@@ -513,6 +515,7 @@ const PersonalizedAssessment = () => {
   const [isGeneratingAptitude, setIsGeneratingAptitude] = useState(false);
   const [isSubmittingAptitude, setIsSubmittingAptitude] = useState(false);
   const [aptitudeResults, setAptitudeResults] = useState<any>(null);
+  const [flaggedAptitudeQuestions, setFlaggedAptitudeQuestions] = useState<Set<number>>(new Set());
   
   // Scenario Based Test State
   const [scenarioBasedQuestions, setScenarioBasedQuestions] = useState<any[]>([]);
@@ -521,6 +524,36 @@ const PersonalizedAssessment = () => {
   const [isGeneratingScenarioBased, setIsGeneratingScenarioBased] = useState(false);
   const [isSubmittingScenarioBased, setIsSubmittingScenarioBased] = useState(false);
   const [scenarioBasedResults, setScenarioBasedResults] = useState<any>(null);
+  const [flaggedScenarioQuestions, setFlaggedScenarioQuestions] = useState<Set<number>>(new Set());
+
+  // Flag question handlers
+  const handleFlagAptitudeQuestion = () => {
+    setFlaggedAptitudeQuestions(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(currentAptitudeQuestion)) {
+        newSet.delete(currentAptitudeQuestion);
+        console.log(`Aptitude Question ${currentAptitudeQuestion + 1} unflagged`);
+      } else {
+        newSet.add(currentAptitudeQuestion);
+        console.log(`Aptitude Question ${currentAptitudeQuestion + 1} flagged for review`);
+      }
+      return newSet;
+    });
+  };
+
+  const handleFlagScenarioQuestion = () => {
+    setFlaggedScenarioQuestions(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(currentScenarioBasedQuestion)) {
+        newSet.delete(currentScenarioBasedQuestion);
+        console.log(`Scenario Question ${currentScenarioBasedQuestion + 1} unflagged`);
+      } else {
+        newSet.add(currentScenarioBasedQuestion);
+        console.log(`Scenario Question ${currentScenarioBasedQuestion + 1} flagged for review`);
+      }
+      return newSet;
+    });
+  };
 
   // Helper function to extract YouTube thumbnail URL
   const getYouTubeThumbnail = (url: string): string | null => {
@@ -4119,6 +4152,22 @@ const PersonalizedAssessment = () => {
                         <span className="text-sm font-mono">{formatTime(quickTestElapsedTime)}</span>
                       </div>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleFlagAptitudeQuestion}
+                      className={`${
+                        flaggedAptitudeQuestions.has(currentAptitudeQuestion)
+                          ? 'text-amber-500 bg-amber-50 hover:bg-amber-100 border-amber-200'
+                          : 'text-muted-foreground hover:text-amber-500'
+                      } transition-colors`}
+                      title={flaggedAptitudeQuestions.has(currentAptitudeQuestion) ? 'Unflag question' : 'Flag for review'}
+                    >
+                      <Flag className={`w-4 h-4 ${flaggedAptitudeQuestions.has(currentAptitudeQuestion) ? 'fill-amber-500' : ''}`} />
+                      {flaggedAptitudeQuestions.has(currentAptitudeQuestion) && (
+                        <span className="ml-2 text-xs">Flagged</span>
+                      )}
+                    </Button>
                   </div>
                 </div>
 
@@ -4141,7 +4190,12 @@ const PersonalizedAssessment = () => {
                                 checked={aptitudeAnswers[currentAptitudeQuestion] === optionLetter}
                                 onChange={(e) => {
                                   const newAnswers = [...aptitudeAnswers];
-                                  newAnswers[currentAptitudeQuestion] = e.target.value;
+                                  const val = e.target.value;
+                                  if (newAnswers[currentAptitudeQuestion] === val) {
+                                    newAnswers[currentAptitudeQuestion] = '';
+                                  } else {
+                                    newAnswers[currentAptitudeQuestion] = val;
+                                  }
                                   setAptitudeAnswers(newAnswers);
                                 }}
                                 className="w-4 h-4 text-primary"
@@ -4171,27 +4225,37 @@ const PersonalizedAssessment = () => {
                     </Button>
 
                     <div className="flex space-x-2">
-                      {aptitudeQuestions.map((_, index) => (
-                        <button
-                          key={index}
-                          onClick={() => setCurrentAptitudeQuestion(index)}
-                          className={`w-8 h-8 rounded-full text-sm font-medium ${
-                            index === currentAptitudeQuestion
-                              ? 'bg-primary text-white'
-                              : aptitudeAnswers[index]
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-gray-100 text-gray-600'
-                          }`}
-                        >
-                          {index + 1}
-                        </button>
-                      ))}
+                      {aptitudeQuestions.map((_, index) => {
+                        const isFlagged = flaggedAptitudeQuestions.has(index);
+                        const isCurrent = index === currentAptitudeQuestion;
+                        const isAnswered = aptitudeAnswers[index];
+                        
+                        return (
+                          <button
+                            key={index}
+                            onClick={() => setCurrentAptitudeQuestion(index)}
+                            className={`w-8 h-8 rounded-full text-sm font-medium relative transition-colors ${
+                              isCurrent
+                                ? 'bg-primary text-white ring-2 ring-primary ring-offset-2'
+                                : isAnswered
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-gray-100 text-gray-600'
+                            } ${isFlagged && !isCurrent ? 'border-2 border-amber-500' : ''}`}
+                            title={`Question ${index + 1}${isFlagged ? ' (Flagged)' : ''}${isAnswered ? ' (Answered)' : ' (Unanswered)'}`}
+                          >
+                            {index + 1}
+                            {isFlagged && (
+                              <Flag className="w-2.5 h-2.5 absolute -top-1 -right-1 text-amber-500 fill-amber-500" />
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
 
                     {currentAptitudeQuestion === aptitudeQuestions.length - 1 ? (
                       <Button
                         onClick={submitAptitudeTest}
-                        disabled={isSubmittingAptitude || !aptitudeAnswers[currentAptitudeQuestion]}
+                        disabled={isSubmittingAptitude}
                         className="bg-green-600 hover:bg-green-700"
                       >
                         {isSubmittingAptitude ? (
@@ -4210,7 +4274,6 @@ const PersonalizedAssessment = () => {
                             setCurrentAptitudeQuestion(currentAptitudeQuestion + 1);
                           }
                         }}
-                        disabled={!aptitudeAnswers[currentAptitudeQuestion]}
                       >
                         Next
                       </Button>
@@ -4286,6 +4349,22 @@ const PersonalizedAssessment = () => {
                         <span className="text-sm font-mono">{formatTime(quickTestElapsedTime)}</span>
                       </div>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleFlagScenarioQuestion}
+                      className={`${
+                        flaggedScenarioQuestions.has(currentScenarioBasedQuestion)
+                          ? 'text-amber-500 bg-amber-50 hover:bg-amber-100 border-amber-200'
+                          : 'text-muted-foreground hover:text-amber-500'
+                      } transition-colors`}
+                      title={flaggedScenarioQuestions.has(currentScenarioBasedQuestion) ? 'Unflag question' : 'Flag for review'}
+                    >
+                      <Flag className={`w-4 h-4 ${flaggedScenarioQuestions.has(currentScenarioBasedQuestion) ? 'fill-amber-500' : ''}`} />
+                      {flaggedScenarioQuestions.has(currentScenarioBasedQuestion) && (
+                        <span className="ml-2 text-xs">Flagged</span>
+                      )}
+                    </Button>
                   </div>
                 </div>
 
@@ -4394,27 +4473,37 @@ const PersonalizedAssessment = () => {
                     </Button>
 
                     <div className="flex space-x-2">
-                      {scenarioBasedQuestions.map((_, index) => (
-                        <button
-                          key={index}
-                          onClick={() => setCurrentScenarioBasedQuestion(index)}
-                          className={`w-8 h-8 rounded-full text-sm font-medium ${
-                            index === currentScenarioBasedQuestion
-                              ? 'bg-primary text-white'
-                              : scenarioBasedAnswers[index]
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-gray-100 text-gray-600'
-                          }`}
-                        >
-                          {index + 1}
-                        </button>
-                      ))}
+                      {scenarioBasedQuestions.map((_, index) => {
+                        const isFlagged = flaggedScenarioQuestions.has(index);
+                        const isCurrent = index === currentScenarioBasedQuestion;
+                        const isAnswered = scenarioBasedAnswers[index];
+                        
+                        return (
+                          <button
+                            key={index}
+                            onClick={() => setCurrentScenarioBasedQuestion(index)}
+                            className={`w-8 h-8 rounded-full text-sm font-medium relative transition-colors ${
+                              isCurrent
+                                ? 'bg-primary text-white ring-2 ring-primary ring-offset-2'
+                                : isAnswered
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-gray-100 text-gray-600'
+                            } ${isFlagged && !isCurrent ? 'border-2 border-amber-500' : ''}`}
+                            title={`Question ${index + 1}${isFlagged ? ' (Flagged)' : ''}${isAnswered ? ' (Answered)' : ' (Unanswered)'}`}
+                          >
+                            {index + 1}
+                            {isFlagged && (
+                              <Flag className="w-2.5 h-2.5 absolute -top-1 -right-1 text-amber-500 fill-amber-500" />
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
 
                     {currentScenarioBasedQuestion === scenarioBasedQuestions.length - 1 ? (
                       <Button
                         onClick={submitScenarioBasedTest}
-                        disabled={isSubmittingScenarioBased || !scenarioBasedAnswers[currentScenarioBasedQuestion]}
+                        disabled={isSubmittingScenarioBased}
                         className="bg-green-600 hover:bg-green-700"
                       >
                         {isSubmittingScenarioBased ? (
@@ -4433,7 +4522,6 @@ const PersonalizedAssessment = () => {
                             setCurrentScenarioBasedQuestion(currentScenarioBasedQuestion + 1);
                           }
                         }}
-                        disabled={!scenarioBasedAnswers[currentScenarioBasedQuestion]}
                       >
                         Next
                       </Button>
@@ -6507,13 +6595,14 @@ const PersonalizedAssessment = () => {
                                         })}
                                       </div>
                                       
-                                      {/* Fallback: Simple clickable links list */}
-                                      <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                                        <h6 className="text-sm font-semibold text-purple-800 mb-2">Quick Links:</h6>
-                                        <ul className="space-y-2">
+                                      {/* Fallback: YouTube videos with thumbnails */}
+                                      <div className="mt-4">
+                                        <h6 className="text-sm font-semibold text-purple-800 mb-3">Quick Links:</h6>
+                                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                                           {validCourses.map((course: any, linkIndex: number) => {
                                             const courseUrl = course?.url || '';
                                             const courseTitle = course?.title || 'YouTube Video';
+                                            const videoId = courseUrl ? getYouTubeVideoId(courseUrl) : null;
                                             const isYouTube = courseUrl && isYouTubeLink(courseUrl);
                                             const normalizedLinkUrl = isYouTube && courseUrl 
                                               ? normalizeYouTubeUrl(courseUrl) 
@@ -6521,25 +6610,89 @@ const PersonalizedAssessment = () => {
                                             
                                             if (!normalizedLinkUrl) return null;
                                             
+                                            // Get thumbnail URL
+                                            let thumbnailUrl = course?.thumbnail_url || null;
+                                            if (!thumbnailUrl && videoId) {
+                                              thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+                                            }
+                                            
+                                            const channel = course?.channel || null;
+                                            const duration = course?.duration || null;
+                                            
                                             return (
-                                              <li key={linkIndex} className="flex items-center gap-2">
-                                                <span className="text-purple-600">•</span>
-                                                <a
-                                                  href={normalizedLinkUrl}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className={`text-sm ${isYouTube ? 'text-red-600 hover:text-red-800' : 'text-purple-700 hover:text-purple-900'} hover:underline flex items-center gap-1`}
-                                                >
-                                                  {courseTitle}
-                                                  <ArrowRight className="w-3 h-3" />
-                                                </a>
-                                                {course?.duration && (
-                                                  <span className="text-xs text-gray-500">({course.duration})</span>
-                                                )}
-                                              </li>
+                                              <div
+                                                key={linkIndex}
+                                                className="group relative overflow-hidden bg-white border border-purple-200 rounded-lg shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer"
+                                                onClick={() => {
+                                                  if (normalizedLinkUrl) {
+                                                    window.open(normalizedLinkUrl, '_blank', 'noopener,noreferrer');
+                                                  }
+                                                }}
+                                              >
+                                                {/* Thumbnail Section */}
+                                                {thumbnailUrl && videoId ? (
+                                                  <div className="relative aspect-video overflow-hidden bg-gray-100">
+                                                    <img 
+                                                      src={thumbnailUrl} 
+                                                      alt={courseTitle}
+                                                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                      loading="lazy"
+                                                      onError={(e) => {
+                                                        const target = e.target as HTMLImageElement;
+                                                        if (videoId && !target.src.includes('hqdefault')) {
+                                                          target.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+                                                        } else if (videoId && target.src.includes('hqdefault')) {
+                                                          target.src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                                                        } else {
+                                                          target.style.display = 'none';
+                                                        }
+                                                      }}
+                                                    />
+                                                    {isYouTube && (
+                                                      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 group-hover:bg-opacity-10 transition-opacity">
+                                                        <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center opacity-90 group-hover:opacity-100">
+                                                          <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                                            <path d="M8 5v14l11-7z"/>
+                                                          </svg>
+                                                        </div>
+                                                      </div>
+                                                    )}
+                                                    {duration && (
+                                                      <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs font-semibold px-2 py-1 rounded">
+                                                        {duration}
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                ) : null}
+                                                
+                                                {/* Content Section */}
+                                                <div className="p-3">
+                                                  <h6 className="text-xs font-semibold text-gray-800 line-clamp-2 group-hover:text-purple-700 transition-colors mb-1">
+                                                    {courseTitle.length > 80 ? `${courseTitle.substring(0, 80)}...` : courseTitle}
+                                                  </h6>
+                                                  {channel && (
+                                                    <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                                                      <Users className="w-3 h-3" />
+                                                      {channel}
+                                                    </p>
+                                                  )}
+                                                  {isYouTube && normalizedLinkUrl && (
+                                                    <a 
+                                                      href={normalizedLinkUrl} 
+                                                      target="_blank" 
+                                                      rel="noopener noreferrer"
+                                                      onClick={(e) => e.stopPropagation()}
+                                                      className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-800 font-medium mt-2"
+                                                    >
+                                                      Watch on YouTube
+                                                      <ArrowRight className="w-3 h-3" />
+                                                    </a>
+                                                  )}
+                                                </div>
+                                              </div>
                                             );
                                           })}
-                                        </ul>
+                                        </div>
                                       </div>
                                     </div>
                                   );
@@ -7297,69 +7450,156 @@ const PersonalizedAssessment = () => {
                     <Button 
                       variant="outline"
                       onClick={() => {
-                        // Generate PDF content locally
-                        const score = interviewAnalysis?.overall_score || 75;
-                        const timeTaken = elapsedTime;
-                        
-                        const pdfContent = `
-                          # Personalized Assessment Report
+                        // Generate PDF using jsPDF
+                        try {
+                          const pdf = new jsPDF({
+                            orientation: 'portrait',
+                            unit: 'mm',
+                            format: 'a4'
+                          });
 
-                          ## Assessment Summary
-                          - **Score**: ${score}/100
-                          - **Assessment Type**: PERSONALIZED ASSESSMENT
-                          - **Time Taken**: ${Math.floor(timeTaken / 60)} minutes
-                          - **Date**: ${new Date().toLocaleDateString()}
-                          - **Suggested Role**: ${suggestedRole || 'Software Engineer'}
+                          const pageWidth = pdf.internal.pageSize.getWidth();
+                          const pageHeight = pdf.internal.pageSize.getHeight();
+                          let yPosition = 20;
+                          const margin = 20;
+                          const lineHeight = 7;
 
-                          ## Performance Analysis
-                          ${performanceGaps ? `
-                          ### Areas for Improvement
-                          ${performanceGaps.areas_for_improvement ? performanceGaps.areas_for_improvement.map((area: any, index: number) => 
-                            `${index + 1}. ${typeof area === 'string' ? area : area.title || area.area || JSON.stringify(area)}`
-                          ).join('\n') : 'No specific areas identified'}
+                          // Helper function to add text with word wrap
+                          const addText = (text: string, fontSize: number = 12, isBold: boolean = false, color: string = '#000000') => {
+                            pdf.setFontSize(fontSize);
+                            pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+                            pdf.setTextColor(color);
+                            
+                            const lines = pdf.splitTextToSize(text, pageWidth - 2 * margin);
+                            for (let i = 0; i < lines.length; i++) {
+                              if (yPosition > pageHeight - 20) {
+                                pdf.addPage();
+                                yPosition = 20;
+                              }
+                              pdf.text(lines[i], margin, yPosition);
+                              yPosition += lineHeight;
+                            }
+                            yPosition += 3;
+                          };
 
-                          ### Strengths
-                          ${performanceGaps.strengths ? performanceGaps.strengths.map((strength: any, index: number) => 
-                            `${index + 1}. ${typeof strength === 'string' ? strength : strength.title || strength.strength || JSON.stringify(strength)}`
-                          ).join('\n') : 'No specific strengths identified'}
-                          ` : ''}
+                          // Helper to strip markdown formatting
+                          const stripMarkdown = (text: string) => {
+                            return text
+                              .replace(/\*\*/g, '')
+                              .replace(/#{1,6}\s/g, '')
+                              .replace(/\*/g, '')
+                              .replace(/`/g, '')
+                              .trim();
+                          };
 
-                          ## Skill Recommendations
-                          ${skillRecommendations ? `
-                          ### Assessment Summary
-                          ${skillRecommendations.assessment_summary || 'No summary available'}
+                          // Header
+                          pdf.setFillColor(0, 210, 255);
+                          pdf.rect(0, 0, pageWidth, 15, 'F');
+                          pdf.setFontSize(24);
+                          pdf.setFont('helvetica', 'bold');
+                          pdf.setTextColor(255, 255, 255);
+                          pdf.text('Personalized Assessment Report', pageWidth / 2, 10, { align: 'center' });
 
-                          ### Learning Paths
-                          ${skillRecommendations.learning_paths ? skillRecommendations.learning_paths.map((path: any, index: number) => 
-                            `${index + 1}. ${typeof path === 'string' ? path : path.title || path.name || JSON.stringify(path)}`
-                          ).join('\n') : 'No learning paths available'}
+                          yPosition = 30;
 
-                          ### Practice Projects
-                          ${skillRecommendations.practice_projects ? skillRecommendations.practice_projects.map((project: any, index: number) => 
-                            `${index + 1}. ${typeof project === 'string' ? project : project.title || project.name || JSON.stringify(project)}`
-                          ).join('\n') : 'No practice projects available'}
-                          ` : ''}
+                          // Assessment Summary
+                          const score = interviewAnalysis?.overall_score || 75;
+                          const timeTaken = elapsedTime;
+                          
+                          addText('ASSESSMENT SUMMARY', 16, true, '#00D2FF');
+                          addText(`Score: ${score}/100`);
+                          addText(`Assessment Type: PERSONALIZED ASSESSMENT`);
+                          addText(`Time Taken: ${Math.floor(timeTaken / 60)} minutes ${timeTaken % 60} seconds`);
+                          addText(`Date: ${new Date().toLocaleDateString()}`);
+                          addText(`Suggested Role: ${suggestedRole || 'Software Engineer'}`);
 
-                          ## Next Steps
-                          1. Review the assessment results and identify areas for improvement
-                          2. Follow the recommended learning paths
-                          3. Practice with similar assessments
-                          4. Consider taking additional assessments to track progress
+                          yPosition += 5;
 
-                          ---
-                          Generated on ${new Date().toLocaleString()}
-                        `;
-                        
-                        // Create and download PDF
-                        const blob = new Blob([pdfContent], { type: 'text/plain' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `personalized-assessment-report-${new Date().toISOString().split('T')[0]}.txt`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
+                          // Performance Analysis
+                          if (performanceGaps) {
+                            addText('PERFORMANCE ANALYSIS', 16, true, '#00D2FF');
+                            
+                            if (performanceGaps.areas_for_improvement && performanceGaps.areas_for_improvement.length > 0) {
+                              addText('Areas for Improvement:', 14, true);
+                              performanceGaps.areas_for_improvement.forEach((area: any, index: number) => {
+                                const areaText = typeof area === 'string' ? area : area.title || area.area || JSON.stringify(area);
+                                addText(`${index + 1}. ${stripMarkdown(areaText)}`);
+                              });
+                              yPosition += 3;
+                            }
+
+                            if (performanceGaps.strengths && performanceGaps.strengths.length > 0) {
+                              addText('Strengths:', 14, true);
+                              performanceGaps.strengths.forEach((strength: any, index: number) => {
+                                const strengthText = typeof strength === 'string' ? strength : strength.title || strength.strength || JSON.stringify(strength);
+                                addText(`${index + 1}. ${stripMarkdown(strengthText)}`);
+                              });
+                              yPosition += 3;
+                            }
+                          }
+
+                          // Skill Recommendations
+                          if (skillRecommendations) {
+                            addText('SKILL RECOMMENDATIONS', 16, true, '#00D2FF');
+                            
+                            if (skillRecommendations.assessment_summary) {
+                              addText('Assessment Summary:', 14, true);
+                              addText(stripMarkdown(skillRecommendations.assessment_summary));
+                              yPosition += 3;
+                            }
+
+                            if (skillRecommendations.learning_paths && skillRecommendations.learning_paths.length > 0) {
+                              addText('Learning Paths:', 14, true);
+                              skillRecommendations.learning_paths.forEach((path: any, index: number) => {
+                                const pathText = typeof path === 'string' ? path : path.title || path.name || JSON.stringify(path);
+                                addText(`${index + 1}. ${stripMarkdown(pathText)}`);
+                                if (path.description) {
+                                  addText(`   ${stripMarkdown(path.description)}`, 10);
+                                }
+                              });
+                              yPosition += 3;
+                            }
+
+                            if (skillRecommendations.practice_projects && skillRecommendations.practice_projects.length > 0) {
+                              addText('Practice Projects:', 14, true);
+                              skillRecommendations.practice_projects.forEach((project: any, index: number) => {
+                                const projectText = typeof project === 'string' ? project : project.title || project.name || JSON.stringify(project);
+                                addText(`${index + 1}. ${stripMarkdown(projectText)}`);
+                                if (project.description) {
+                                  addText(`   ${stripMarkdown(project.description)}`, 10);
+                                }
+                              });
+                            }
+                          }
+
+                          // Next Steps
+                          yPosition += 5;
+                          addText('NEXT STEPS', 16, true, '#00D2FF');
+                          addText('1. Review the assessment results and identify areas for improvement');
+                          addText('2. Follow the recommended learning paths');
+                          addText('3. Practice with similar assessments');
+                          addText('4. Consider taking additional assessments to track progress');
+
+                          // Footer
+                          const totalPages = pdf.getNumberOfPages();
+                          for (let i = 1; i <= totalPages; i++) {
+                            pdf.setPage(i);
+                            pdf.setFontSize(10);
+                            pdf.setTextColor(128, 128, 128);
+                            pdf.text(
+                              `Generated on ${new Date().toLocaleString()} - Page ${i} of ${totalPages}`,
+                              pageWidth / 2,
+                              pageHeight - 10,
+                              { align: 'center' }
+                            );
+                          }
+
+                          // Download PDF
+                          pdf.save(`personalized-assessment-report-${new Date().toISOString().split('T')[0]}.pdf`);
+                        } catch (error) {
+                          console.error('Error generating PDF:', error);
+                          alert('Failed to generate PDF. Please try again.');
+                        }
                       }}
                       className="px-8 py-3"
                     >

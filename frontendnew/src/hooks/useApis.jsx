@@ -439,16 +439,67 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {string} test_type
  */
 /**
+ * @typedef {object} ForgotPasswordRequest
+ * @property {string} email
+ */
+/**
+ * @typedef {object} ForgotPasswordResponse
+ * @property {boolean} success
+ * @property {object} debug_token
+ */
+/**
+ * @typedef {object} GoogleLoginRequest
+ * @property {string} id_token
+ */
+/**
+ * @typedef {object} LinkedInLoginRequest
+ * @property {string} access_token
+ */
+/**
  * @typedef {object} LoginRequest
  * @property {string} email
  * @property {string} password
+ */
+/**
+ * @typedef {object} RefreshRequest
+ * @property {string} refresh_token
+ */
+/**
+ * @typedef {object} ResendVerificationResponse
+ * @property {boolean} success
+ */
+/**
+ * @typedef {object} ResetPasswordRequest
+ * @property {string} token
+ * @property {string} new_password
+ */
+/**
+ * @typedef {object} ResetPasswordResponse
+ * @property {boolean} success
+ * @property {string} message
+ */
+/**
+ * @typedef {object} RoleCreate
+ * @property {string} name
+ * @property {object} description
+ */
+/**
+ * @typedef {object} RoleOut
+ * @property {string} name
+ * @property {object} description
+ * @property {integer} id
+ */
+/**
+ * @typedef {object} RoleUpdate
+ * @property {object} name
+ * @property {object} description
  */
 /**
  * @typedef {object} TokenIntrospection
  * @property {boolean} active
  * @property {object} sub
  * @property {object} exp
- * @property {object} roles
+ * @property {string[]} roles
  */
 /**
  * @typedef {object} TokenPair
@@ -461,8 +512,6 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {string} email
  * @property {object} name
  * @property {object} phone
- * @property {object} is_active
- * @property {object} is_superuser
  * @property {string} password
  */
 /**
@@ -470,10 +519,23 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {string} email
  * @property {object} name
  * @property {object} phone
- * @property {object} is_active
- * @property {object} is_superuser
  * @property {integer} id
+ * @property {boolean} is_active
+ * @property {boolean} is_superuser
  * @property {string[]} roles
+ */
+/**
+ * @typedef {object} UserRoleUpdate
+ * @property {string[]} roles
+ */
+/**
+ * @typedef {object} VerifyEmailRequest
+ * @property {string} token
+ */
+/**
+ * @typedef {object} VerifyEmailResponse
+ * @property {boolean} success
+ * @property {string} message
  */
 /**
  * @typedef {object} CityCount
@@ -974,6 +1036,20 @@ async function apiClient(method, path, data = null, contentType = 'application/j
  * @property {InterviewType} interview_type
  * @property {InterviewMode} mode
  * @property {object} template_info
+ */
+/**
+ * @typedef {object} InterviewStartWithJobRequest
+ * @property {InterviewType} interview_type
+ * @property {string} job_description
+ * @property {object} job_title
+ * @property {DifficultyLevel} experience_level
+ * @property {object} preferred_language
+ * @property {InterviewMode} mode
+ * @property {IndustryType} industry
+ * @property {object} company_template
+ * @property {object} custom_instructions
+ * @property {object} user_id
+ * @property {ResumeDataSchema} resume_data
  */
 /**
  * @typedef {object} InterviewType
@@ -1583,13 +1659,25 @@ export const loginLoginPost = (options) => {
 };
 
 /**
- * @description Hook for /auth/refresh [POST]
- * @param {void} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<TokenPair, unknown, void>}
+ * @description Hook for /auth/token/refresh [POST]
+ * @param {RefreshRequest} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<TokenPair, unknown, RefreshRequest>}
  */
 export const refreshTokenRefreshPost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/auth/refresh', data),
+    mutationFn: (data) => apiClient('post', '/auth/token/refresh', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /auth/token/introspect [POST]
+ * @param {void} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<TokenIntrospection, unknown, void>}
+ */
+export const introspectTokenIntrospectPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/auth/token/introspect', data),
     ...options,
   });
 };
@@ -1598,8 +1686,8 @@ export const refreshTokenRefreshPost = (options) => {
  * @description Hook for /auth/me [GET]
  * @returns {import('@tanstack/react-query').QueryResult<UserOut>}
  */
-export const authMeMeGet = (options) => {
-  const queryKey = ['auth_me_me_get'];
+export const getMeMeGet = (options) => {
+  const queryKey = ['get_me_me_get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/auth/me'),
@@ -1608,13 +1696,171 @@ export const authMeMeGet = (options) => {
 };
 
 /**
- * @description Hook for /auth/introspect [POST]
- * @param {void} data The request body based on the OpenAPI specification.
- * @returns {import('@tanstack/react-query').MutationResult<TokenIntrospection, unknown, void>}
+ * @description Hook for /auth/login/google [POST]
+ * @param {GoogleLoginRequest} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<TokenPair, unknown, GoogleLoginRequest>}
  */
-export const introspectIntrospectPost = (options) => {
+export const loginGoogleLoginGooglePost = (options) => {
   return useMutation({
-    mutationFn: (data) => apiClient('post', '/auth/introspect', data),
+    mutationFn: (data) => apiClient('post', '/auth/login/google', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /auth/login/linkedin [POST]
+ * @param {LinkedInLoginRequest} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<TokenPair, unknown, LinkedInLoginRequest>}
+ */
+export const loginLinkedinLoginLinkedinPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/auth/login/linkedin', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /auth/verify-email [POST]
+ * @param {VerifyEmailRequest} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<VerifyEmailResponse, unknown, VerifyEmailRequest>}
+ */
+export const verifyEmailVerifyEmailPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/auth/verify-email', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /auth/resend-verification [POST]
+ * @param {void} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<ResendVerificationResponse, unknown, void>}
+ */
+export const resendVerificationResendVerificationPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/auth/resend-verification', data),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /auth/forgot-password [POST]
+ * @param {ForgotPasswordRequest} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<ForgotPasswordResponse, unknown, ForgotPasswordRequest>}
+ */
+export const forgotPasswordForgotPasswordPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/auth/forgot-password', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /auth/reset-password [POST]
+ * @param {ResetPasswordRequest} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<ResetPasswordResponse, unknown, ResetPasswordRequest>}
+ */
+export const resetPasswordResetPasswordPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/auth/reset-password', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /auth/users/{user_id}/roles [PUT]
+ * @param {UserRoleUpdate} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<UserOut, unknown, UserRoleUpdate>}
+ */
+export const updateUserRolesUsers_UserId_RolesPut = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('put', '/auth/users/{user_id}/roles', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /auth/users/{user_id}/roles/{role_name} [POST]
+ * @param {void} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<UserOut, unknown, void>}
+ */
+export const addRoleToUserUsers_UserId_Roles_RoleName_Post = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/auth/users/{user_id}/roles/{role_name}', data),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /auth/users/{user_id}/roles/{role_name} [DELETE]
+ * @param {void} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<UserOut, unknown, void>}
+ */
+export const removeRoleFromUserUsers_UserId_Roles_RoleName_Delete = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('delete', '/auth/users/{user_id}/roles/{role_name}', data),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /auth/roles [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<RoleOut[]>}
+ */
+export const listRolesRolesGet = (options) => {
+  const queryKey = ['list_roles_roles_get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/auth/roles'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /auth/roles [POST]
+ * @param {RoleCreate} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<RoleOut, unknown, RoleCreate>}
+ */
+export const createRoleRolesPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/auth/roles', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /auth/roles/{role_id} [GET]
+ * @returns {import('@tanstack/react-query').QueryResult<RoleOut>}
+ */
+export const getRoleRoles_RoleId_Get = (options) => {
+  const queryKey = ['get_role_roles__role_id__get'];
+  return useQuery({
+    queryKey,
+    queryFn: () => apiClient('get', '/auth/roles/{role_id}'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /auth/roles/{role_id} [PUT]
+ * @param {RoleUpdate} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<RoleOut, unknown, RoleUpdate>}
+ */
+export const updateRoleRoles_RoleId_Put = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('put', '/auth/roles/{role_id}', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
+ * @description Hook for /auth/roles/{role_id} [DELETE]
+ * @param {void} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<HTTPValidationError, unknown, void>}
+ */
+export const deleteRoleRoles_RoleId_Delete = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('delete', '/auth/roles/{role_id}', data),
     ...options,
   });
 };
@@ -1623,8 +1869,8 @@ export const introspectIntrospectPost = (options) => {
  * @description Hook for /auth/ [GET]
  * @returns {import('@tanstack/react-query').QueryResult<object>}
  */
-export const authRoot_Get = (options) => {
-  const queryKey = ['auth_root__get'];
+export const root_Get = (options) => {
+  const queryKey = ['root__get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/auth/'),
@@ -1636,8 +1882,8 @@ export const authRoot_Get = (options) => {
  * @description Hook for /auth/health [GET]
  * @returns {import('@tanstack/react-query').QueryResult<object>}
  */
-export const authHealthCheckHealthGet = (options) => {
-  const queryKey = ['auth_health_check_health_get'];
+export const healthCheckHealthGet = (options) => {
+  const queryKey = ['health_check_health_get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/auth/health'),
@@ -2392,6 +2638,18 @@ export const startInterviewV1InterviewStartPost = (options) => {
 };
 
 /**
+ * @description Hook for /interview/v1/interview/start-with-job [POST]
+ * @param {InterviewStartWithJobRequest} data The request body based on the OpenAPI specification.
+ * @returns {import('@tanstack/react-query').MutationResult<InterviewStartResponse, unknown, InterviewStartWithJobRequest>}
+ */
+export const startInterviewWithJobV1InterviewStartWithJobPost = (options) => {
+  return useMutation({
+    mutationFn: (data) => apiClient('post', '/interview/v1/interview/start-with-job', data, 'application/json'),
+    ...options,
+  });
+};
+
+/**
  * @description Hook for /interview/v1/interview/{session_id}/history [GET]
  * @returns {import('@tanstack/react-query').QueryResult<object>}
  */
@@ -2433,8 +2691,8 @@ export const getInterviewAnalysisV1InterviewAnalysis_SessionId_Get = (options) =
  * @description Hook for /interview/v1/analyze/health [GET]
  * @returns {import('@tanstack/react-query').QueryResult<object>}
  */
-export const analysisHealthV1AnalyzeHealthGet = (options) => {
-  const queryKey = ['analysis_health_v1_analyze_health_get'];
+export const interviewAnalysisHealthV1AnalyzeHealthGet = (options) => {
+  const queryKey = ['interview_analysis_health_v1_analyze_health_get'];
   return useQuery({
     queryKey,
     queryFn: () => apiClient('get', '/interview/v1/analyze/health'),

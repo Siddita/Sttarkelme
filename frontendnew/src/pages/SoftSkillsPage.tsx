@@ -20,6 +20,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from 'framer-motion';
 import { Navbar } from "@/components/ui/navbar-menu";
+import jsPDF from 'jspdf';
 import { 
   useGenerateBehavioralQuestions, 
   type AptitudeQuestion,
@@ -111,7 +112,7 @@ const SoftSkillsPage = () => {
   const [performanceGaps, setPerformanceGaps] = useState<any>(null);
   const [skillRecommendations, setSkillRecommendations] = useState<any>(null);
   const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState(false);
-  const [downloadedReport, setDownloadedReport] = useState<any>(null);
+  const [downloadedReport, setDownloadedReport] = useState<any>(null); // retained for compatibility, not shown
   const [generatedPdf, setGeneratedPdf] = useState<any>(null);
 
   // Quiz analysis hooks
@@ -228,77 +229,172 @@ const SoftSkillsPage = () => {
       const totalQuestions = quizQuestions.length;
       const answeredQuestions = Object.keys(userAnswers).length;
       
-      // For scenario-based questions, we'll use a more realistic scoring approach
-      // Since these are subjective, we'll give partial credit based on completion
-      const completionRate = answeredQuestions / totalQuestions;
+      // Evaluate ALL questions, not just the last one
+      const questionEvaluations: Array<{ question: string; answer: string; evaluation: string; score: number | null }> = [];
+      const scores: number[] = [];
       
-      // Base score on completion and some variation for realism
-      const baseScore = Math.floor(completionRate * 100);
-      const scoreVariation = Math.floor(Math.random() * 20) - 10; // ±10 points
-      const finalScore = Math.max(40, Math.min(95, baseScore + scoreVariation));
-      
-      // Calculate correct answers (for behavioral questions, this is more about completion)
-      const correctAnswers = Math.floor(answeredQuestions * (finalScore / 100));
-      const incorrectAnswers = answeredQuestions - correctAnswers;
-      
-      // Get evaluation from API for the last question
-      let evaluation = "Good performance on behavioral questions.";
-      let apiScore = null;
-      
-      try {
-        const lastQuestionId = Object.keys(userAnswers)[Object.keys(userAnswers).length - 1];
-        const lastAnswer = userAnswers[lastQuestionId];
-        const lastQuestion = quizQuestions.find(q => q.id === lastQuestionId);
-        
-        if (lastQuestion && lastAnswer !== undefined) {
-          console.log("Calling evaluate_behavioral endpoint with:", {
-            question: lastQuestion.question,
-            response: lastQuestion.options[lastAnswer] || "No answer provided"
-          });
+      // Evaluate each answered question
+      for (const [questionId, answerIndex] of Object.entries(userAnswers)) {
+        const question = quizQuestions.find(q => q.id === questionId);
+        if (question && answerIndex !== undefined) {
+          const answerText = question.options[answerIndex] || "No answer provided";
           
-          const response = await evaluateBehavioralResponse.mutateAsync({
-            question: lastQuestion.question,
-            response: lastQuestion.options[lastAnswer] || "No answer provided"
-          });
-          
-          console.log("Evaluation response:", response);
-          evaluation = response.evaluation || evaluation;
-          
-          // Extract score from evaluation text if available
-          const scoreMatch = evaluation.match(/Overall score[:\s]*(\d+)\/(\d+)/i);
-          if (scoreMatch) {
-            const scoreValue = parseInt(scoreMatch[1]);
-            const maxScore = parseInt(scoreMatch[2]);
-            apiScore = Math.round((scoreValue / maxScore) * 100);
-            console.log("Extracted API score:", apiScore, "from", scoreValue, "/", maxScore);
+          try {
+            console.log("Evaluating question:", question.question, "Answer:", answerText);
+            
+            const response = await evaluateScenarioBasedResponse.mutateAsync({
+              question: question.question,
+              response: answerText
+            });
+            
+            const evaluationText = response.evaluation || "";
+            console.log(`Raw evaluation text for question ${questionId}:`, evaluationText);
+            
+            questionEvaluations.push({
+              question: question.question,
+              answer: answerText,
+              evaluation: evaluationText,
+              score: null
+            });
+            
+            // Extract score from evaluation text
+            // Try multiple patterns to handle different API response formats
+            const scorePatterns = [
+              // "Score: 8" or "Score: 8/10" format (from main-api-service)
+              /^Score:\s*(\d+)(?:\/(\d+))?/im,
+              // "Overall score: X/10" format
+              /Overall score[:\s]*(\d+)\/(\d+)/i,
+              // "score: X/10" format
+              /score[:\s]*(\d+)\/(\d+)/i,
+              // "X/10" format anywhere
+              /(\d+)\/(\d+)/,
+              // "score: X" format
+              /score[:\s]*(\d+)/i,
+              // "X out of 10" format
+              /(\d+)\s*out\s*of\s*(\d+)/i,
+              // Just a number 0-10 at the start of a line
+              /^(\d+)(?:\s*\/\s*10)?$/m
+            ];
+            
+            let extractedScore: number | null = null;
+            for (const pattern of scorePatterns) {
+              const match = evaluationText.match(pattern);
+              if (match) {
+                const scoreValue = parseInt(match[1]);
+                const maxScore = match[2] ? parseInt(match[2]) : 10; // Default to 10 if not specified
+                if (!isNaN(scoreValue) && scoreValue >= 0 && scoreValue <= 10 && maxScore > 0) {
+                  extractedScore = Math.round((scoreValue / maxScore) * 100);
+                  console.log(`Extracted score using pattern ${pattern}: ${scoreValue}/${maxScore} = ${extractedScore}%`);
+                  break;
+                }
+              }
+            }
+            
+            if (extractedScore !== null) {
+              scores.push(extractedScore);
+              // Update the evaluation with the extracted score
+              questionEvaluations[questionEvaluations.length - 1].score = extractedScore;
+              console.log(`✓ Successfully extracted score for question ${questionId}: ${extractedScore}%`);
+            } else {
+              console.warn(`✗ Could not extract score from evaluation for question ${questionId}`);
+              console.warn(`Evaluation text was: "${evaluationText.substring(0, 200)}..."`);
+              // Try to find any number that might be a score
+              const anyNumberMatch = evaluationText.match(/\b([0-9]|10)\b/);
+              if (anyNumberMatch) {
+                const possibleScore = parseInt(anyNumberMatch[0]);
+                if (possibleScore >= 0 && possibleScore <= 10) {
+                  extractedScore = possibleScore * 10; // Convert to percentage
+                  scores.push(extractedScore);
+                  questionEvaluations[questionEvaluations.length - 1].score = extractedScore;
+                  console.log(`⚠ Using fallback score extraction: ${possibleScore}/10 = ${extractedScore}%`);
+                }
+              }
+            }
+          } catch (apiError) {
+            console.warn(`API evaluation failed for question ${questionId}:`, apiError);
+            questionEvaluations.push({
+              question: question.question,
+              answer: answerText,
+              evaluation: "Evaluation unavailable.",
+              score: null
+            });
           }
         }
-      } catch (apiError) {
-        console.warn("API evaluation failed, using default:", apiError);
       }
-
-      // Use API score if available, otherwise use calculated score
-      const finalPercentage = apiScore !== null ? apiScore : finalScore;
       
-      // Calculate "correct answers" based on API score quality
-      // For behavioral questions, this represents how many responses met quality standards
-      const finalCorrectAnswers = apiScore !== null 
-        ? Math.round((answeredQuestions * apiScore) / 100) // Convert percentage to actual count
-        : Math.round((answeredQuestions * finalScore) / 100);
+      // Calculate overall score based on all evaluations
+      let finalPercentage: number;
+      let evaluation: string;
+      let apiScoreUsed = false;
       
-      // Create results object with consistent scoring
+      if (scores.length > 0) {
+        // Use average of all scores
+        const averageScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+        finalPercentage = Math.round(averageScore);
+        apiScoreUsed = true;
+        
+        // Combine evaluations from all questions
+        evaluation = questionEvaluations.map((evalItem, index) => {
+          const scoreText = evalItem.score !== null ? ` (Score: ${evalItem.score}%)` : '';
+          return `Question ${index + 1}: ${evalItem.question}\nYour Answer: ${evalItem.answer}${scoreText}\n${evalItem.evaluation}`;
+        }).join('\n\n');
+        
+        console.log(`✓ Calculated overall score: ${finalPercentage}% from ${scores.length} evaluated questions`);
+      } else if (questionEvaluations.length > 0 && questionEvaluations.some(e => e.evaluation && e.evaluation !== "Evaluation unavailable.")) {
+        // We have evaluations but no scores extracted - estimate score based on evaluation content
+        // Look for positive/negative indicators in the evaluation text
+        let estimatedScore = 50; // Start with neutral score
+        const positiveIndicators = ['excellent', 'good', 'strong', 'well', 'clear', 'effective', 'appropriate', 'relevant'];
+        const negativeIndicators = ['poor', 'weak', 'unclear', 'lacks', 'missing', 'insufficient', 'needs improvement'];
+        
+        questionEvaluations.forEach(evalItem => {
+          const evalText = evalItem.evaluation.toLowerCase();
+          const positiveCount = positiveIndicators.filter(word => evalText.includes(word)).length;
+          const negativeCount = negativeIndicators.filter(word => evalText.includes(word)).length;
+          
+          if (positiveCount > negativeCount) {
+            estimatedScore += 15;
+          } else if (negativeCount > positiveCount) {
+            estimatedScore -= 15;
+          }
+        });
+        
+        // Clamp between 20-80% for estimated scores
+        finalPercentage = Math.max(20, Math.min(80, estimatedScore));
+        apiScoreUsed = false;
+        
+        // Combine evaluations from all questions
+        evaluation = questionEvaluations.map((evalItem, index) => {
+          return `Question ${index + 1}: ${evalItem.question}\nYour Answer: ${evalItem.answer}\n${evalItem.evaluation}`;
+        }).join('\n\n');
+        
+        console.warn(`⚠ No scores extracted, using estimated score: ${finalPercentage}% based on evaluation content`);
+      } else {
+        // Complete fallback: no evaluations or all failed
+        finalPercentage = Math.max(0, Math.min(30, Math.round((answeredQuestions / totalQuestions) * 30)));
+        evaluation = "Evaluation was not available for your responses. The API may be experiencing issues. Please try again.";
+        console.error("✗ No evaluations or scores available, using fallback score:", finalPercentage);
+      }
+      
+      // Calculate quality responses based on actual scores
+      // A "quality response" is one that scored >= 60%
+      const qualityThreshold = 60;
+      const qualityResponses = scores.filter(score => score >= qualityThreshold).length;
+      const finalCorrectAnswers = qualityResponses;
+      
+      // Create results object with accurate scoring
       const results = {
         score: finalPercentage,
         total_questions: totalQuestions,
         percentage: finalPercentage,
-        correct_answers: finalCorrectAnswers, // Quality responses based on API score
+        correct_answers: finalCorrectAnswers, // Quality responses (score >= 60%)
         questions_answered: answeredQuestions, // Total questions answered
-        incorrect_answers: answeredQuestions - finalCorrectAnswers, // Responses that didn't meet quality standards
+        incorrect_answers: answeredQuestions - finalCorrectAnswers, // Responses below quality threshold
         unanswered_questions: totalQuestions - answeredQuestions,
         time_taken: timeTaken,
-        detailed_results: [],
+        detailed_results: questionEvaluations,
         evaluation: evaluation,
-        api_score_used: apiScore !== null
+        api_score_used: apiScoreUsed
       };
 
       console.log("Assessment Results:", results);
@@ -735,10 +831,21 @@ const SoftSkillsPage = () => {
                                   name={`question-${quizQuestions[currentQuestionIndex]?.id}`}
                                   value={index}
                                   checked={userAnswers[quizQuestions[currentQuestionIndex]?.id] === index}
-                                  onChange={(e) => setUserAnswers(prev => ({
-                                    ...prev,
-                                    [quizQuestions[currentQuestionIndex]?.id]: parseInt(e.target.value)
-                                  }))}
+                                  onChange={(e) => {
+                                    const idx = parseInt(e.target.value);
+                                    setUserAnswers(prev => {
+                                      const current = prev[quizQuestions[currentQuestionIndex]?.id];
+                                      if (current === idx) {
+                                        const copy = { ...prev };
+                                        delete copy[quizQuestions[currentQuestionIndex]?.id];
+                                        return copy;
+                                      }
+                                      return {
+                                        ...prev,
+                                        [quizQuestions[currentQuestionIndex]?.id]: idx
+                                      };
+                                    });
+                                  }}
                                   className="w-4 h-4 text-primary"
                                 />
                                 <span className="text-sm">{typeof option === 'string' ? option : 'Option not available'}</span>
@@ -1459,49 +1566,7 @@ const SoftSkillsPage = () => {
                      </Card>
                    )}
 
-                   {/* Downloaded Report Display */}
-                   {downloadedReport && (
-                     <Card className="p-6 bg-gradient-card border-primary/10 mb-8">
-                       <h3 className="text-xl font-semibold mb-4 flex items-center">
-                         <FileText className="w-5 h-5 mr-2 text-blue-500" />
-                         Comprehensive Assessment Report
-                       </h3>
-                       <div className="max-h-96 overflow-y-auto">
-                         <div className="prose prose-sm max-w-none">
-                           <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded-lg border">
-                             {downloadedReport.report}
-                           </pre>
-                         </div>
-                       </div>
-                       <div className="mt-4 flex gap-2">
-                         <Button
-                           variant="outline"
-                           size="sm"
-                           onClick={() => {
-                             const blob = new Blob([downloadedReport.report], { type: 'text/plain' });
-                             const url = URL.createObjectURL(blob);
-                             const a = document.createElement('a');
-                             a.href = url;
-                             a.download = 'soft-skills-assessment-report.txt';
-                             document.body.appendChild(a);
-                             a.click();
-                             document.body.removeChild(a);
-                             URL.revokeObjectURL(url);
-                           }}
-                         >
-                           <Download className="w-4 h-4 mr-2" />
-                           Download as Text
-                         </Button>
-                         <Button
-                           variant="outline"
-                           size="sm"
-                           onClick={() => setDownloadedReport(null)}
-                         >
-                           Close
-                         </Button>
-                       </div>
-                     </Card>
-                   )}
+                 {/* Downloaded Report Display intentionally removed; report downloads directly */}
 
                    {/* Generated PDF Display */}
                    {generatedPdf && (
@@ -1557,22 +1622,42 @@ const SoftSkillsPage = () => {
                     {/* New Analysis Action Buttons */}
                     <Button 
                       variant="outline"
-                      onClick={() => {
+                      onClick={async () => {
+                        if (!performanceGaps && !skillRecommendations && !quizResults) {
+                          alert('Please generate results first, then try downloading.');
+                          return;
+                        }
                         const reportData = {
                           jobs: [], // Empty array as required by API
                           analysis: {
-                            assessment_results: quizResults,
-                            performance_gaps: performanceGaps,
-                            skill_recommendations: skillRecommendations,
+                            assessment_results: quizResults || {},
+                            performance_gaps: performanceGaps || {},
+                            skill_recommendations: skillRecommendations || {},
                             assessment_type: 'soft_skills',
                             timestamp: new Date().toISOString()
                           }
                         };
                         console.log('Report Data being sent:', reportData);
-                        downloadReport(reportData);
+                        try {
+                          const data = await downloadReport(reportData);
+                          const reportText = data?.report ? data.report : JSON.stringify(data ?? reportData, null, 2);
+                          const blob = new Blob([reportText], { type: 'text/plain' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = 'soft-skills-assessment-report.txt';
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          URL.revokeObjectURL(url);
+                        } catch (error: any) {
+                          console.error('Failed to download report:', error);
+                          const msg = error?.response?.message || error?.message || 'Failed to download report. Please try again.';
+                          alert(msg);
+                        }
                       }}
                       className="px-8 py-3"
-                      disabled={!performanceGaps && !skillRecommendations}
+                      disabled={!performanceGaps && !skillRecommendations && !quizResults}
                     >
                       <Download className="w-4 h-4 mr-2" />
                       Download Analysis Report
@@ -1581,70 +1666,158 @@ const SoftSkillsPage = () => {
                     <Button 
                       variant="outline"
                       onClick={() => {
-                        // Generate PDF content locally
-                        const score = quizResults?.percentage || 0;
-                        const total = quizResults?.total_questions || 0;
-                        const percentage = score;
-                        const timeTaken = quizResults?.time_taken || 0;
-                        
-                        const pdfContent = `
-# Soft Skills Assessment Report
+                        // Generate PDF using jsPDF
+                        try {
+                          const pdf = new jsPDF({
+                            orientation: 'portrait',
+                            unit: 'mm',
+                            format: 'a4'
+                          });
 
-## Assessment Summary
-- **Score**: ${score}%
-- **Assessment Type**: SOFT SKILLS
-- **Time Taken**: ${Math.floor(timeTaken / 60)} minutes
-- **Date**: ${new Date().toLocaleDateString()}
+                          const pageWidth = pdf.internal.pageSize.getWidth();
+                          const pageHeight = pdf.internal.pageSize.getHeight();
+                          let yPosition = 20;
+                          const margin = 20;
+                          const lineHeight = 7;
 
-## Performance Analysis
-${performanceGaps ? `
-### Areas for Improvement
-${performanceGaps.areas_for_improvement ? performanceGaps.areas_for_improvement.map((area: any, index: number) => 
-  `${index + 1}. ${typeof area === 'string' ? area : area.title || area.area || JSON.stringify(area)}`
-).join('\n') : 'No specific areas identified'}
+                          // Helper function to add text with word wrap
+                          const addText = (text: string, fontSize: number = 12, isBold: boolean = false, color: string = '#000000') => {
+                            pdf.setFontSize(fontSize);
+                            pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+                            pdf.setTextColor(color);
+                            
+                            const lines = pdf.splitTextToSize(text, pageWidth - 2 * margin);
+                            for (let i = 0; i < lines.length; i++) {
+                              if (yPosition > pageHeight - 20) {
+                                pdf.addPage();
+                                yPosition = 20;
+                              }
+                              pdf.text(lines[i], margin, yPosition);
+                              yPosition += lineHeight;
+                            }
+                            yPosition += 3;
+                          };
 
-### Strengths
-${performanceGaps.strengths ? performanceGaps.strengths.map((strength: any, index: number) => 
-  `${index + 1}. ${typeof strength === 'string' ? strength : strength.title || strength.strength || JSON.stringify(strength)}`
-).join('\n') : 'No specific strengths identified'}
-` : ''}
+                          // Helper to strip markdown formatting
+                          const stripMarkdown = (text: string) => {
+                            return text
+                              .replace(/\*\*/g, '')
+                              .replace(/#{1,6}\s/g, '')
+                              .replace(/\*/g, '')
+                              .replace(/`/g, '')
+                              .trim();
+                          };
 
-## Skill Recommendations
-${skillRecommendations ? `
-### Assessment Summary
-${skillRecommendations.assessment_summary || 'No summary available'}
+                          // Header
+                          pdf.setFillColor(0, 210, 255);
+                          pdf.rect(0, 0, pageWidth, 15, 'F');
+                          pdf.setFontSize(24);
+                          pdf.setFont('helvetica', 'bold');
+                          pdf.setTextColor(255, 255, 255);
+                          pdf.text('Soft Skills Assessment Report', pageWidth / 2, 10, { align: 'center' });
 
-### Learning Paths
-${skillRecommendations.learning_paths ? skillRecommendations.learning_paths.map((path: any, index: number) => 
-  `${index + 1}. ${typeof path === 'string' ? path : path.title || path.name || JSON.stringify(path)}`
-).join('\n') : 'No learning paths available'}
+                          yPosition = 30;
 
-### Practice Projects
-${skillRecommendations.practice_projects ? skillRecommendations.practice_projects.map((project: any, index: number) => 
-  `${index + 1}. ${typeof project === 'string' ? project : project.title || project.name || JSON.stringify(project)}`
-).join('\n') : 'No practice projects available'}
-` : ''}
+                          // Assessment Summary
+                          const score = quizResults?.percentage || 0;
+                          const total = quizResults?.total_questions || 0;
+                          const timeTaken = quizResults?.time_taken || 0;
+                          
+                          addText('ASSESSMENT SUMMARY', 16, true, '#00D2FF');
+                          addText(`Score: ${score}%`);
+                          addText(`Assessment Type: SOFT SKILLS`);
+                          addText(`Questions Answered: ${quizResults?.questions_answered || 0} out of ${total}`);
+                          addText(`Quality Responses: ${quizResults?.correct_answers || 0}`);
+                          addText(`Time Taken: ${Math.floor(timeTaken / 60)} minutes ${timeTaken % 60} seconds`);
+                          addText(`Date: ${new Date().toLocaleDateString()}`);
 
-## Next Steps
-1. Review the assessment results and identify areas for improvement
-2. Follow the recommended learning paths
-3. Practice with similar questions
-4. Consider taking additional assessments to track progress
+                          yPosition += 5;
 
----
-Generated on ${new Date().toLocaleString()}
-                        `;
-                        
-                        // Create and download PDF
-                        const blob = new Blob([pdfContent], { type: 'text/plain' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `soft-skills-assessment-report-${new Date().toISOString().split('T')[0]}.txt`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
+                          // Performance Analysis
+                          if (performanceGaps) {
+                            addText('PERFORMANCE ANALYSIS', 16, true, '#00D2FF');
+                            
+                            if (performanceGaps.areas_for_improvement && performanceGaps.areas_for_improvement.length > 0) {
+                              addText('Areas for Improvement:', 14, true);
+                              performanceGaps.areas_for_improvement.forEach((area: any, index: number) => {
+                                const areaText = typeof area === 'string' ? area : area.title || area.area || JSON.stringify(area);
+                                addText(`${index + 1}. ${stripMarkdown(areaText)}`);
+                              });
+                              yPosition += 3;
+                            }
+
+                            if (performanceGaps.strengths && performanceGaps.strengths.length > 0) {
+                              addText('Strengths:', 14, true);
+                              performanceGaps.strengths.forEach((strength: any, index: number) => {
+                                const strengthText = typeof strength === 'string' ? strength : strength.title || strength.strength || JSON.stringify(strength);
+                                addText(`${index + 1}. ${stripMarkdown(strengthText)}`);
+                              });
+                              yPosition += 3;
+                            }
+                          }
+
+                          // Skill Recommendations
+                          if (skillRecommendations) {
+                            addText('SKILL RECOMMENDATIONS', 16, true, '#00D2FF');
+                            
+                            if (skillRecommendations.assessment_summary) {
+                              addText('Assessment Summary:', 14, true);
+                              addText(stripMarkdown(skillRecommendations.assessment_summary));
+                              yPosition += 3;
+                            }
+
+                            if (skillRecommendations.learning_paths && skillRecommendations.learning_paths.length > 0) {
+                              addText('Learning Paths:', 14, true);
+                              skillRecommendations.learning_paths.forEach((path: any, index: number) => {
+                                const pathText = typeof path === 'string' ? path : path.title || path.name || JSON.stringify(path);
+                                addText(`${index + 1}. ${stripMarkdown(pathText)}`);
+                                if (path.description) {
+                                  addText(`   ${stripMarkdown(path.description)}`, 10);
+                                }
+                              });
+                              yPosition += 3;
+                            }
+
+                            if (skillRecommendations.practice_projects && skillRecommendations.practice_projects.length > 0) {
+                              addText('Practice Projects:', 14, true);
+                              skillRecommendations.practice_projects.forEach((project: any, index: number) => {
+                                const projectText = typeof project === 'string' ? project : project.title || project.name || JSON.stringify(project);
+                                addText(`${index + 1}. ${stripMarkdown(projectText)}`);
+                                if (project.description) {
+                                  addText(`   ${stripMarkdown(project.description)}`, 10);
+                                }
+                              });
+                            }
+                          }
+
+                          // Next Steps
+                          yPosition += 5;
+                          addText('NEXT STEPS', 16, true, '#00D2FF');
+                          addText('1. Review the assessment results and identify areas for improvement');
+                          addText('2. Follow the recommended learning paths');
+                          addText('3. Practice with similar questions');
+                          addText('4. Consider taking additional assessments to track progress');
+
+                          // Footer
+                          const totalPages = pdf.getNumberOfPages();
+                          for (let i = 1; i <= totalPages; i++) {
+                            pdf.setPage(i);
+                            pdf.setFontSize(10);
+                            pdf.setTextColor(128, 128, 128);
+                            pdf.text(
+                              `Generated on ${new Date().toLocaleString()} - Page ${i} of ${totalPages}`,
+                              pageWidth / 2,
+                              pageHeight - 10,
+                              { align: 'center' }
+                            );
+                          }
+
+                          // Download PDF
+                          pdf.save(`soft-skills-assessment-report-${new Date().toISOString().split('T')[0]}.pdf`);
+                        } catch (error) {
+                          console.error('Error generating PDF:', error);
+                          alert('Failed to generate PDF. Please try again.');
+                        }
                       }}
                       className="px-8 py-3"
                     >

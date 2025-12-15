@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authMeMeGet } from '@/hooks/useApis';
+import { getMeMeGet } from '@/hooks/useApis';
 
 interface User {
   id: string;
@@ -20,6 +20,18 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
+    // During HMR, components might render before providers are ready
+    // Provide a fallback to prevent crashes during development
+    if (import.meta.env.DEV) {
+      console.warn('useAuth called outside AuthProvider - this may be due to HMR. Providing fallback.');
+      return {
+        user: null,
+        isAuthenticated: false,
+        isLoading: true,
+        login: () => {},
+        logout: () => {},
+      };
+    }
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
@@ -30,7 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch user info when authenticated - completely disabled to prevent automatic calls
-  const { data: userInfo, refetch: refetchUserInfo } = authMeMeGet({
+  const { data: userInfo, refetch: refetchUserInfo } = getMeMeGet({
     enabled: false,
     retry: false,
     refetchOnWindowFocus: false,

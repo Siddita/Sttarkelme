@@ -30,6 +30,8 @@ import InterviewPage from "./pages/InterviewPage";
 import Quiz from "./pages/Quiz";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
+import GoogleCallback from "./pages/GoogleCallback";
+import LinkedInCallback from "./pages/LinkedInCallback";
 import PersonalizedAssessment from "./pages/PersonalizedAssessment.tsx";
 import AssessmentAnalysis from "./pages/AssessmentAnalysis";
 import CodingRoundPage from "./pages/CodingRoundPage";
@@ -131,6 +133,8 @@ const App = () => {
               <Route path="/writing-test" element={<WritingTestPage />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/auth/google/callback" element={<GoogleCallback />} />
+              <Route path="/auth/linkedin/callback" element={<LinkedInCallback />} />
 
               {/* ----- Dashboard routes (with sidebar) ----- */}
               <Route element={<DashboardLayout />}>

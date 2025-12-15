@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useAuth } from "@/contexts/AuthContext";
+import { useAvatar } from "@/hooks/useAvatar";
 
 
 
@@ -70,6 +71,7 @@ export default function Sidebar() {
   const pathname = location.pathname
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const avatarUrl = useAvatar(); // Get avatar from API, localStorage, or fallback
 
   return (
     <>
@@ -112,7 +114,6 @@ export default function Sidebar() {
                   const Icon = item.icon
                   const isActive = pathname === item.href
                   return (
-                    <>
                       <Link
                         key={item.href}
                         to={item.href}
@@ -128,7 +129,6 @@ export default function Sidebar() {
                         />
                         <span className="font-semibold text-sm md:text-base">{item.label}</span>
                       </Link>
-                    </>
                   )
                 })}
               </nav>
@@ -139,9 +139,9 @@ export default function Sidebar() {
             <div className="mb-3 p-2 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl border border-blue-100">
               <div className="flex items-center gap-2">
                 <Avatar className="w-8 h-8 ring-1 ring-blue-200 flex-shrink-0">
-                  <AvatarImage src="/professional-headshot.png" alt="Alex Chen" />
+                  <AvatarImage src={avatarUrl} alt={user?.name || "User"} />
                   <AvatarFallback className="bg-gradient-to-br from-blue-600 to-blue-700 text-white font-bold text-xs">
-                    AC
+                    {(user?.name || "U").split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
@@ -158,7 +158,6 @@ export default function Sidebar() {
                 const Icon = item.icon
                 const isActive = pathname === item.href
                 return (
-                  <>
                     <Link
                       key={item.href}
                       to={item.href}
@@ -174,8 +173,6 @@ export default function Sidebar() {
                       />
                       <span className="font-medium truncate">{item.label}</span>
                     </Link>
-                  
-                  </>
                 )
               })}
             </nav>

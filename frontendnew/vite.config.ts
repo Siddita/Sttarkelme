@@ -26,6 +26,11 @@ export default defineConfig(({ mode }) => ({
         changeOrigin: true,
         secure: true,
       },
+      '/profile': {
+        target: process.env.VITE_API_BASE_URL || 'https://talentcueai.com',
+        changeOrigin: true,
+        secure: true,
+      },
       '/api': {
         target: process.env.VITE_API_BASE_URL || 'https://talentcueai.com',
         changeOrigin: true,

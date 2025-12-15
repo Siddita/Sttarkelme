@@ -14,7 +14,9 @@ export default function SettingsPage() {
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Settings</h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">Manage your account preferences and privacy settings</p>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">
+            Manage your account preferences and privacy settings
+          </p>
         </div>
       </div>
 

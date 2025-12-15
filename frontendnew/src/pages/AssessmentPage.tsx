@@ -31,6 +31,7 @@ import {
   generateQuestionV1CodingGenerateQuestionPost
 } from "@/hooks/useApis";
 import { analyticsService, AssessmentResult } from "@/services/analyticsService";
+import jsPDF from "jspdf";
 
 interface Question {
   id: number;
@@ -74,6 +75,8 @@ const AssessmentPage = () => {
   const [retryCount, setRetryCount] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  // Track flagged questions for review
+  const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set());
   
   // New analysis results state
   const [performanceGaps, setPerformanceGaps] = useState<any>(null);
@@ -81,6 +84,7 @@ const AssessmentPage = () => {
   const [isGeneratingAnalysis, setIsGeneratingAnalysis] = useState(false);
   const [downloadedReport, setDownloadedReport] = useState<any>(null);
   const [generatedPdf, setGeneratedPdf] = useState<any>(null);
+const [isDownloadingReport, setIsDownloadingReport] = useState(false);
   
   // Profile form state for coding assessment
   const [showProfileForm, setShowProfileForm] = useState(false);
@@ -108,11 +112,63 @@ const AssessmentPage = () => {
     return data;
   };
 
+  // Render YouTube-style course cards with thumbnail/link
+  const renderCourseGrid = (courses: any[]) => (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {courses.map((course, idx) => {
+        const url = course?.url || '';
+        const title = course?.title || 'YouTube Video';
+        const thumb = course?.thumbnail_url || '';
+        const channel = course?.channel;
+        const duration = course?.duration;
+        if (!url) return null;
+        return (
+          <div
+            key={idx}
+            className="bg-white border border-purple-200 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition"
+          >
+            {thumb ? (
+              <a href={url} target="_blank" rel="noreferrer">
+                <img
+                  src={thumb}
+                  alt={title}
+                  className="w-full aspect-video object-cover"
+                  loading="lazy"
+                />
+              </a>
+            ) : null}
+            <div className="p-3">
+              <a
+                href={url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm font-semibold text-purple-800 hover:underline line-clamp-2"
+              >
+                {title}
+              </a>
+              {(channel || duration) && (
+                <p className="text-xs text-gray-600 mt-1">
+                  {channel ? channel : ''} {channel && duration ? '•' : ''} {duration ? duration : ''}
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   // Helper function to format JSON objects as readable content
   const formatJsonContent = (content: any) => {
     const parsed = parseJsonSafely(content);
     
     if (Array.isArray(parsed)) {
+      const looksLikeCourses = parsed.some(
+        (item) => item && typeof item === 'object' && (item.url || item.thumbnail_url)
+      );
+      if (looksLikeCourses) {
+        return renderCourseGrid(parsed);
+      }
       return (
         <ul className="space-y-2">
           {parsed.map((item, index) => (
@@ -132,14 +188,24 @@ const AssessmentPage = () => {
             <div key={key} className="p-3 bg-gray-50 rounded-lg">
               <h5 className="font-semibold text-sm mb-2 capitalize">{key.replace(/_/g, ' ')}</h5>
               {Array.isArray(value) ? (
-                <ul className="space-y-1">
-                  {value.map((item, index) => (
-                    <li key={index} className="flex items-start gap-2">
-                      <span className="text-xs mt-1 text-primary">•</span>
-                      <span className="text-sm">{typeof item === 'string' ? item : JSON.stringify(item)}</span>
-                    </li>
-                  ))}
-                </ul>
+                (() => {
+                  const looksLikeCourses = value.some(
+                    (item) => item && typeof item === 'object' && (item.url || item.thumbnail_url)
+                  );
+                  if (looksLikeCourses) {
+                    return renderCourseGrid(value);
+                  }
+                  return (
+                    <ul className="space-y-1">
+                      {value.map((item, index) => (
+                        <li key={index} className="flex items-start gap-2">
+                          <span className="text-xs mt-1 text-primary">•</span>
+                          <span className="text-sm">{typeof item === 'string' ? item : JSON.stringify(item)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  );
+                })()
               ) : (
                 <p className="text-sm">{typeof value === 'string' ? value : JSON.stringify(value)}</p>
               )}
@@ -708,43 +774,18 @@ const AssessmentPage = () => {
       console.log(`📊 Summary: ${answeredCount}/${answers.length} questions appear to be answered`);
       console.log('🔍 If this doesn\'t match what you see, there\'s a bug in the answer extraction logic');
       
+      // Skipping is allowed: log unanswered but don't block submission
       const unansweredQuestions = answers.filter((answer, index) => {
-        // Consider 0 as a valid answer (it could be option A)
         const isUnanswered = (answer === '' || answer === null || answer === undefined) && answer !== 0;
         if (isUnanswered) {
-          console.log(`❌ Question ${index + 1} (ID: ${questions[index]?.id}) is unanswered:`, answer);
+          console.log(`⚠️ Question ${index + 1} (ID: ${questions[index]?.id}) is unanswered (skipping allowed).`);
         } else {
-          console.log(`✅ Question ${index + 1} (ID: ${questions[index]?.id}) is answered:`, answer);
+          console.log(`✅ Question ${index + 1} (ID: ${questions[index]?.id}) is answered.`);
         }
         return isUnanswered;
       });
       
-      console.log(`📊 Answer Summary: ${answers.length} total, ${unansweredQuestions.length} unanswered`);
-      
-      if (unansweredQuestions.length > 0) {
-        // Show detailed error with specific question information
-        const unansweredDetails = unansweredQuestions.map((_, index) => {
-          const originalIndex = answers.findIndex((answer, i) => i === index && (answer === '' || answer === null || answer === undefined));
-          return `Question ${originalIndex + 1}`;
-        });
-        
-        // TEMPORARY: Add a bypass button for debugging
-        console.log('🚨 VALIDATION BYPASS AVAILABLE - Check if this is a false positive');
-        console.log('If you believe all questions are answered, this might be a bug.');
-        
-        // For now, let's be more lenient and only block if we're really sure questions are unanswered
-        const definitelyUnanswered = answers.filter(answer => 
-          answer === '' || answer === null || answer === undefined
-        );
-        
-        if (definitelyUnanswered.length === 0) {
-          console.log('⚠️ Bypassing validation - all questions appear to have answers');
-          // Continue with the assessment submission
-        } else {
-          setApiError(`Please answer all questions before submitting. ${unansweredQuestions.length} question(s) remain unanswered: ${unansweredDetails.join(', ')}. Check console for detailed debugging information.`);
-          return;
-        }
-      }
+      console.log(`📊 Answer Summary: ${answers.length} total, ${unansweredQuestions.length} unanswered (skips allowed)`);
       
       // Convert user answers to option letters (A, B, C, D)
       const selectedOptions = answers.map((answer, index) => {
@@ -756,11 +797,11 @@ const AssessmentPage = () => {
           answerType: typeof answer
         });
         
-        // Check if answer is empty or not provided (but allow 0 as valid answer)
+        // Allow unanswered/skipped questions (return null); 0 is a valid option index
         if (answer === '' || answer === null || answer === undefined) {
           console.warn(`Question ${index} is unanswered:`, answer);
-          setApiError(`Question ${index + 1} is not answered. Please answer all questions.`);
-          return null; // This will cause validation to fail
+          // Allow skips but backend requires A-D; use placeholder 'A' and log
+          return 'A';
         }
         
         // Log successful answer extraction
@@ -814,15 +855,11 @@ const AssessmentPage = () => {
         return null;
       });
       
-      // Check if any conversion failed
-      if (selectedOptions.some(option => option === null)) {
-        return; // Error already set above
-      }
-      
-      // Validate that all selected options are valid letters (A, B, C, D)
-      const validOptions = selectedOptions.every(option => /^[A-D]$/.test(option));
-      if (!validOptions) {
-        const invalidOptions = selectedOptions.filter(option => !/^[A-D]$/.test(option));
+      // Validate only provided options; allow null/undefined for skipped questions
+      const invalidOptions = selectedOptions.filter(
+        option => option !== null && option !== undefined && option !== '' && !/^[A-D]$/.test(option)
+      );
+      if (invalidOptions.length > 0) {
         console.error('Invalid selected options found:', invalidOptions);
         setApiError(`Invalid answer format. Expected A, B, C, or D, but got: ${invalidOptions.join(', ')}`);
         return;
@@ -923,20 +960,16 @@ const AssessmentPage = () => {
 
   const handleAnswer = (answer: any) => {
     const questionId = questions[assessmentState.currentQuestion].id;
-    console.log('💾 Storing answer:', {
-      questionId,
-      answer,
-      currentQuestion: assessmentState.currentQuestion,
-      question: questions[assessmentState.currentQuestion]?.question,
-      allStoredAnswers: assessmentState.answers
-    });
     setAssessmentState(prev => {
-      const newAnswers = { ...prev.answers, [questionId]: answer };
-      console.log('✅ Updated answers:', newAnswers);
-      return {
-      ...prev,
-        answers: newAnswers
-      };
+      const existing = prev.answers[questionId];
+      const newAnswers = { ...prev.answers };
+      if (existing === answer) {
+        // Unselect if same option clicked again
+        delete newAnswers[questionId];
+      } else {
+        newAnswers[questionId] = answer;
+      }
+      return { ...prev, answers: newAnswers };
     });
   };
 
@@ -956,8 +989,18 @@ const AssessmentPage = () => {
 
 
   const handleFlagQuestion = () => {
-    // In a real app, this would mark the question for review
-    console.log('Question flagged for review');
+    const currentQIndex = assessmentState.currentQuestion;
+    setFlaggedQuestions(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(currentQIndex)) {
+        newSet.delete(currentQIndex);
+        console.log(`Question ${currentQIndex + 1} unflagged`);
+      } else {
+        newSet.add(currentQIndex);
+        console.log(`Question ${currentQIndex + 1} flagged for review`);
+      }
+      return newSet;
+    });
   };
 
   const handleAddSkill = () => {
@@ -1486,49 +1529,7 @@ const AssessmentPage = () => {
             </Card>
           )}
 
-          {/* Downloaded Report Display */}
-          {downloadedReport && (
-            <Card className="p-6 bg-gradient-card border-primary/10 mb-8">
-              <h3 className="text-xl font-semibold mb-4 flex items-center">
-                <FileText className="w-5 h-5 mr-2 text-blue-500" />
-                Comprehensive Assessment Report
-              </h3>
-              <div className="max-h-96 overflow-y-auto">
-                <div className="prose prose-sm max-w-none">
-                  <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded-lg border">
-                    {downloadedReport.report}
-                  </pre>
-                </div>
-              </div>
-              <div className="mt-4 flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const blob = new Blob([downloadedReport.report], { type: 'text/plain' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'assessment-report.txt';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                  }}
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Download as Text
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setDownloadedReport(null)}
-                >
-                  Close
-                </Button>
-              </div>
-            </Card>
-          )}
+                {/* Downloaded Report Display intentionally removed; report downloads directly */}
 
           {/* Generated PDF Display */}
           {generatedPdf && (
@@ -1629,94 +1630,194 @@ const AssessmentPage = () => {
                 {/* New Analysis Action Buttons */}
                 <Button 
                   variant="outline"
-                  onClick={() => {
+                  onClick={async () => {
+                    if (!performanceGaps && !skillRecommendations && !testResults) {
+                      alert('Please generate results first, then try downloading.');
+                      return;
+                    }
+                    setIsDownloadingReport(true);
                     const reportData = {
                       jobs: [], // Empty array as required by API
                       analysis: {
-                        assessment_results: testResults,
-                        performance_gaps: performanceGaps,
-                        skill_recommendations: skillRecommendations,
+                        assessment_results: testResults || {},
+                        performance_gaps: performanceGaps || {},
+                        skill_recommendations: skillRecommendations || {},
                         assessment_type: assessmentType,
                         timestamp: new Date().toISOString()
                       }
                     };
                     console.log('Report Data being sent:', reportData);
-                    downloadReport(reportData);
+                    try {
+                      const data = await downloadReport(reportData);
+                      const reportText = data?.report ? data.report : JSON.stringify(data ?? reportData, null, 2);
+                      const blob = new Blob([reportText], { type: 'text/plain' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${assessmentType}-assessment-report.txt`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    } catch (error: any) {
+                      console.error('Failed to download report:', error);
+                      const msg = error?.response?.message || error?.message || 'Failed to download report. Please try again.';
+                      alert(msg);
+                    } finally {
+                      setIsDownloadingReport(false);
+                    }
                   }}
                   className="px-8 py-3"
-                  disabled={!performanceGaps && !skillRecommendations}
+                  disabled={isDownloadingReport || (!performanceGaps && !skillRecommendations && !testResults)}
                 >
                   <Download className="w-4 h-4 mr-2" />
-                  Download Analysis Report
+                  {isDownloadingReport ? 'Downloading...' : 'Download Analysis Report'}
                 </Button>
                 
                  <Button 
                    variant="outline"
                    onClick={() => {
-                     // Generate PDF content locally
-                     const score = testResults?.score || assessmentState.score || 0;
-                     const total = testResults?.total || questions.length || 0;
-                     const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
-                     const timeTaken = testResults?.time_taken || (assessmentStartTime ? Math.round((Date.now() - assessmentStartTime) / 1000) : 0);
-                     
-                     const pdfContent = `
-# Assessment Report
+                     try {
+                       const pdf = new jsPDF({
+                         orientation: "portrait",
+                         unit: "mm",
+                         format: "a4"
+                       });
 
-## Assessment Summary
-- **Score**: ${score}/${total} (${percentage}%)
-- **Assessment Type**: ${assessmentType.toUpperCase()}
-- **Time Taken**: ${Math.round(timeTaken / 60)} minutes
-- **Date**: ${new Date().toLocaleDateString()}
+                       const pageWidth = pdf.internal.pageSize.getWidth();
+                       const pageHeight = pdf.internal.pageSize.getHeight();
+                       let yPosition = 20;
+                       const margin = 20;
+                       const lineHeight = 7;
 
-## Performance Analysis
-${performanceGaps ? `
-### Areas for Improvement
-${performanceGaps.areas_for_improvement ? performanceGaps.areas_for_improvement.map((area: any, index: number) => 
-  `${index + 1}. ${typeof area === 'string' ? area : area.title || area.area || JSON.stringify(area)}`
-).join('\n') : 'No specific areas identified'}
+                       const addText = (text: string, fontSize = 12, isBold = false, color = "#000000") => {
+                         pdf.setFontSize(fontSize);
+                         pdf.setFont("helvetica", isBold ? "bold" : "normal");
+                         pdf.setTextColor(color);
+                         
+                         const lines = pdf.splitTextToSize(text, pageWidth - 2 * margin);
+                         for (let i = 0; i < lines.length; i++) {
+                           if (yPosition > pageHeight - 20) {
+                             pdf.addPage();
+                             yPosition = 20;
+                           }
+                           pdf.text(lines[i], margin, yPosition);
+                           yPosition += lineHeight;
+                         }
+                         yPosition += 3;
+                       };
 
-### Strengths
-${performanceGaps.strengths ? performanceGaps.strengths.map((strength: any, index: number) => 
-  `${index + 1}. ${typeof strength === 'string' ? strength : strength.title || strength.strength || JSON.stringify(strength)}`
-).join('\n') : 'No specific strengths identified'}
-` : ''}
+                       const stripMarkdown = (text: string) =>
+                         text
+                           .replace(/\*\*/g, "")
+                           .replace(/#{1,6}\s/g, "")
+                           .replace(/\*/g, "")
+                           .replace(/`/g, "")
+                           .trim();
 
-## Skill Recommendations
-${skillRecommendations ? `
-### Assessment Summary
-${skillRecommendations.assessment_summary || 'No summary available'}
+                       // Header
+                       pdf.setFillColor(0, 210, 255);
+                       pdf.rect(0, 0, pageWidth, 15, "F");
+                       pdf.setFontSize(22);
+                       pdf.setFont("helvetica", "bold");
+                       pdf.setTextColor(255, 255, 255);
+                       pdf.text("Assessment Report", pageWidth / 2, 10, { align: "center" });
 
-### Learning Paths
-${skillRecommendations.learning_paths ? skillRecommendations.learning_paths.map((path: any, index: number) => 
-  `${index + 1}. ${typeof path === 'string' ? path : path.title || path.name || JSON.stringify(path)}`
-).join('\n') : 'No learning paths available'}
+                       yPosition = 30;
 
-### Practice Projects
-${skillRecommendations.practice_projects ? skillRecommendations.practice_projects.map((project: any, index: number) => 
-  `${index + 1}. ${typeof project === 'string' ? project : project.title || project.name || JSON.stringify(project)}`
-).join('\n') : 'No practice projects available'}
-` : ''}
+                       // Summary
+                       const score = testResults?.score || assessmentState.score || 0;
+                       const total = testResults?.total || questions.length || 0;
+                       const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
+                       const timeTaken = testResults?.time_taken || (assessmentStartTime ? Math.round((Date.now() - assessmentStartTime) / 1000) : 0);
 
-## Next Steps
-1. Review the assessment results and identify areas for improvement
-2. Follow the recommended learning paths
-3. Practice with similar questions
-4. Consider taking additional assessments to track progress
+                       addText("ASSESSMENT SUMMARY", 16, true, "#00D2FF");
+                       addText(`Score: ${score}/${total} (${percentage}%)`);
+                       addText(`Assessment Type: ${assessmentType.toUpperCase()}`);
+                       addText(`Questions Answered: ${total}`);
+                       addText(`Time Taken: ${Math.floor(timeTaken / 60)} minutes ${timeTaken % 60} seconds`);
+                       addText(`Date: ${new Date().toLocaleDateString()}`);
 
----
-Generated on ${new Date().toLocaleString()}
-                     `;
-                     
-                     // Create and download PDF
-                     const blob = new Blob([pdfContent], { type: 'text/plain' });
-                     const url = URL.createObjectURL(blob);
-                     const a = document.createElement('a');
-                     a.href = url;
-                     a.download = `assessment-report-${new Date().toISOString().split('T')[0]}.txt`;
-                     document.body.appendChild(a);
-                     a.click();
-                     document.body.removeChild(a);
-                     URL.revokeObjectURL(url);
+                       yPosition += 4;
+
+                       // Performance Analysis
+                       if (performanceGaps) {
+                         addText("PERFORMANCE ANALYSIS", 16, true, "#00D2FF");
+
+                         if (performanceGaps.areas_for_improvement?.length) {
+                           addText("Areas for Improvement:", 14, true);
+                           performanceGaps.areas_for_improvement.forEach((area: any, index: number) => {
+                             const text = typeof area === "string" ? area : area.title || area.area || JSON.stringify(area);
+                             addText(`${index + 1}. ${stripMarkdown(text)}`);
+                           });
+                           yPosition += 3;
+                         }
+
+                         if (performanceGaps.strengths?.length) {
+                           addText("Strengths:", 14, true);
+                           performanceGaps.strengths.forEach((strength: any, index: number) => {
+                             const text = typeof strength === "string" ? strength : strength.title || strength.strength || JSON.stringify(strength);
+                             addText(`${index + 1}. ${stripMarkdown(text)}`);
+                           });
+                           yPosition += 3;
+                         }
+                       }
+
+                       // Skill Recommendations
+                       if (skillRecommendations) {
+                         addText("SKILL RECOMMENDATIONS", 16, true, "#00D2FF");
+
+                         if (skillRecommendations.assessment_summary) {
+                           addText("Assessment Summary:", 14, true);
+                           addText(stripMarkdown(skillRecommendations.assessment_summary));
+                           yPosition += 3;
+                         }
+
+                         if (skillRecommendations.learning_paths?.length) {
+                           addText("Learning Paths:", 14, true);
+                           skillRecommendations.learning_paths.forEach((path: any, index: number) => {
+                             const text = typeof path === "string" ? path : path.title || path.name || JSON.stringify(path);
+                             addText(`${index + 1}. ${stripMarkdown(text)}`);
+                             if (path.description) addText(`   ${stripMarkdown(path.description)}`, 10);
+                           });
+                           yPosition += 3;
+                         }
+
+                         if (skillRecommendations.practice_projects?.length) {
+                           addText("Practice Projects:", 14, true);
+                           skillRecommendations.practice_projects.forEach((project: any, index: number) => {
+                             const text = typeof project === "string" ? project : project.title || project.name || JSON.stringify(project);
+                             addText(`${index + 1}. ${stripMarkdown(text)}`);
+                             if (project.description) addText(`   ${stripMarkdown(project.description)}`, 10);
+                           });
+                         }
+                       }
+
+                       yPosition += 5;
+                       addText("NEXT STEPS", 16, true, "#00D2FF");
+                       addText("1. Review the assessment results and identify areas for improvement");
+                       addText("2. Follow the recommended learning paths");
+                       addText("3. Practice with similar questions");
+                       addText("4. Consider taking additional assessments to track progress");
+
+                       const totalPages = pdf.getNumberOfPages();
+                       for (let i = 1; i <= totalPages; i++) {
+                         pdf.setPage(i);
+                         pdf.setFontSize(10);
+                         pdf.setTextColor(128, 128, 128);
+                         pdf.text(
+                           `Generated on ${new Date().toLocaleString()} - Page ${i} of ${totalPages}`,
+                           pageWidth / 2,
+                           pageHeight - 10,
+                           { align: "center" }
+                         );
+                       }
+
+                       pdf.save(`assessment-report-${new Date().toISOString().split("T")[0]}.pdf`);
+                     } catch (error) {
+                       console.error("Error generating PDF:", error);
+                       alert("Failed to generate PDF. Please try again.");
+                     }
                    }}
                    className="px-8 py-3"
                  >
@@ -1961,9 +2062,17 @@ Generated on ${new Date().toLocaleString()}
                     variant="ghost"
                     size="sm"
                     onClick={handleFlagQuestion}
-                    className="text-muted-foreground hover:text-amber-500"
+                    className={`${
+                      flaggedQuestions.has(assessmentState.currentQuestion)
+                        ? 'text-amber-500 bg-amber-50 hover:bg-amber-100 border-amber-200'
+                        : 'text-muted-foreground hover:text-amber-500'
+                    } transition-colors`}
+                    title={flaggedQuestions.has(assessmentState.currentQuestion) ? 'Unflag question' : 'Flag for review'}
                   >
-                    <Flag className="w-4 h-4" />
+                    <Flag className={`w-4 h-4 ${flaggedQuestions.has(assessmentState.currentQuestion) ? 'fill-amber-500' : ''}`} />
+                    {flaggedQuestions.has(assessmentState.currentQuestion) && (
+                      <span className="ml-2 text-xs">Flagged</span>
+                    )}
                   </Button>
                 </div>
 
@@ -2101,7 +2210,6 @@ Generated on ${new Date().toLocaleString()}
                         <Button 
                           onClick={handleSubmitAssessment} 
                           className="bg-green-600 hover:bg-green-700"
-                          disabled={questions.length - Object.keys(assessmentState.answers).length > 0}
                         >
                         <CheckCircle className="w-4 h-4 mr-2" />
                         Submit Assessment
@@ -2122,24 +2230,34 @@ Generated on ${new Date().toLocaleString()}
                 </h3>
                 
                 <div className="grid grid-cols-5 gap-2 mb-4">
-                  {questions.map((_, index) => (
-                    <button
-                      key={index}
-                      onClick={() => {
-                        setAssessmentState(prev => ({ ...prev, currentQuestion: index }));
-                        setShowExplanation(false);
-                      }}
-                      className={`w-8 h-8 rounded text-xs font-medium transition-colors ${
-                        index === assessmentState.currentQuestion
-                          ? 'bg-primary text-white'
-                          : assessmentState.answers[questions[index].id] !== undefined
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                          : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
-                      }`}
-                    >
-                      {index + 1}
-                    </button>
-                  ))}
+                  {questions.map((_, index) => {
+                    const isAnswered = assessmentState.answers[questions[index].id] !== undefined;
+                    const isFlagged = flaggedQuestions.has(index);
+                    const isCurrent = index === assessmentState.currentQuestion;
+                    
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => {
+                          setAssessmentState(prev => ({ ...prev, currentQuestion: index }));
+                          setShowExplanation(false);
+                        }}
+                        className={`w-8 h-8 rounded text-xs font-medium transition-colors relative ${
+                          isCurrent
+                            ? 'bg-primary text-white ring-2 ring-primary ring-offset-2'
+                            : isAnswered
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                            : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                        } ${isFlagged && !isCurrent ? 'border-2 border-amber-500' : ''}`}
+                        title={`Question ${index + 1}${isFlagged ? ' (Flagged)' : ''}${isAnswered ? ' (Answered)' : ' (Unanswered)'}`}
+                      >
+                        {index + 1}
+                        {isFlagged && (
+                          <Flag className="w-2.5 h-2.5 absolute -top-1 -right-1 text-amber-500 fill-amber-500" />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <div className="space-y-2 text-sm">
@@ -2161,6 +2279,17 @@ Generated on ${new Date().toLocaleString()}
                       {questions.length - Object.keys(assessmentState.answers).length}
                     </span>
                   </div>
+                  {flaggedQuestions.size > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center">
+                        <Flag className="w-3 h-3 text-amber-500 fill-amber-500 mr-2" />
+                        Flagged
+                      </span>
+                      <span className="font-medium text-amber-600">
+                        {flaggedQuestions.size}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {assessmentState.timeRemaining < 300 && (

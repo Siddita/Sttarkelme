@@ -12,10 +12,14 @@ import {
   registerRegisterPost,
   loginLoginPost,
   refreshTokenRefreshPost,
-  authMeMeGet,
-  introspectIntrospectPost,
-  authRoot_Get,
-  authHealthCheckHealthGet
+  getMeMeGet,
+  introspectTokenIntrospectPost,
+  root_Get,
+  healthCheckHealthGet,
+  loginGoogleLoginGooglePost,
+  loginLinkedinLoginLinkedinPost,
+  verifyEmailVerifyEmailPost,
+  resendVerificationResendVerificationPost
 } from '../hooks/useApis';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -103,14 +107,63 @@ const Signup = () => {
     },
   });
 
+  // OAuth login mutations
+  const googleLoginMutation = loginGoogleLoginGooglePost({
+    onSuccess: (data) => {
+      const token = data?.access_token;
+      if (token) {
+        login(token);
+        toast.success("Login successful!");
+        navigate("/");
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || "Google login failed. Please try again.");
+    },
+  });
+
+  const linkedinLoginMutation = loginLinkedinLoginLinkedinPost({
+    onSuccess: (data) => {
+      const token = data?.access_token;
+      if (token) {
+        login(token);
+        toast.success("Login successful!");
+        navigate("/");
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || "LinkedIn login failed. Please try again.");
+    },
+  });
+
+  // Email verification mutations
+  const verifyEmailMutation = verifyEmailVerifyEmailPost({
+    onSuccess: () => {
+      toast.success("Email verified successfully!");
+      navigate("/login");
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || "Email verification failed.");
+    },
+  });
+
+  const resendVerificationMutation = resendVerificationResendVerificationPost({
+    onSuccess: () => {
+      toast.success("Verification email sent! Please check your inbox.");
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || "Failed to resend verification email.");
+    },
+  });
+
   // Health check and user info hooks - only call when authenticated
-  const { data: userInfo, refetch: refetchUserInfo } = authMeMeGet({
+  const { data: userInfo, refetch: refetchUserInfo } = getMeMeGet({
     enabled: false // Disable automatic calls to prevent 401 errors
   });
-  const { data: authHealth, refetch: refetchAuthHealth } = authHealthCheckHealthGet({
+  const { data: authHealth, refetch: refetchAuthHealth } = healthCheckHealthGet({
     enabled: false // Disable automatic health checks
   });
-  const { data: authRoot, refetch: refetchAuthRoot } = authRoot_Get({
+  const { data: authRoot, refetch: refetchAuthRoot } = root_Get({
     enabled: false // Disable automatic root calls
   });
   
@@ -180,10 +233,18 @@ const Signup = () => {
   
     // Use mutate with callbacks instead of mutateAsync
     registerMutation.mutate(registrationData, {
-      onSuccess: () => {
-        toast.success("Account created successfully!");
-        navigate("/login");
+      onSuccess: (data) => {
+        toast.success("Account created successfully! Please verify your email.");
+        // Optionally trigger email verification or resend
         setIsLoading(false);
+        // Show verification prompt
+        const shouldVerify = window.confirm("Account created! Would you like to verify your email now?");
+        if (shouldVerify) {
+          // Navigate to verification page or show verification form
+          navigate("/verify-email", { state: { email: formData.email } });
+        } else {
+          navigate("/login");
+        }
       },
       onError: (error: any) => {
         console.error('Registration error:', error);
@@ -191,6 +252,61 @@ const Signup = () => {
         setIsLoading(false);
       },
     });
+  };
+
+  const handleGoogleLogin = () => {
+    // Google OAuth 2.0 flow
+    // Note: You'll need to configure Google OAuth Client ID in environment variables
+    const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const redirectUri = `${window.location.origin}/auth/google/callback`;
+    
+    if (!googleClientId) {
+      toast.error("Google OAuth is not configured. Please contact support.");
+      console.warn("VITE_GOOGLE_CLIENT_ID not set in environment variables");
+      return;
+    }
+
+    // Generate state for CSRF protection
+    const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    sessionStorage.setItem('oauth_state', state);
+
+    // Redirect to Google OAuth consent screen
+    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${googleClientId}&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `response_type=id_token&` +
+      `scope=openid email profile&` +
+      `state=${state}&` +
+      `nonce=${Math.random().toString(36).substring(2, 15)}`;
+    
+    window.location.href = googleAuthUrl;
+  };
+
+  const handleLinkedInLogin = () => {
+    // LinkedIn OAuth 2.0 flow
+    // Note: You'll need to configure LinkedIn OAuth Client ID in environment variables
+    const linkedInClientId = import.meta.env.VITE_LINKEDIN_CLIENT_ID;
+    const redirectUri = `${window.location.origin}/auth/linkedin/callback`;
+    
+    if (!linkedInClientId) {
+      toast.error("LinkedIn OAuth is not configured. Please contact support.");
+      console.warn("VITE_LINKEDIN_CLIENT_ID not set in environment variables");
+      return;
+    }
+
+    // Generate state for CSRF protection
+    const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    sessionStorage.setItem('oauth_state', state);
+
+    // Redirect to LinkedIn OAuth consent screen
+    const linkedInAuthUrl = `https://www.linkedin.com/oauth/v2/authorization?` +
+      `response_type=code&` +
+      `client_id=${linkedInClientId}&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `state=${state}&` +
+      `scope=r_liteprofile r_emailaddress`;
+    
+    window.location.href = linkedInAuthUrl;
   };
   
 
@@ -398,13 +514,10 @@ const Signup = () => {
                       value={formData.phone}
                       onChange={(e) => {
                         const numericValue = e.target.value.replace(/\D/g, '').slice(0, 10);
-                        handleInputChange({
-                          ...e,
-                          target: {
-                            ...e.target,
-                            value: numericValue
-                          }
-                        } as React.ChangeEvent<HTMLInputElement>);
+                        setFormData(prev => ({
+                          ...prev,
+                          phone: numericValue
+                        }));
                       }}
                       onFocus={() => setFocusedField("phone")}
                       onBlur={() => setFocusedField(null)}
@@ -594,6 +707,60 @@ const Signup = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 1.3 }}
+                className="mt-8"
+              >
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-cyan-200/50" />
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-4 bg-transparent text-[#2D3253]/60">Or continue with</span>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid grid-cols-2 gap-3">
+                  <Button
+                    variant="outline"
+                    className="w-full border-cyan-200/50 bg-white/80 hover:bg-cyan-50 text-[#2D3253] hover:text-[#2D3253] backdrop-blur-sm"
+                    onClick={handleGoogleLogin}
+                  >
+                    <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
+                      <path
+                        fill="currentColor"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="currentColor"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="currentColor"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                      />
+                      <path
+                        fill="currentColor"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                      />
+                    </svg>
+                    Google
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full border-cyan-200/50 bg-white/80 hover:bg-cyan-50 text-[#2D3253] hover:text-[#2D3253] backdrop-blur-sm"
+                    onClick={handleLinkedInLogin}
+                  >
+                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                    </svg>
+                    LinkedIn
+                  </Button>
+                </div>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.4 }}
                 className="mt-8 text-center"
               >
                 <p className="text-sm text-[#2D3253]/70">

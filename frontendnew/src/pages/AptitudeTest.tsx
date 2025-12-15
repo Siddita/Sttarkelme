@@ -81,10 +81,19 @@ const AptitudeTest = () => {
   const stepNames = ["Aptitude", "MCQ", "Coding", "Scenario Based", "Soft Skills"];
 
   const handleAnswerSelect = (answer: string) => {
-    setSelectedAnswers(prev => ({
-      ...prev,
-      [currentQuestion]: answer
-    }));
+    setSelectedAnswers(prev => {
+      const current = prev[currentQuestion];
+      // Toggle off if same option clicked again
+      if (current === answer) {
+        const copy = { ...prev };
+        delete copy[currentQuestion];
+        return copy;
+      }
+      return {
+        ...prev,
+        [currentQuestion]: answer
+      };
+    });
   };
 
   const handleFlagQuestion = () => {

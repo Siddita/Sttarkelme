@@ -167,9 +167,8 @@ import {
 
   updateMeV1MePatch,
 
-  authMeMeGet,
+  getMeMeGet,
 
-  listSkillsV1SkillsGet
 
 } from "@/hooks/useApis";
 
@@ -375,7 +374,7 @@ const Mentorship = () => {
 
   // Fetch auth user info to get name
 
-  const { data: authUser } = authMeMeGet({
+  const { data: authUser } = getMeMeGet({
 
     enabled: isAuthenticated,
 
@@ -487,14 +486,23 @@ const Mentorship = () => {
 
   
 
-  // Get skills for goal creation
-
-  const { data: skills } = listSkillsV1SkillsGet({
-
+  // Get skills for goal creation (using mentorship endpoint)
+  const { data: skills } = useQuery({
+    queryKey: ['mentorship_skills_v1_skills_get'],
+    queryFn: async () => {
+      const token = localStorage.getItem('accessToken');
+      if (!token || !token.trim()) throw new Error('No token');
+      const response = await fetch(`${API_BASE_URL}/mentorship/v1/skills`, {
+        headers: {
+          'Authorization': `Bearer ${token.trim()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error('Failed to fetch skills');
+      return response.json();
+    },
     enabled: isAuthenticated,
-
-    retry: false
-
+    retry: false,
   });
 
 

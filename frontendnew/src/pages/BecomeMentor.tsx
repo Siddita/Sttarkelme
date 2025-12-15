@@ -41,9 +41,7 @@ import {
   myMentorSkillsV1MeMentorSkillsGet,
   addMentorSkillV1MeMentorSkillsPost,
   deleteMentorSkillV1MeMentorSkills_SkillId_Delete,
-  listSkillsV1SkillsGet,
-  createSkillV1SkillsPost,
-  authMeMeGet,
+  getMeMeGet,
   listSessionsV1SessionsGet,
   updateSessionV1Sessions_SessionId_Patch,
   createReviewV1Sessions_SessionId_ReviewPost,
@@ -52,7 +50,7 @@ import {
   decideGoalStatusRequestV1Goals_GoalId_StatusRequests_RequestId_DecisionPost,
   requestGoalStatusChangeV1MeMenteeGoals_GoalId_RequestStatusPost
 } from "@/hooks/useApis";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -66,7 +64,7 @@ const BecomeMentor = () => {
   const isAuthenticated = !!localStorage.getItem('accessToken');
   
   // Fetch auth user info to get name
-  const { data: authUser } = authMeMeGet({
+  const { data: authUser } = getMeMeGet({
     enabled: isAuthenticated,
     retry: false
   });
@@ -116,10 +114,23 @@ const BecomeMentor = () => {
     refetchInterval: 10000, // Auto-refresh every 10 seconds
   });
   
-  // Get skills for mentor skills selection
-  const { data: skills } = listSkillsV1SkillsGet({
+  // Get skills for mentor skills selection (using mentorship endpoint)
+  const { data: skills } = useQuery({
+    queryKey: ['mentorship_skills_v1_skills_get'],
+    queryFn: async () => {
+      const token = localStorage.getItem('accessToken');
+      if (!token || !token.trim()) throw new Error('No token');
+      const response = await fetch(`${API_BASE_URL}/mentorship/v1/skills`, {
+        headers: {
+          'Authorization': `Bearer ${token.trim()}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error('Failed to fetch skills');
+      return response.json();
+    },
     enabled: isAuthenticated,
-    retry: false
+    retry: false,
   });
   
   // Get mentor's current skills
@@ -348,10 +359,27 @@ const BecomeMentor = () => {
     }
   });
   
-  // Mutation for creating a new skill
-  const createSkillMutation = createSkillV1SkillsPost({
+  // Mutation for creating a new skill (using mentorship endpoint)
+  const createSkillMutation = useMutation({
+    mutationFn: async (data: { name: string; category?: string | null }) => {
+      const token = localStorage.getItem('accessToken');
+      if (!token || !token.trim()) throw new Error('No token');
+      const response = await fetch(`${API_BASE_URL}/mentorship/v1/skills`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token.trim()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to create skill' }));
+        throw new Error(errorData.detail || 'Failed to create skill');
+      }
+      return response.json();
+    },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['list_skills_v1_skills_get'] });
+      queryClient.invalidateQueries({ queryKey: ['mentorship_skills_v1_skills_get'] });
       toast.success("Skill created successfully! Adding to your profile...");
       // After creating the skill, add it to mentor skills with user-specified level and years
       const level = pendingSkillData?.level || 3;
@@ -364,7 +392,7 @@ const BecomeMentor = () => {
       });
     },
     onError: (error: any) => {
-      const errorMessage = error.response?.data?.detail || error.message || "Failed to create skill. Please try again.";
+      const errorMessage = error.message || "Failed to create skill. Please try again.";
       toast.error(errorMessage);
     }
   });
